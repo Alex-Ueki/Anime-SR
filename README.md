@@ -13,11 +13,37 @@ for base code (especially img_utils.py and models.py)
 
 ## TODOS
 
+
+<br><b>MAIN</b> : Implement a setup.py main() function that initializes all the image directories
+
+Should have structure as follows:
+
+```
+$ANIME-SR/   
+  eval_images/    
+    Alpha/    
+    Beta/   
+  input_images/   
+    Alpha/    
+    Beta/   
+  predict_images/   
+    Alpha/    
+  train_images/   
+    training/   
+      Alpha/    
+      Beta/   
+    validation/       
+      Alpha/    
+      Beta/   
+  *.py
+```
+
+
 <br><b>[1]</b> Have paths be stored in a class object that allows settable values (for border and path directories)
 <br><b>[2]</b> Use os.path to have path values that work for both MAC (/) and Windows (\\)
 <br><b>[3]</b> Implement a function in setup.py that tiles an HD image with a given border size
-<br><b>[4]</b> Implement a setup.py main() function that initializes all the directories
-<br><b>[5]</b> Implement a function that takes images from input_images and divides them into train_images (for training and validation) and eval_images (for evaluation)
+<br><b>[4]</b> Implement a function that takes images from input_images and divides them into train_images (for training and validation) and eval_images (for evaluation)
+
 
 ## Model Architecture (From Image-Super-Resolution)
 
