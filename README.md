@@ -40,8 +40,8 @@ $ANIME-SR/
 ```
 
 
-<br><b>[1]</b> Have paths be stored in a class object that allows settable values (for border and path directories)
-<br><b>[2]</b> Use os.path to have path values that work for both MAC (/) and Windows (\\)
+<br><b>[1]</b> DONE: Have paths be stored in a class object that allows settable values (for border and path directories)
+<br><b>[2]</b> DONE: Use os.path to have path values that work for both MAC (/) and Windows (\\)
 <br><b>[3]</b> Implement a function in setup.py that tiles an HD image with a given border size
 <br><b>[4]</b> Implement a function that takes images from input_images and divides them into train_images (for training and validation) and eval_images (for evaluation)
 

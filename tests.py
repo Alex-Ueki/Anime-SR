@@ -8,9 +8,9 @@ if __name__ == "__main__":
     Train Super Resolution
     """
 
-    # sr = srcnn.BasicSR()
-    # sr.create_model()
-    # sr.fit(nb_epochs=250)
+    sr = srcnn.BasicSR()
+    sr.create_model()
+    sr.fit(nb_epochs=250)
 
     """
     Evaluate BasicSR on eval_images

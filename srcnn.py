@@ -12,7 +12,7 @@ from keras.utils.np_utils import to_categorical
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
-import setup
+from setup import PathManager
 from advanced import HistoryCheckpoint
 
 """
@@ -53,7 +53,7 @@ class BaseSRCNNModel(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, border = 2, channels = 3):
+    def __init__(self, name, base_tile_size=60, border=2, channels=3, batch_size=16):
         """
         Base model to provide a standard interface of adding Super Resolution models
         """
@@ -61,26 +61,19 @@ class BaseSRCNNModel(object):
         self.name = name
         self.border = border
 
-        # This will be replaced with a class from "setup.py" in the future
         """
-            Declare all your paths and constants in setup.py
+        pm (PathManager) is a class that holds all the directory information
+        Holds batch_size, image_shape, and all directory paths
+        Includes functions for image generators and image counts
+        See setup.py for information
         """
-        self.batch_size = setup.batch_size
-        self.weight_path = setup.weight_path + self.name + ("%d-PixelBorder.h5" % border)
-        self.train_path = setup.training_output_path
-        self.validation_path = setup.validation_output_path
-        self.evaluation_path = setup.evaluation_output_path
-        self.predict_path = setup.predict_path
+
+        self.pm = PathManager(name, base_tile_size=base_tile_size, border=border, channels=channels, batch_size=batch_size)
 
         self.evaluation_function = PSNRLossBorder(border)
 
-        if K.image_data_format() == 'channels_first':
-            self.input_shape = (channels, 60 + 2*border, 60 + 2*border)
-        else:
-            self.input_shape = (60 + 2*border, 60 + 2*border, channels)
-
     @abstractmethod
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
         pass
 
     def fit(self, nb_epochs=80, save_history=True):
@@ -90,20 +83,20 @@ class BaseSRCNNModel(object):
         Uses images in self.validation_path for Validation
         """
 
-        samples_per_epoch = setup.train_images_count()
-        val_count = setup.val_images_count()
-        if self.model == None: self.create_model(batch_size=self.batch_size)
+        samples_per_epoch = self.pm.train_images_count()
+        val_count = self.pm.val_images_count()
+        if self.model == None: self.create_model()
 
-        callback_list = [callbacks.ModelCheckpoint(self.weight_path, monitor='val_PSNR', save_best_only=True,
+        callback_list = [callbacks.ModelCheckpoint(self.pm.weight_path, monitor='val_PSNR', save_best_only=True,
                                                    mode='max', save_weights_only=True)]
         if save_history: callback_list.append(HistoryCheckpoint(self.name + "_history.txt"))
 
         print("Training model : %s" % (self.__class__.__name__))
-        self.model.fit_generator(setup.image_generator(self.train_path, batch_size=self.batch_size),
-                                 steps_per_epoch=samples_per_epoch // self.batch_size,
+        self.model.fit_generator(self.pm.training_data_generator(),
+                                 steps_per_epoch=samples_per_epoch // self.pm.batch_size,
                                  epochs=nb_epochs,
-                                 validation_data=setup.image_generator(self.validation_path, batch_size=self.batch_size),
-                                 validation_steps=val_count // self.batch_size)
+                                 validation_data=self.pm.validation_data_generator(),
+                                 validation_steps=val_count // self.pm.batch_size)
 
         return self.model
 
@@ -114,8 +107,8 @@ class BaseSRCNNModel(object):
         print("Validating %s model" % self.name)
         if self.model == None: self.create_model(load_weights=True)
 
-        results = self.model.evaluate_generator(setup.image_generator(self.evaluation_path, batch_size=self.batch_size),
-                                      steps = setup.eval_images_count() // self.batch_size)
+        results = self.model.evaluate_generator(self.pm.evaluation_data_generator(),
+                                      steps = self.pm.eval_images_count() // self.pm.batch_size)
         print(self.name,results)
 
     def predict(self, verbose=True):
@@ -126,13 +119,14 @@ class BaseSRCNNModel(object):
         from scipy.misc import imread, imresize, imsave
 
         # Read images from predict_path, creating a generator
-        imagen = setup.predict_image_generator(self.predict_path, shuffle=False, batch_size=self.batch_size)
 
         model = self.create_model(load_weights=True)
         if verbose: print("Model loaded.")
 
         # Create prediction for image patches
-        result = model.predict_generator(imagen, steps = setup.predict_images_count() // self.batch_size, verbose=verbose)
+        result = model.predict_generator(self.pm.prediction_data_generator(),
+                                         steps = self.pm.predict_images_count() // self.pm.batch_size,
+                                         verbose=verbose)
 
         if verbose: print("\nDe-processing images.")
 
@@ -145,13 +139,13 @@ class BaseSRCNNModel(object):
         if verbose: print("Completed De-processing image.")
 
         (num, width, height, channels) = result.shape
-        output_directory = self.predict_path + self.name + "/" # Will need to be changed
+        output_directory = os.path.join(self.pm.predict_path, self.name)
         if not os.path.exists(output_directory):
             os.makedirs(output_directory)
 
         if verbose: print(("Saving %d images into " % num) + output_directory)
         # Getting old file names
-        file_names = [f for f in sorted(os.listdir(self.predict_path + setup.alphaset))]
+        file_names = [f for f in sorted(os.listdir(os.path.join(self.pm.predict_path,self.pm.alpha)))]
         for i in range(num):
             output = np.clip(result[i, :, :, :], 0, 255).astype('uint8') # TODO Change this for new image type
             filename = output_directory + (self.name + "_" + file_names[i])
@@ -160,8 +154,8 @@ class BaseSRCNNModel(object):
 
 class BasicSR(BaseSRCNNModel):
 
-    def __init__(self):
-        super(BasicSR, self).__init__("BasicSR", border = 2, channels = 3)
+    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(BasicSR, self).__init__("BasicSR", base_tile_size=60, border=2, channels=3, batch_size=16)
 
     def create_model(self, channels=3, load_weights=False):
         """
@@ -169,28 +163,29 @@ class BasicSR(BaseSRCNNModel):
         """
         model = Sequential()
 
-        model.add(Conv2D(64, (9, 9), activation='relu', padding='same', input_shape=self.input_shape))
+        model.add(Conv2D(64, (9, 9), activation='relu', padding='same', input_shape=self.pm.image_shape))
         model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
         model.add(Conv2D(channels, (5, 5), padding='same'))
 
         adam = optimizers.Adam(lr=1e-3)
+
         model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
-        if load_weights: model.load_weights(self.weight_path)
+        if load_weights: model.load_weights(self.pm.weight_path)
 
         self.model = model
         return model
 
 class ExpansionSR(BaseSRCNNModel):
 
-    def __init__(self, border = 2, channels = 3):
-        super(ExpansionSR, self).__init__("ExpansionSR", border = 2, channels = 3)
+    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(ExpansionSR, self).__init__("ExpansionSR", base_tile_size=60, border=2, channels=3, batch_size=16)
 
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
         """
             Creates a model to be used to scale images of specific height and width.
         """
 
-        init = Input(shape=self.input_shape)
+        init = Input(shape=self.pm.image_shape)
         x = Conv2D(64, (9, 9), activation='relu', padding='same', name='level1')(init)
 
         x1 = Conv2D(32, (1, 1), activation='relu', padding='same', name='lavel1_1')(x)
@@ -199,24 +194,26 @@ class ExpansionSR(BaseSRCNNModel):
 
         x = Average()([x1, x2, x3])
 
-        out = Conv2D(channels, (5, 5), activation='relu', padding='same', name='output')(x)
+        out = Conv2D(self.channels, (5, 5), activation='relu', padding='same', name='output')(x)
 
         model = Model(init, out)
+
         adam = optimizers.Adam(lr=1e-3)
-        model.compile(optimizer=adam, loss='mse', metrics=[PSNRLoss])
-        if load_weights: model.load_weights(self.weight_path)
+
+        model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
+        if load_weights: model.load_weights(self.pm.weight_path)
 
         self.model = model
         return model
 
 class DeepDenoiseSR(BaseSRCNNModel):
 
-    def __init__(self, border = 2, channels = 3):
-        super(DeepDenoiseSR, self).__init__("DeepDenoiseSR", border = 2, channels = 3)
+    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(DeepDenoiseSR, self).__init__("DeepDenoiseSR", base_tile_size=60, border=2, channels=3, batch_size=16)
 
     def create_model(self, channels=3, load_weights=False):
 
-        init = Input(shape=self.input_shape)
+        init = Input(shape=self.pm.image_shape)
         c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
         c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(c1)
 
@@ -245,10 +242,11 @@ class DeepDenoiseSR(BaseSRCNNModel):
         decoded = Conv2D(channels, (5, 5), activation='linear', border_mode='same')(m2)
 
         model = Model(init, decoded)
+
         adam = optimizers.Adam(lr=1e-3)
-        PSNRLoss = PSNRLossBorder(self.border)
-        model.compile(optimizer=adam, loss='mse', metrics=[PSNRLoss])
-        if load_weights: model.load_weights(self.weight_path)
+
+        model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
+        if load_weights: model.load_weights(self.pm.weight_path)
 
         self.model = model
         return model
@@ -256,12 +254,12 @@ class DeepDenoiseSR(BaseSRCNNModel):
 # Very Deep Super Resolution
 class VDSR(BaseSRCNNModel):
 
-    def __init__(self, border = 2, channels = 3):
-        super(VDSR, self).__init__("VDSR", border = 2, channels = 3)
+    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(VDSR, self).__init__("VDSR", base_tile_size=60, border=2, channels=3, batch_size=16)
 
     def create_model(self, channels=3, load_weights=False):
 
-        init = Input(shape=self.input_shape)
+        init = Input(shape=self.pm.image_shape)
         x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
 
         for i in range(0,19):
@@ -271,9 +269,9 @@ class VDSR(BaseSRCNNModel):
 
         model = Model(init, decode)
         adam = optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=0.01, decay=0.0)
-        PSNRLoss = PSNRLossBorder(self.border)
-        model.compile(optimizer=adam, loss='mse', metrics=[PSNRLoss])
-        if load_weights: model.load_weights(self.weight_path)
+
+        model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
+        if load_weights: model.load_weights(self.pm.weight_path)
 
         self.model = model
         return model
