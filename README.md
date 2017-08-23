@@ -13,6 +13,7 @@ for base code (especially img_utils.py and models.py)
 
 ## TODOS
 
+<br>Document all dependencies, required versions of Cuda, etc.
 
 <br><b>MAIN</b> : Implement a setup.py main() function that initializes all the image directories
 
