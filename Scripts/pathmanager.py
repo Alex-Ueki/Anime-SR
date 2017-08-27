@@ -34,7 +34,7 @@ def readPNGImageData(f, meta):
 def writePNG(f, image, meta):
     # Scale and clip image
     output = np.clip(image*255., 0, 255).astype('uint8')
-    imsave(filename, output)
+    imsave(f, output)
     return
 
 # Returns empty dictionary because meta data is currently not needed
@@ -87,8 +87,8 @@ class PathManager():
         self.evaluation_path = os.path.join(self.base_dir, "eval_images", self.format)
         self.predict_path = os.path.join(self.base_dir, "predict_images", self.format)
 
-        # weight_path is the path to weight.h5 file for this model
-        self.weight_path = os.path.join(self.base_dir, "weights", "%s_%s_%d-PixelBorder.h5" % (name, self.format, border))
+        # weight_file is the path to weight.h5 file for this model
+        self.weight_file = os.path.join(self.base_dir, "weights", "%s_%s_%d-PixelBorder.h5" % (name, self.format, border))
 
         self.alpha = "SD_" + self.format
         self.beta = "HD_" + self.format
@@ -209,8 +209,10 @@ class PathManager():
 
             for i, j in enumerate(index_array):
                 x_fn = X_filenames[j]
-                img = imread(x_fn, mode='RGB')
-                img = img.astype('float32') / 255.
+                if self.current_meta is None:
+                    self.current_meta = self.img_meta(x_fn)
+                    # Assume that all meta data in a directory is the same
+                img = self.img_read(x_fn, self.current_meta)
 
                 if K.image_dim_ordering() == "th":
                     batch_x[i] = img.transpose((2, 0, 1))
@@ -218,8 +220,7 @@ class PathManager():
                     batch_x[i] = img
 
                 y_fn = y_filenames[j]
-                img = imread(y_fn, mode="RGB")
-                img = img.astype('float32') / 255.
+                img = self.img_read(y_fn, self.current_meta)
 
                 if K.image_dim_ordering() == "th":
                     batch_y[i] = img.transpose((2, 0, 1))

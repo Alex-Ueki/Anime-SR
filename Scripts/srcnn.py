@@ -65,7 +65,7 @@ class BaseSRCNNModel(object):
         pm (PathManager) is a class that holds all the directory information
         Holds batch_size, image_shape, and all directory paths
         Includes functions for image generators and image counts
-        See setup.py for information
+        See pathmanager.py for information
         """
 
         self.pm = PathManager(name, format_type=format_type, base_tile_size=base_tile_size, border=border, channels=channels, batch_size=batch_size)
@@ -87,8 +87,9 @@ class BaseSRCNNModel(object):
         val_count = self.pm.val_images_count()
         if self.model == None: self.create_model()
 
-        callback_list = [callbacks.ModelCheckpoint(self.pm.weight_path, monitor='val_PSNR', save_best_only=True,
+        callback_list = [callbacks.ModelCheckpoint(self.pm.weight_file, monitor='val_PSNR', save_best_only=True,
                                                    mode='max', save_weights_only=True)]
+
         if save_history: callback_list.append(HistoryCheckpoint(self.name + "_history.txt"))
 
         print("Training model : %s" % (self.__class__.__name__))
@@ -149,13 +150,17 @@ class BaseSRCNNModel(object):
         for i in range(num):
             image = result[i, :, :, :]
             filename = os.path.join(output_directory, self.name + "_" + file_names[i])
-            self.img_write(filename, image, self.current_meta)
-        if verbose: print(("Save %d images into " % num) + output_directory)
+            self.pm.img_write(filename, image, self.pm.current_meta)
+        if verbose: print(("Saved %d images into " % num) + output_directory)
 
 class BasicSR(BaseSRCNNModel):
 
     def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(BasicSR, self).__init__("BasicSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
+        super(BasicSR, self).__init__("BasicSR",
+                                      format_type=format_type,
+                                      base_tile_size=base_tile_size,
+                                      border=border, channels=channels,
+                                      batch_size=batch_size)
 
     def create_model(self, channels=3, load_weights=False):
         """
@@ -170,7 +175,7 @@ class BasicSR(BaseSRCNNModel):
         adam = optimizers.Adam(lr=1e-3)
 
         model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
-        if load_weights: model.load_weights(self.pm.weight_path)
+        if load_weights: model.load_weights(self.pm.weight_file)
 
         self.model = model
         return model
@@ -178,7 +183,11 @@ class BasicSR(BaseSRCNNModel):
 class ExpansionSR(BaseSRCNNModel):
 
     def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(ExpansionSR, self).__init__("ExpansionSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
+        super(ExpansionSR, self).__init__("ExpansionSR",
+                                          format_type=format_type,
+                                          base_tile_size=base_tile_size,
+                                          border=border, channels=channels,
+                                          batch_size=batch_size)
 
     def create_model(self, load_weights=False):
         """
@@ -201,7 +210,7 @@ class ExpansionSR(BaseSRCNNModel):
         adam = optimizers.Adam(lr=1e-3)
 
         model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
-        if load_weights: model.load_weights(self.pm.weight_path)
+        if load_weights: model.load_weights(self.pm.weight_file)
 
         self.model = model
         return model
@@ -209,7 +218,11 @@ class ExpansionSR(BaseSRCNNModel):
 class DeepDenoiseSR(BaseSRCNNModel):
 
     def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(DeepDenoiseSR, self).__init__("DeepDenoiseSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
+        super(DeepDenoiseSR, self).__init__("DeepDenoiseSR",
+                                            format_type=format_type,
+                                            base_tile_size=base_tile_size,
+                                            border=border, channels=channels,
+                                            batch_size=batch_size)
 
     def create_model(self, channels=3, load_weights=False):
 
@@ -239,14 +252,14 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
         m2 = Add()([c1, c1_2])
 
-        decoded = Conv2D(channels, (5, 5), activation='linear', border_mode='same')(m2)
+        decoded = Conv2D(channels, (5, 5), activation='linear', padding='same')(m2)
 
         model = Model(init, decoded)
 
         adam = optimizers.Adam(lr=1e-3)
 
         model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
-        if load_weights: model.load_weights(self.pm.weight_path)
+        if load_weights: model.load_weights(self.pm.weight_file)
 
         self.model = model
         return model
@@ -255,7 +268,11 @@ class DeepDenoiseSR(BaseSRCNNModel):
 class VDSR(BaseSRCNNModel):
 
     def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(VDSR, self).__init__("VDSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
+        super(VDSR, self).__init__("VDSR",
+                                   format_type=format_type,
+                                   base_tile_size=base_tile_size,
+                                   border=border, channels=channels,
+                                   batch_size=batch_size)
 
     def create_model(self, channels=3, load_weights=False):
 
@@ -265,13 +282,13 @@ class VDSR(BaseSRCNNModel):
         for i in range(0,19):
             x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
 
-        decode = Conv2D(channels, (3, 3), activation='linear', border_mode='same')(x)
+        decode = Conv2D(channels, (3, 3), activation='linear', padding='same')(x)
 
         model = Model(init, decode)
         adam = optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=0.01, decay=0.0)
 
         model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
-        if load_weights: model.load_weights(self.pm.weight_path)
+        if load_weights: model.load_weights(self.pm.weight_file)
 
         self.model = model
         return model

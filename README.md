@@ -6,38 +6,19 @@ for base code (especially img_utils.py and models.py)
 
 ## Usage
 
-<br><b>[1]</b> Open <b>tests.py</b> and un-comment the lines at each section to use a model for training, evaluation, or prediction.
-<br><b>[2]</b> Execute tests.py to begin training. GPU is recommended, although if small number of images are provided then GPU may not be required.
-<br><b>[3]</b> Training images should be located in train_images. The original SD should be placed in "Alpha", and the HD in "Beta"
+<br><b>[1]</b> Run <b>pathmanager.py</b> to set up all directories for images
+<br><b>[2]</b> Open <b>tests.py</b> and un-comment the lines at each section to use a model for training, evaluation, or prediction.
+<br><b>[3]</b> Place images (64x64) into train_images for training, eval_images for evaluation, and predict_images for prediction
+  --> train_images require SD and HD image sets, for both training and validation.
+  --> eval_images require just one SD and HD image set.
+  --> predict_images require just the SD images.
+<br><b>[4]</b> Each directory will have folders for supported image types (PNG, DPX).
+<br><b>[5]</b> Execute tests.py to begin training. GPU is recommended, although if small number of images are provided then GPU may not be required.
 
 
 ## TODOS
 
 <br>Document all dependencies, required versions of Cuda, etc.
-
-<br><b>MAIN</b> : Implement a setup.py main() function that initializes all the image directories
-
-Should have structure as follows:
-
-```
-$ANIME-SR/   
-  eval_images/    
-    Alpha/    
-    Beta/   
-  input_images/   
-    Alpha/    
-    Beta/   
-  predict_images/   
-    Alpha/    
-  train_images/   
-    training/   
-      Alpha/    
-      Beta/   
-    validation/       
-      Alpha/    
-      Beta/   
-  *.py
-```
 
 
 <br><b>[1]</b> DONE: Have paths be stored in a class object that allows settable values (for border and path directories)
