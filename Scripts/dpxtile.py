@@ -31,7 +31,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-""" 
+"""
 
 import struct
 import numpy as np
@@ -168,6 +168,8 @@ def readDPXMetaData(f):
 
 	return meta
 
+# TODO: @trebor : Can we assume that the meta data will be the same for all files from the same directory
+# i.e We can read one file at initization to know the meta for both reading and writing for the whole model?
 def readDPXImageData(f, meta):
 	if meta['depth'] != 10 or meta['packing'] != 1 or meta['encoding'] != 0 or meta['descriptor'] != 50:
 		return None
@@ -184,11 +186,12 @@ def readDPXImageData(f, meta):
 		raw = raw.byteswap()
 
 	# extract and normalize color channel values to 0..1 inclusive.
-	
-	image[:,:,0] = ((raw >> 22) & 0x000003FF) / 1023.0
-	image[:,:,1] = ((raw >> 12) & 0x000003FF) / 1023.0
-	image[:,:,2] = ((raw >> 2) & 0x000003FF) / 1023.0
 
+	image[:,:,0] = ((raw >> 22) & 0x000003FF)
+	image[:,:,1] = ((raw >> 12) & 0x000003FF)
+	image[:,:,2] = ((raw >> 2) & 0x000003FF)
+
+	image = image.astype('float32') / 1023.
 	return image
 
 def writeDPX(f, image, meta):
@@ -204,7 +207,7 @@ def writeDPX(f, image, meta):
 				bytes = struct.pack(endianness + p[3], meta[p[0]])
 			f.write(bytes)
 
-	raw = ((((image[:,:,0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22) 
+	raw = ((((image[:,:,0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
 			| (((image[:,:,1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
 			| (((image[:,:,2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
 		)
@@ -218,16 +221,16 @@ def writeDPX(f, image, meta):
 if __name__ == "__main__":
 	fromdir = sys.argv[1]
 	todir = sys.argv[2]
-	
+
 	fnames = []
 	for (dirpath, dirnames, filenames) in os.walk(fromdir):
 		fnames.extend(filenames)
 		break
-		
+
 	# print(fnames)
-	
+
 	ONCEONLY = True
-	
+
 	for filename in fnames:
 		print('Processing: ' + fromdir + '/' + filename)
 		with open(fromdir + '/' + filename, 'rb') as f:
@@ -239,7 +242,7 @@ if __name__ == "__main__":
 				if VERBOSE or ONCEONLY:
 					ONCEONLY = False
 					print("\nFILE INFORMATION HEADER")
-		
+
 					print("Endianness:","Big Endian" if meta['endianness'] == ">" else "Little Endian")
 					print("Image Offset (Bytes):",meta['offset'])
 					print("DPX Version:",meta['dpx_version'])
@@ -251,14 +254,14 @@ if __name__ == "__main__":
 					print("Project Name:",meta['project_name'])
 					print("Copyright:",meta['copyright'])
 					print("Encryption Key:","Unencrypted" if meta['encryption_key'] == 0xFFFFFFFF else binascii.hexlify(bin(meta['encryption_key'])))
-		
-		
+
+
 					print("\nIMAGE INFORMATION HEADER")
 					print("Orientation:", orientations[meta['orientation']] if meta['orientation'] in orientations else "unknown")
 					print("Image Element Count:", meta['image_element_count'])
 					print("Width:", meta['width'])
 					print("Height:", meta['height'])
-		
+
 					print("\nIMAGE ELEMENT 1")
 					print("Data Sign:", "signed" if meta['data_sign'] == 1 else "unsigned")
 					print("Descriptor:", descriptors[meta['descriptor']] if meta['descriptor'] in descriptors else "unknown")
@@ -270,68 +273,67 @@ if __name__ == "__main__":
 					print("End of Line Padding:",meta['line_padding'])
 					print("End of Image Padding:",meta['image_padding'])
 					print("Image Element Description:",meta['image_element_description'])
-		
+
 					print("\nIMAGE SOURCE INFORMATION HEADER")
 					print("Input Device Name:",meta['input_device_name'])
 					print("Input Device Serial Number:",meta['input_device_sn'])
-		
+
 					print("\n")
-	
+
 				image = readDPXImageData(f, meta)
-	
+
 				if image is None:
 					print("DPX Type not Implemented")
 				else:
-					
+
 					# being hugely pedantic with the comments here because I'm not sure I'm doing this right,
 					# and if I am, then it will help with later code which can be more concise.
-					
+
 					# image is 1920x1080. Add 2 pixels of black to top and bottom
-					
+
 					w = meta['width']
 					h = meta['height']
-					
+
 					blackRow = np.full((1, w, 3), image[0][0][0], dtype=float)
 
 					# maybe not the fastest way to add 2 lines
-					
+
 					image = np.append(blackRow, image, axis=0)
 					image = np.append(blackRow, image, axis=0)
 					image = np.append(image, blackRow, axis=0)
 					image = np.append(image, blackRow, axis=0)
-					
+
 					# ok, we want to make 60x60 tiles with 2 pixel borders
-					
+
 					# Starting position for the first tile
-					
+
 					baseY = 0
 					baseX = 238
-					
+
 					# size of tiles
-					
+
 					w = 64
 					h = 64
-					
+
 					# hack the DPX meta information so that it generates tile files of the correct size
-					
+
 					meta['height'] = h
 					meta['width'] = w
-					
+
 					# step between tiles
-					
+
 					stepX = 60
 					stepY = 60
-					
+
 					# tile number counter
-					
+
 					tnum = 0
-					
+
 					# generate tiles
-					
+
 					for ty in range(0,18):
 						for tx in range(0,24):
-							tile = image[(baseY+ty*stepY):(baseY+ty*stepY+h),(baseX+tx*stepX):(baseX+tx*stepX+w),:]			
+							tile = image[(baseY+ty*stepY):(baseY+ty*stepY+h),(baseX+tx*stepX):(baseX+tx*stepX+w),:]
 							with open(todir + '/' + filename.replace('.dpx', '-' + str(tnum).zfill(3) + '.dpx'), 'wb') as o:
 								writeDPX(o,tile,meta)
 							tnum += 1
-					

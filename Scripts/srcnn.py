@@ -12,7 +12,7 @@ from keras.utils.np_utils import to_categorical
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
-from setup import PathManager
+from pathmanager import PathManager
 from advanced import HistoryCheckpoint
 
 """
@@ -53,7 +53,7 @@ class BaseSRCNNModel(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, base_tile_size=60, border=2, channels=3, batch_size=16):
+    def __init__(self, name, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
         """
         Base model to provide a standard interface of adding Super Resolution models
         """
@@ -68,7 +68,7 @@ class BaseSRCNNModel(object):
         See setup.py for information
         """
 
-        self.pm = PathManager(name, base_tile_size=base_tile_size, border=border, channels=channels, batch_size=batch_size)
+        self.pm = PathManager(name, format_type=format_type, base_tile_size=base_tile_size, border=border, channels=channels, batch_size=batch_size)
 
         self.evaluation_function = PSNRLossBorder(border)
 
@@ -130,13 +130,13 @@ class BaseSRCNNModel(object):
 
         if verbose: print("\nDe-processing images.")
 
-         # Deprocess patches
+         # Reordering image dimensions
         if K.image_dim_ordering() == "th":
-            result = result.transpose((0, 2, 3, 1)).astype(np.float32) * 255.
+            result = result.transpose((0, 2, 3, 1)).astype(np.float32)
         else:
-            result = result.astype(np.float32) * 255.
+            result = result.astype(np.float32)
 
-        if verbose: print("Completed De-processing image.")
+        if verbose: print("Completed Reordering images.")
 
         (num, width, height, channels) = result.shape
         output_directory = os.path.join(self.pm.predict_path, self.name)
@@ -147,15 +147,15 @@ class BaseSRCNNModel(object):
         # Getting old file names
         file_names = [f for f in sorted(os.listdir(os.path.join(self.pm.predict_path,self.pm.alpha)))]
         for i in range(num):
-            output = np.clip(result[i, :, :, :], 0, 255).astype('uint8') # TODO Change this for new image type
-            filename = output_directory + (self.name + "_" + file_names[i])
-            imsave(filename, output)
+            image = result[i, :, :, :]
+            filename = os.path.join(output_directory, self.name + "_" + file_names[i])
+            self.img_write(filename, image, self.current_meta)
         if verbose: print(("Save %d images into " % num) + output_directory)
 
 class BasicSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(BasicSR, self).__init__("BasicSR", base_tile_size=60, border=2, channels=3, batch_size=16)
+    def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(BasicSR, self).__init__("BasicSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
 
     def create_model(self, channels=3, load_weights=False):
         """
@@ -177,8 +177,8 @@ class BasicSR(BaseSRCNNModel):
 
 class ExpansionSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(ExpansionSR, self).__init__("ExpansionSR", base_tile_size=60, border=2, channels=3, batch_size=16)
+    def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(ExpansionSR, self).__init__("ExpansionSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
 
     def create_model(self, load_weights=False):
         """
@@ -208,8 +208,8 @@ class ExpansionSR(BaseSRCNNModel):
 
 class DeepDenoiseSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(DeepDenoiseSR, self).__init__("DeepDenoiseSR", base_tile_size=60, border=2, channels=3, batch_size=16)
+    def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(DeepDenoiseSR, self).__init__("DeepDenoiseSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
 
     def create_model(self, channels=3, load_weights=False):
 
@@ -254,8 +254,8 @@ class DeepDenoiseSR(BaseSRCNNModel):
 # Very Deep Super Resolution
 class VDSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_size=60, border=2, channels=3, batch_size=16):
-        super(VDSR, self).__init__("VDSR", base_tile_size=60, border=2, channels=3, batch_size=16)
+    def __init__(self, format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16):
+        super(VDSR, self).__init__("VDSR", format_type=0, base_tile_size=60, border=2, channels=3, batch_size=16)
 
     def create_model(self, channels=3, load_weights=False):
 
