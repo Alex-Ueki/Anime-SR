@@ -1,6 +1,6 @@
 
-import srcnn
-import setup
+import Modules.srcnn as srcnn
+import Modules.setup as setup
 
 if __name__ == "__main__":
 
