@@ -87,18 +87,25 @@ class BaseSRCNNModel(object):
         val_count = self.pm.val_images_count()
         if self.model == None: self.create_model()
 
-        callback_list = [callbacks.ModelCheckpoint(self.pm.weight_file, monitor='val_PSNR', save_best_only=True,
-                                                   mode='max', save_weights_only=True)]
+        callback_list = [callbacks.ModelCheckpoint(self.pm.weight_file,
+                                                  monitor='val_PeekSignaltoNoiseRatio',
+                                                  save_best_only=True,
+                                                  mode='max',
+                                                  save_weights_only=True)]
 
-        if save_history: callback_list.append(HistoryCheckpoint(self.name + "_history.txt"))
+        if save_history:
+            history_file = os.path.join(self.pm.history_path, self.name + "_history.txt")
+            callback_list.append(HistoryCheckpoint(history_file))
 
         print("Training model : %s" % (self.__class__.__name__))
+
+        # TODO FIXED TREBOR
         self.model.fit_generator(self.pm.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.pm.batch_size,
-                                 epochs=nb_epochs,
+                                 epochs=nb_epochs, callbacks=callback_list,
                                  validation_data=self.pm.validation_data_generator(),
                                  validation_steps=val_count // self.pm.batch_size)
-
+        # TODO FIXED TREBOR 
         return self.model
 
     def evaluate(self):
@@ -162,7 +169,7 @@ class BasicSR(BaseSRCNNModel):
                                       border=border, channels=channels,
                                       batch_size=batch_size)
 
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
         """
             Creates a model to be used to scale images of specific height and width.
         """
@@ -170,7 +177,7 @@ class BasicSR(BaseSRCNNModel):
 
         model.add(Conv2D(64, (9, 9), activation='relu', padding='same', input_shape=self.pm.image_shape))
         model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(channels, (5, 5), padding='same'))
+        model.add(Conv2D(self.pm.channels, (5, 5), padding='same'))
 
         adam = optimizers.Adam(lr=1e-3)
 
@@ -203,7 +210,7 @@ class ExpansionSR(BaseSRCNNModel):
 
         x = Average()([x1, x2, x3])
 
-        out = Conv2D(self.channels, (5, 5), activation='relu', padding='same', name='output')(x)
+        out = Conv2D(self.pm.channels, (5, 5), activation='relu', padding='same', name='output')(x)
 
         model = Model(init, out)
 
@@ -224,7 +231,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
                                             border=border, channels=channels,
                                             batch_size=batch_size)
 
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
 
         init = Input(shape=self.pm.image_shape)
         c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
@@ -252,7 +259,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
         m2 = Add()([c1, c1_2])
 
-        decoded = Conv2D(channels, (5, 5), activation='linear', padding='same')(m2)
+        decoded = Conv2D(self.pm.channels, (5, 5), activation='linear', padding='same')(m2)
 
         model = Model(init, decoded)
 
@@ -274,7 +281,7 @@ class VDSR(BaseSRCNNModel):
                                    border=border, channels=channels,
                                    batch_size=batch_size)
 
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
 
         init = Input(shape=self.pm.image_shape)
         x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
@@ -282,7 +289,7 @@ class VDSR(BaseSRCNNModel):
         for i in range(0,19):
             x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
 
-        decode = Conv2D(channels, (3, 3), activation='linear', padding='same')(x)
+        decode = Conv2D(self.pm.channels, (3, 3), activation='linear', padding='same')(x)
 
         model = Model(init, decode)
         adam = optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=0.01, decay=0.0)

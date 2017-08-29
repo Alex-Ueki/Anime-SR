@@ -14,23 +14,23 @@ if __name__ == "__main__":
     Train Super Resolution
     """
 
-    # sr = srcnn.BasicSR(format_type=1)
-    # sr.create_model()
-    # sr.fit(nb_epochs=250)
+    sr = srcnn.BasicSR(format_type=1)
+    sr.create_model()
+    sr.fit(nb_epochs=1)
 
     """
     Evaluate BasicSR on eval_images
     """
 
-    # sr = srcnn.BasicSR(format_type=1)
-    # sr.evaluate()
+    sr = srcnn.BasicSR(format_type=1)
+    sr.evaluate()
 
     """
     Predict HD images in predict_images using BasicSR
     """
 
-    sr = srcnn.BasicSR(format_type=1)
-    sr.predict()
+    # sr = srcnn.BasicSR(format_type=1)
+    # sr.predict()
 
     """
     Train ExpansionSuperResolution
@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     # ddsr = srcnn.DeepDenoiseSR(format_type=1)
     # ddsr.create_model()
-    # ddsr.fit(nb_epochs=80)
+    # ddsr.fit(nb_epochs=2)
 
     """
     Evaluate DDSRCNN on eval_images
@@ -73,8 +73,8 @@ if __name__ == "__main__":
     Predict HD images in predict_images using DeepDenoiseSR
     """
 
-    ddsr = srcnn.DeepDenoiseSR(format_type=1)
-    ddsr.predict()
+    # ddsr = srcnn.DeepDenoiseSR(format_type=1)
+    # ddsr.predict()
 
     """
     Train VDSR (Very Deep Super Resolution)

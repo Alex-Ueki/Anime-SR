@@ -1,0 +1,1 @@
+{'loss': [0.00062493750967204285], 'PeekSignaltoNoiseRatio': [-35.356733035372621], 'val_loss': [0.00018327157168604484], 'val_PeekSignaltoNoiseRatio': [-37.808495377841062]}

@@ -86,6 +86,7 @@ class PathManager():
         self.validation_path = os.path.join(self.base_dir, "train_images", "validation_" + self.format)
         self.evaluation_path = os.path.join(self.base_dir, "eval_images", self.format)
         self.predict_path = os.path.join(self.base_dir, "predict_images", self.format)
+        self.history_path = os.path.join(self.base_dir, "history")
 
         # weight_file is the path to weight.h5 file for this model
         self.weight_file = os.path.join(self.base_dir, "weights", "%s_%s_%d-PixelBorder.h5" % (name, self.format, border))
@@ -108,6 +109,9 @@ class PathManager():
 
         if not os.path.exists(os.path.join(self.predict_path, self.alpha)):
             os.makedirs(os.path.join(self.predict_path, self.alpha))
+
+        if not os.path.exists(self.history_path):
+            os.makedirs(self.history_path)
         #TODO Determine how input path will be needed
 
     """
