@@ -1,6 +1,15 @@
 # ANIME-SR training directories
 
-Data/
+Data/eval_images/Alpha/*
+Data/eval_images/Beta/*
+Data/train_images/Alpha/*
+Data/train_images/Alpha/*
+Data/predict_images/*
+Data/input_images/*
+Data/weights/*
+
+Frames/
+Temp/
 scratchpad.txt
 
 # Byte-compiled / optimized / DLL files

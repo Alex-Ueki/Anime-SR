@@ -11,7 +11,7 @@ Tweaked to also work in Python 2 (fixed normalization code to ensure floating
 point division) -- RJW 08/19/17
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
+of this software and associated documentation files (the 'Software'), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
@@ -20,7 +20,7 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -32,72 +32,69 @@ THE SOFTWARE.
 import struct
 import numpy as np
 
-# retain the dpx metadata for the last DPX file processed, as it may be
-# needed for writing out a new file.
-
 orientations = {
-    0: "Left to Right, Top to Bottom",
-    1: "Right to Left, Top to Bottom",
-    2: "Left to Right, Bottom to Top",
-    3: "Right to Left, Bottom to Top",
-    4: "Top to Bottom, Left to Right",
-    5: "Top to Bottom, Right to Left",
-    6: "Bottom to Top, Left to Right",
-    7: "Bottom to Top, Right to Left"
+    0: 'Left to Right, Top to Bottom',
+    1: 'Right to Left, Top to Bottom',
+    2: 'Left to Right, Bottom to Top',
+    3: 'Right to Left, Bottom to Top',
+    4: 'Top to Bottom, Left to Right',
+    5: 'Top to Bottom, Right to Left',
+    6: 'Bottom to Top, Left to Right',
+    7: 'Bottom to Top, Right to Left'
 }
 
 descriptors = {
-    1: "Red",
-    2: "Green",
-    3: "Blue",
-    4: "Alpha",
-    6: "Luma (Y)",
-    7: "Color Difference",
-    8: "Depth (Z)",
-    9: "Composite Video",
-    50: "RGB",
-    51: "RGBA",
-    52: "ABGR",
-    100: "Cb, Y, Cr, Y (4:2:2)",
-    102: "Cb, Y, Cr (4:4:4)",
-    103: "Cb, Y, Cr, A (4:4:4:4)"
+    1: 'Red',
+    2: 'Green',
+    3: 'Blue',
+    4: 'Alpha',
+    6: 'Luma (Y)',
+    7: 'Color Difference',
+    8: 'Depth (Z)',
+    9: 'Composite Video',
+    50: 'RGB',
+    51: 'RGBA',
+    52: 'ABGR',
+    100: 'Cb, Y, Cr, Y (4:2:2)',
+    102: 'Cb, Y, Cr (4:4:4)',
+    103: 'Cb, Y, Cr, A (4:4:4:4)'
 }
 
 packings = {
-    0: "Packed into 32-bit words",
-    1: "Filled to 32-bit words, Padding First",
-    2: "Filled to 32-bit words, Padding Last"
+    0: 'Packed into 32-bit words',
+    1: 'Filled to 32-bit words, Padding First',
+    2: 'Filled to 32-bit words, Padding Last'
 }
 
 encodings = {
-    0: "No encoding",
-    1: "Run Length Encoding"
+    0: 'No encoding',
+    1: 'Run Length Encoding'
 }
 
 transfers = {
-    1: "Printing Density",
-    2: "Linear",
-    3: "Logarithmic",
-    4: "Unspecified Video",
-    5: "SMPTE 274M",
-    6: "ITU-R 709-4",
-    7: "ITU-R 601-5 system B or G",
-    8: "ITU-R 601-5 system M",
-    9: "Composite Video (NTSC)",
-    10: "Composite Video (PAL)",
-    11: "Z (Linear Depth)",
-    12: "Z (Homogenous Depth)"
+    1: 'Printing Density',
+    2: 'Linear',
+    3: 'Logarithmic',
+    4: 'Unspecified Video',
+    5: 'SMPTE 274M',
+    6: 'ITU-R 709-4',
+    7: 'ITU-R 601-5 system B or G',
+    8: 'ITU-R 601-5 system M',
+    9: 'Composite Video (NTSC)',
+    10: 'Composite Video (PAL)',
+    11: 'Z (Linear Depth)',
+    12: 'Z (Homogenous Depth)'
 }
 
 colorimetries = {
-    1: "Printing Density",
-    4: "Unspecified Video",
-    5: "SMPTE 274M",
-    6: "ITU-R 709-4",
-    7: "ITU-R 601-5 system B or G",
-    8: "ITU-R 601-5 system M",
-    9: "Composite Video (NTSC)",
-    10: "Composite Video (PAL)"
+    1: 'Printing Density',
+    4: 'Unspecified Video',
+    5: 'SMPTE 274M',
+    6: 'ITU-R 709-4',
+    7: 'ITU-R 601-5 system B or G',
+    8: 'ITU-R 601-5 system M',
+    9: 'Composite Video (NTSC)',
+    10: 'Composite Video (PAL)'
 }
 
 propertymap = [
@@ -139,9 +136,9 @@ def readDPXMetaData(f):
     f.seek(0)
     bytes = f.read(4)
     magic = bytes.decode(encoding='UTF-8')
-    if magic != "SDPX" and magic != "XPDS":
+    if magic != 'SDPX' and magic != 'XPDS':
         return None
-    endianness = ">" if magic == "SDPX" else "<"
+    endianness = '>' if magic == 'SDPX' else '<'
 
     meta = {}
 
@@ -150,7 +147,7 @@ def readDPXMetaData(f):
         bytes = f.read(p[2])
         if p[3] == 'magic':
             meta[p[0]] = bytes.decode(encoding='UTF-8')
-            meta['endianness'] = "be" if magic == "SDPX" else "le"
+            meta['endianness'] = 'be' if magic == 'SDPX' else 'le'
         elif p[3] == 'utf8':
             meta[p[0]] = bytes.decode(encoding='UTF-8')
         elif p[3] == 'B':
@@ -172,22 +169,22 @@ def readDPXImageData(f, meta):
     image = np.empty((height, width, 3), dtype=float)
 
     f.seek(meta['offset'])
-    raw = np.fromfile(f, dtype=np.dtype(np.int32), count=width*height, sep="")
-    raw = raw.reshape((height,width))
+    raw = np.fromfile(f, dtype=np.dtype(np.int32), count=width*height, sep='')
+    raw = raw.reshape((height, width))
 
     if meta['endianness'] == 'be':
         raw = raw.byteswap()
 
     # extract and normalize color channel values to 0..1 inclusive.
 
-    image[:,:,0] = ((raw >> 22) & 0x000003FF) / 1023.0
-    image[:,:,1] = ((raw >> 12) & 0x000003FF) / 1023.0
-    image[:,:,2] = ((raw >> 2) & 0x000003FF) / 1023.0
+    image[:, :, 0] = ((raw >> 22) & 0x000003FF) / 1023.0
+    image[:, :, 1] = ((raw >> 12) & 0x000003FF) / 1023.0
+    image[:, :, 2] = ((raw >> 2) & 0x000003FF) / 1023.0
 
     return image
 
 def writeDPX(f, image, meta):
-    endianness = ">" if meta['endianness'] == 'be' else "<"
+    endianness = '>' if meta['endianness'] == 'be' else '<'
     for p in propertymap:
         if p[0] in meta:
             f.seek(p[1])
@@ -199,13 +196,13 @@ def writeDPX(f, image, meta):
                 bytes = struct.pack(endianness + p[3], meta[p[0]])
             f.write(bytes)
 
-    raw = ((((image[:,:,0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
-            | (((image[:,:,1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
-            | (((image[:,:,2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
+    raw = ((((image[:, :, 0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
+            | (((image[:, :, 1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
+            | (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
         )
 
     if meta['endianness'] == 'be':
         raw = raw.byteswap()
 
     f.seek(meta['offset'])
-    raw.tofile(f, sep="")
+    raw.tofile(f, sep='')
