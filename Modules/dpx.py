@@ -129,7 +129,14 @@ propertymap = [
     ('image_element_description', 820, 32, 'utf8'),
 
     ('input_device_name', 1556, 32, 'utf8'),
-    ('input_device_sn', 1588, 32, 'utf8')
+    ('input_device_sn', 1588, 32, 'utf8'),
+
+    ('gamma', 1948, 4, 'f'),
+    ('black_level', 1952, 4, 'f'),
+    ('black_gain', 1956, 4, 'f'),
+    ('break_point', 1960, 4, 'f'),
+    ('white_level', 1964, 4, 'f')
+
 ]
 
 def readDPXMetaData(f):
@@ -156,6 +163,8 @@ def readDPXMetaData(f):
             meta[p[0]] = struct.unpack(endianness + 'H', bytes)[0]
         elif p[3] == 'I':
             meta[p[0]] = struct.unpack(endianness + 'I', bytes)[0]
+        elif p[3] == 'f':
+            meta[p[0]] = struct.unpack(endianness + 'f', bytes)[0]
 
 
     return meta

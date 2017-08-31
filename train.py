@@ -15,6 +15,7 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=255
+    black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
     trimtop=nnn         pixels to trim on image top edge, default = 0
@@ -77,6 +78,7 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=255
+    black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
     trimtop=nnn         pixels to trim on image top edge, default = 0
@@ -102,6 +104,7 @@ if __name__ == '__main__':
 
     tile_width, tile_height, tile_border, epochs = 60, 60, 2, 255
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
+    black_level = -1.0
     paths = {}
 
     # Parse options
@@ -112,10 +115,17 @@ if __name__ == '__main__':
             errors = oops(errors, True, 'Invalid option ({})', option)
         else:
             op, value = opvalue
-            vnum = int(value) if value.isdigit() else -1
+
+            # convert value to integer and float with default -1
+
+            try:
+                fnum = float(value)
+            except ValueError:
+                fnum = -1.0
+            vnum = fnum
 
             opmatch = [s for s in ['width', 'height', 'border', 'epochs', 'training',
-                                   'validation', 'model', 'data', 'history',
+                                   'validation', 'model', 'data', 'history', 'black',
                                    'trimleft', 'trimright', 'trimtop', 'trimbottom'] if s.startswith(op)]
 
             if len(opmatch) == 0:
@@ -133,6 +143,10 @@ if __name__ == '__main__':
                 elif op == 'border':
                     tile_border = vnum
                     errors = oops(errors, vnum <= 0, 'Tile border invalid ({})', option)
+                elif op == 'black':
+                    if value != 'auto':
+                        black_level = fnum
+                        errors = oops(errors, fnum <= 0, 'Black level invalid ({})', option)
                 elif op == 'epochs':
                     epochs = vnum
                     errors = oops(errors, vnum <= 0, 'Epochs invalid ({})', option)
@@ -228,7 +242,6 @@ if __name__ == '__main__':
     test_files = [ [image_info[f][g][0][0] for g in [0, 1]] for f in [0, 1]]
     test_images = [ [frameops.imread(image_info[f][g][0][0]) for g in [0, 1]] for f in [0, 1]]
 
-
     for f in [0, 1]:
         s1, s2 = np.shape(test_images[f][0]), np.shape(test_images[f][1])
         errors = oops(errors, s1 != s2, '{} {} and {} images do not have identical size ({} vs {})', (image_paths[f], sub_folders[0], sub_folders[1], s1, s2))
@@ -242,7 +255,7 @@ if __name__ == '__main__':
 
     terminate(errors, False)
 
-    trimmed_width, trimmed_height = s1[0] - (trim_left + trim_right), s1[1] - (trim_top + trim_bottom)
+    trimmed_width, trimmed_height = s1[1] - (trim_left + trim_right), s1[0] - (trim_top + trim_bottom)
 
     errors = oops(errors, trimmed_width <= 0, 'Trimmed images have invalid width ({} - ({} + {}) <= 0)', (s1[0], trim_left, trim_right))
     errors = oops(errors, trimmed_width <= 0, 'Trimmed images have invalid height ({} - ({} + {}) <= 0)', (s1[1], trim_top, trim_bottom))
@@ -256,36 +269,30 @@ if __name__ == '__main__':
 
     tiles_per_image = (trimmed_width // tile_width) * (trimmed_height // tile_height)
 
+    # Attempt to automatically figure out the border color black level, by finding the minimum pixel value in one of our
+    # sample images. This will definitely work if we are processing 1440x1080 4:3 embedded in 1920x1080 16:19 images
+
+    if black_level < 0:
+        black_level = np.min(test_images[0][0])
+
     # Since we've gone to the trouble of reading in all the path data, let's make it available to our models for reuse
     for fc, f in enumerate(image_paths):
         for sc, s in enumerate(sub_folders):
             paths[f + '.' + s] = image_info[fc][sc]
 
-    print('  Image dimensions : {} x {}'.format(s1[0], s1[1]))
+    print('  Image dimensions : {} x {}'.format(s1[1], s1[0]))
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(trim_top, trim_bottom, trim_left, trim_right))
     print('Trimmed dimensions : {} x {}'.format(trimmed_width, trimmed_height))
     print('   Tiles per image : {}'.format(tiles_per_image))
+    print('       Black level : {}'.format(black_level))
     print('')
-
-    """
-    img = frameops.imread('Temp/Test.png')
-    frameops.imsave('Temp/Test-nomung.png',img)
-
-    tiles = [t for t in frameops.tesselate('Temp/Test.png', tile_width, tile_height, tile_border, trim_left=240, trim_right=240, shuffle=False)]
-
-    img = frameops.grout(tiles, tile_border, 24, pad_left=240, pad_right=240)
-    print(np.shape(img))
-
-    frameops.imsave('Temp/Test-Out.png',img)
-
-    terminate(True,False)
-    """
 
     # Train the model
 
     if model_type in models.models:
         sr = models.models[model_type](base_tile_width=tile_width, base_tile_height=tile_height,
-                                       border=tile_border, trim_left=trim_left, trim_right=trim_left,
+                                       border=tile_border, black_level=black_level,
+                                       trim_left=trim_left, trim_right=trim_left,
                                        tiles_per_image=tiles_per_image, paths=paths)
         sr.create_model()
         sr.fit(nb_epochs=epochs)

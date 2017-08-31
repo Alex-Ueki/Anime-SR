@@ -30,21 +30,35 @@ import os
 class PathManager():
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
-                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
 
         self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
         self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
         self.tile_width, self.tile_height = base_tile_width + 2*border, base_tile_height + 2*border
         self.channels, self.tiles_per_image = channels, tiles_per_image
+        self.black_level, self.batch_size = black_level, batch_size
+        self.name = name
         self.paths = paths
+
+        # Passed Parameter Paranoia
+
+        print('PathManager Initialization...')
+        print('            Name : {}'.format(self.name))
+        print(' base_tile_width : {}'.format(self.base_tile_width))
+        print('base_tile_height : {}'.format(self.base_tile_height))
+        print('          border : {}'.format(self.border))
+        print('        channels : {}'.format(self.channels))
+        print('      batch_size : {}'.format(self.batch_size))
+        print('     black_level : {}'.format(self.black_level))
+        print('       trim tblr : {} {} {} {}'.format(self.trim_top, self.trim_bottom, self.trim_left, self.trim_right))
+        print(' tiles_per_image : {}'.format(self.tiles_per_image))
+        print('    path entries : {}'.format(self.paths.keys()))
 
         # Getting the image size dimensions
         if K.image_dim_ordering() == 'th':
             self.image_shape = (self.channels, self.tile_width, self.tile_height)
         else:
             self.image_shape = (self.tile_width, self.tile_height, self.channels)
-
-        self.batch_size = batch_size
 
         self.data_path = paths['data'] if 'data' in paths else 'Data'
         self.base_dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__main__.__file__)), self.data_path)
@@ -94,21 +108,21 @@ class PathManager():
     # Convenience Functions for data generators
     # See _image_generator, _index_generate, _predict_image_generator for base code
 
-    def training_data_generator(self, shuffle=True):
+    def training_data_generator(self, shuffle=True, jitter=True):
         return self._image_generator_frameops(self.training_path, shuffle)
 
-    def validation_data_generator(self, shuffle=True):
+    def validation_data_generator(self, shuffle=True, jitter=True):
         return self._image_generator_frameops(self.validation_path, shuffle)
 
-    def evaluation_data_generator(self, shuffle=True):
+    def evaluation_data_generator(self, shuffle=True, jitter=True):
         return self._image_generator_frameops(self.evaluation_path, shuffle)
 
-    def prediction_data_generator(self, shuffle=False):
+    def prediction_data_generator(self, shuffle=False, jitter=False):
         return self._predict_image_generator_frameops(self.predict_path, shuffle)
 
     # Frameops versions of image generators
 
-    def _image_generator_frameops(self, directory, shuffle=True):
+    def _image_generator_frameops(self, directory, shuffle=True, jitter=False):
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
@@ -126,9 +140,10 @@ class PathManager():
             for alpha_tile, beta_tile in frameops.tesselate_pair(
                                             alpha_paths, beta_paths,
                                             self.base_tile_width, self.base_tile_height, self.border,
+                                            black_level=self.black_level,
                                             trim_left=self.trim_left, trim_right=self.trim_right,
                                             trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                                            shuffle=shuffle):
+                                            shuffle=shuffle, jitter=jitter):
                 if K.image_dim_ordering() == 'th':
                     alpha_tile = alpha_tile.transpose((2, 0, 1))
                     beta_tile = beta_tile.transpose((2, 0, 1))
@@ -139,7 +154,7 @@ class PathManager():
                     batch_index = 0
                     yield (alpha_tiles, beta_tiles)
 
-    def _predict_image_generator_frameops(self, directory, shuffle=True):
+    def _predict_image_generator_frameops(self, directory, shuffle=True, jitter=False):
 
         alpha_paths = frameops.image_files(os.path.join(directory, self.alpha), deep=True)[0]
 
@@ -154,7 +169,7 @@ class PathManager():
                                 self.base_tile_width, self.base_tile_height, self.border,
                                 trim_left=self.trim_left, trim_right=self.trim_right,
                                 trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                                shuffle=shuffle):
+                                shuffle=shuffle, jitter=jitter):
                 if K.image_dim_ordering() == 'th':
                     alpha_tile = alpha_tile.transpose((2, 0, 1))
 

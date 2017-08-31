@@ -53,11 +53,25 @@ class BaseSRCNNModel(object):
     # Base model to provide a standard interface of adding Super Resolution models
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
 
         self.model = None
         self.name = name
-        self.border = border
+        # self.border = border
+
+        # Parameter passing paranoia
+
+        print('Model Initialization...')
+        print('            Name : {}'.format(name))
+        print(' base_tile_width : {}'.format(base_tile_width))
+        print('base_tile_height : {}'.format(base_tile_height))
+        print('          border : {}'.format(border))
+        print('        channels : {}'.format(channels))
+        print('      batch_size : {}'.format(batch_size))
+        print('     black_level : {}'.format(black_level))
+        print('       trim tblr : {} {} {} {}'.format(trim_top, trim_bottom, trim_left, trim_right))
+        print(' tiles_per_image : {}'.format(tiles_per_image))
+        print('    path entries : {}'.format(paths.keys()))
 
         # pm (PathManager) is a class that holds all the directory information
         # Holds batch_size, image_shape, and all directory paths
@@ -66,7 +80,8 @@ class BaseSRCNNModel(object):
 
         self.pm = PathManager(name, base_tile_width=base_tile_width, base_tile_height=base_tile_height,
                               border=border, channels=channels, batch_size=batch_size,
-                              tiles_per_image=tiles_per_image, paths=paths)
+                              black_level=black_level, trim_top=trim_top, trim_bottom=trim_bottom,
+                              trim_left=trim_left, trim_right=trim_right, tiles_per_image=tiles_per_image, paths=paths)
 
         self.evaluation_function = PSNRLossBorder(border)
 
@@ -94,7 +109,6 @@ class BaseSRCNNModel(object):
         if save_history:
             callback_list.append(HistoryCheckpoint(self.pm.history_path))
         print('Training model : %s' % (self.__class__.__name__))
-        print(self.pm.weight_path)
 
         self.model.fit_generator(self.pm.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.pm.batch_size,
@@ -165,10 +179,12 @@ class BaseSRCNNModel(object):
 class BasicSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
                  tiles_per_image=1, paths={}):
-        super(BasicSR, self).__init__('BasicSR', base_tile_width, base_tile_height, border, channels, batch_size,
-                                       trim_top, trim_bottom, trim_left, trim_right, tiles_per_image, paths)
+        super(BasicSR, self).__init__('BasicSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
+                                       border=border, channels=channels, batch_size=batch_size, black_level=black_level,
+                                       trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
+                                       tiles_per_image=tiles_per_image, paths=paths)
 
     # Create a model to be used to scale images of specific height and width.
 
@@ -192,11 +208,13 @@ class BasicSR(BaseSRCNNModel):
 class ExpansionSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
                  tiles_per_image=1, paths={}):
 
-        super(ExpansionSR, self).__init__('ExpansionSR', base_tile_width, base_tile_height, border, channels, batch_size,
-                                          trim_top, trim_bottom, trim_left, trim_right, tiles_per_image, paths)
+        super(ExpansionSR, self).__init__('ExpansionSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
+                                          border=border, channels=channels, batch_size=batch_size, black_level=black_level,
+                                          trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
+                                          tiles_per_image=tiles_per_image, paths=paths)
 
     # Create a model to be used to scale images of specific height and width.
 
@@ -226,11 +244,13 @@ class ExpansionSR(BaseSRCNNModel):
 class DeepDenoiseSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
                  tiles_per_image=1, paths={}):
 
-        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', base_tile_width, base_tile_height, border, channels, batch_size,
-                                             trim_top, trim_bottom, trim_left, trim_right, tiles_per_image, paths)
+        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
+                                             border=border, channels=channels, batch_size=batch_size, black_level=black_level,
+                                             trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
+                                             tiles_per_image=tiles_per_image, paths=paths)
 
     def create_model(self, channels=3, load_weights=False):
 
@@ -280,8 +300,10 @@ class VDSR(BaseSRCNNModel):
                  trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
                  tiles_per_image=1, paths={}):
 
-        super(VDSR, self).__init__('VDSR', base_tile_width, base_tile_height, border, channels, batch_size,
-                                   trim_top, trim_bottom, trim_left, trim_right, tiles_per_image, paths)
+        super(VDSR, self).__init__('VDSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
+                                   border=border, channels=channels, batch_size=batch_size, black_level=black_level,
+                                   trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
+                                   tiles_per_image=tiles_per_image, paths=paths)
 
     def create_model(self, channels=3, load_weights=False):
 

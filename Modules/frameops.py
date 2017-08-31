@@ -105,11 +105,13 @@ def imsave(file_path, img, meta=None):
 #   tile_width      width of tile in image files
 #   tile_height     height of tile in image files
 #   border          number of pixels to add to tile borders
-#   border_color    black color to use when adding borders
+#   black_level     black color to use when adding borders
 #   trim_...        pixels to trim from images before tesselating
 #   shuffle         Do a random permutation of files
+#   jitter          Jitter the tile position randomly
 
-def tesselate(file_paths, tile_width, tile_height, border, border_color = 0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True):
+def tesselate(file_paths, tile_width, tile_height, border, black_level = 0.0,
+              trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False):
 
     # Convert non-list to list
 
@@ -143,13 +145,19 @@ def tesselate(file_paths, tile_width, tile_height, border, border_color = 0, tri
             if len(shape) != 3 or (shape[0] > rows * tile_height) or (shape[1] > cols * tile_width):
                 print('Tesselation Error: file {} has incorrect shape {}'.format(f,str(shape)))
             else:
-                # Pad the image - the pixels added have value (border_color, border_color, border_color)
+                # Pad the image - the pixels added have value (black_level, black_level, black_level)
 
-                img = np.pad(img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
+                img = np.pad(img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=black_level)
 
                 # Actual tile width and height
 
                 across, down = tile_width+(2 * border), tile_height+(2 * border)
+
+                # Jitter tiles; if we are jittering, then the number of tiles along an axis is reduced by 1
+
+                jitter_x, jitter_y = (random.randint(0, tile_width-1), random.randint(0, tile_height-1)) if jitter else (0, 0)
+                rows = rows if jitter_x == 0 else rows - 1
+                cols = cols if jitter_y == 0 else cols - 1
 
                 # Shuffle tiles
 
@@ -162,15 +170,16 @@ def tesselate(file_paths, tile_width, tile_height, border, border_color = 0, tri
                 # Generate tiles
 
                 for row in row_list:
-                    rpos = row * tile_width
+                    rpos = (row * tile_width) + jitter_y
                     for col in col_list:
-                        cpos = col * tile_height
+                        cpos = (col * tile_height) + jitter_x
                         tile = img[rpos:rpos + down, cpos:cpos + across,:]
                         yield tile
 
 # This version tesellates matched pairs of images, with identical shuffling behavior. Used for model training
 
-def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, border_color = 0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True):
+def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, black_level = 0.0,
+                   trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False):
 
     # Convert non-lists to lists
 
@@ -214,14 +223,20 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bor
             elif len(alpha_shape) != 3 or (alpha_shape[0] > rows * tile_height) or (alpha_shape[1] > cols * tile_width):
                 print('Tesselation error: file pairs {} and {} have incorrect shape {}'.format(alpha_path, beta_path, str(alpha_shape)))
             else:
-                # Pad the images - the pixels added have value (border_color, border_color, border_color)
+                # Pad the images - the pixels added have value (black_level, black_level, black_level)
 
-                alpha_img = np.pad(alpha_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
-                beta_img = np.pad(beta_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
+                alpha_img = np.pad(alpha_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=black_level)
+                beta_img = np.pad(beta_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=black_level)
 
                 # Actual tile width and height
 
                 across, down = tile_width+(2 * border), tile_height+(2 * border)
+
+                # Jitter tiles; if we are jittering, then the number of tiles along an axis is reduced by 1
+
+                jitter_x, jitter_y = (random.randint(0, tile_width-1), random.randint(0, tile_height-1)) if jitter else (0, 0)
+                rows = rows if jitter_x == 0 else rows - 1
+                cols = cols if jitter_y == 0 else cols - 1
 
                 # Shuffle tiles
 
@@ -234,9 +249,9 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bor
                 # Generate tiles
 
                 for row in row_list:
-                    rpos = row * tile_width
+                    rpos = (row * tile_width) + jitter_y
                     for col in col_list:
-                        cpos = col * tile_height
+                        cpos = (col * tile_height) + jitter_x
                         alpha_tile = alpha_img[rpos:rpos + down, cpos:cpos + across,:]
                         beta_tile = beta_img[rpos:rpos + down, cpos:cpos + across,:]
                         yield (alpha_tile, beta_tile)
@@ -247,10 +262,10 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bor
 #   tiles           1-d list of numpy image tiles
 #   border          number of pixels to remove from the border
 #   row_width       number of tiles per row (number of rows is thus implicit)
-#   border_color    black color to use when padding
+#   black_level    black color to use when padding
 #   pad_...         amount of padding to create on each edge
 
-def grout(tiles, border, row_width, border_color=0, pad_top=0, pad_bottom=0, pad_left=0, pad_right=0):
+def grout(tiles, border, row_width, black_level=0.0, pad_top=0, pad_bottom=0, pad_left=0, pad_right=0):
 
     # Figure out the size of the final image and allocate it
 
@@ -283,7 +298,7 @@ def grout(tiles, border, row_width, border_color=0, pad_top=0, pad_bottom=0, pad
     # Pad the tiles
 
     if pad_top + pad_bottom + pad_left + pad_right > 0:
-        img = np.pad(img, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode='constant', constant_values=border_color)
+        img = np.pad(img, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode='constant', constant_values=black_level)
 
     return img
 

@@ -49,6 +49,7 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=255
+    black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
     trimtop=nnn         pixels to trim on image top edge, default = 0
@@ -64,6 +65,8 @@ Options are:
 ## TODOS
 
 - Parental Unit
+    - Add skip tile feature to trainer?
+    - Some way of skipping low-contrast tiles? Use blz to compress tiles and check size? Probably too slow though.
     - Better error handling on file IO
     - Create path structure in Data folder if necessary
     - Path structure validation improvements
