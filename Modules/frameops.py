@@ -11,6 +11,7 @@ import numpy as np
 import scipy.misc as misc
 import os
 import copy
+import random
 
 import Modules.dpx as dpx
 
@@ -103,40 +104,133 @@ def imsave(file_path, img, meta=None):
 #   border          number of pixels to add to tile borders
 #   border_color    black color to use when adding borders
 #   trim_...        pixels to trim from images before tesselating
+#   shuffle         Do a random permutation of files
 
-def tesselate(file_paths, tile_width, tile_height, border, border_color = 0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0):
+def tesselate(file_paths, tile_width, tile_height, border, border_color = 0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True):
 
     # Convert non-list to list
 
     file_paths = file_paths if type(file_paths) in (list,tuple) else [ file_paths ]
 
+    # Shuffle the list
+
+    if shuffle:
+        random.shuffle(file_paths)
+
+    # Process image files
+
     for f in file_paths:
         img = imread(f)
+
         # Trim the image
+
         if trim_top + trim_bottom + trim_left + trim_right > 0:
             shape = np.shape(img)
-            print(shape)
             img = img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
+
+        # Tessellate image
+
         shape = np.shape(img)
-        print(shape)
         rows = shape[0] // tile_height
         cols = shape[1] // tile_width
+
         if len(shape) != 3 or (shape[0] > rows * tile_height) or (shape[1] > cols * tile_width):
-            print('Error: file {} has incorrect shape {}'.format(f,str(np.shape.img)))
+            print('Tesselation Error: file {} has incorrect shape {}'.format(f,str(shape)))
         else:
             # Pad the image - the pixels added have value (border_color, border_color, border_color)
+
             img = np.pad(img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
-            shape = np.shape(img)
-            print(shape)
-            # Generate tiles
+
+            # Actual tile width and height
+
             across, down = tile_width+(2 * border), tile_height+(2 * border)
-            for row in range(0, rows):
+
+            # Shuffle tiles
+
+            row_list = list(range(rows))
+            col_list = list(range(cols))
+            if shuffle:
+                random.shuffle(row_list)
+                random.shuffle(col_list)
+
+            # Generate tiles
+
+            for row in row_list:
                 rpos = row * tile_width
-                for col in range(0, cols):
+                for col in col_list:
                     cpos = col * tile_height
                     tile = img[rpos:rpos + down, cpos:cpos + across,:]
-                    print('Tile r={},c={} starts at {},{} with shape {}'.format(row, col, rpos, cpos, str(np.shape(tile))))
                     yield tile
+
+# This version tesellates matched pairs of images, with identical shuffling behavior. Used for model training
+
+def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, border_color = 0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True):
+
+    # Convert non-lists to lists
+
+    alpha_paths = alpha_paths if type(alpha_paths) in (list,tuple) else [ alpha_paths ]
+    beta_paths = beta_paths if type(beta_paths) in (list,tuple) else [ beta_paths ]
+
+    all_paths = list(zip(alpha_paths, beta_paths))
+
+    # Shuffle the lists
+
+    if shuffle:
+        random.shuffle(all_paths)
+
+    # Process the image file pairs
+    print(len(all_paths))
+    for alpha_path, beta_path in all_paths:
+        print(alpha_path)
+        print(beta_path)
+        alpha_img = imread(alpha_path)
+        beta_img = imread(beta_path)
+
+        # Trim the images
+
+        if trim_top + trim_bottom + trim_left + trim_right > 0:
+            shape = np.shape(alpha_img)
+            alpha_img = alpha_img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
+            beta_img = beta_img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
+
+        # Tessellate image pairs
+
+        alpha_shape = np.shape(alpha_img)
+        beta_shape = np.shape(beta_img)
+        rows = alpha_shape[0] // tile_height
+        cols = alpha_shape[1] // tile_width
+
+        if alpha_shape != beta_shape:
+            print('Tesselation eroror: file pairs {} and {} have different shapes {} and {}'.format(alpha_path, beta_path, str(alpha_shape), str(beta_shape)))
+        elif len(alpha_shape) != 3 or (alpha_shape[0] > rows * tile_height) or (alpha_shape[1] > cols * tile_width):
+            print('Tesselation error: file pairs {} and {} have incorrect shape {}'.format(alpha_path, beta_path, str(alpha_shape)))
+        else:
+            # Pad the images - the pixels added have value (border_color, border_color, border_color)
+
+            alpha_img = np.pad(alpha_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
+            beta_img = np.pad(beta_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
+
+            # Actual tile width and height
+
+            across, down = tile_width+(2 * border), tile_height+(2 * border)
+
+            # Shuffle tiles
+
+            row_list = list(range(rows))
+            col_list = list(range(cols))
+            if shuffle:
+                random.shuffle(row_list)
+                random.shuffle(col_list)
+
+            # Generate tiles
+
+            for row in row_list:
+                rpos = row * tile_width
+                for col in col_list:
+                    cpos = col * tile_height
+                    alpha_tile = alpha_img[rpos:rpos + down, cpos:cpos + across,:]
+                    beta_tile = beta_img[rpos:rpos + down, cpos:cpos + across,:]
+                    yield (alpha_tile, beta_tile)
 
 # Quasi-inverse to tesselate; glue together tiles to form a final image; takes list of numpy tile arrays,
 # trims off the borders, stitches them together, and pads as needed.

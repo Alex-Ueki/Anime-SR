@@ -227,10 +227,11 @@ if __name__ == '__main__':
     print(' Image dimensions : {} x {}'.format(s1[0], s1[1]))
     print('')
 
+    """
     img = frameops.imread('Temp/Test.png')
     frameops.imsave('Temp/Test-nomung.png',img)
 
-    tiles = [t for t in frameops.tesselate('Temp/Test.png',tile_width,tile_height,tile_border,trim_left=240,trim_right=240)]
+    tiles = [t for t in frameops.tesselate('Temp/Test.png', tile_width, tile_height, tile_border, trim_left=240, trim_right=240, shuffle=False)]
 
     img = frameops.grout(tiles, tile_border, 24, pad_left=240, pad_right=240)
     print(np.shape(img))
@@ -238,11 +239,13 @@ if __name__ == '__main__':
     frameops.imsave('Temp/Test-Out.png',img)
 
     terminate(True,False)
+    """
 
     # Train the model
 
     if model_type in models.models:
-        sr = models.models[model_type](base_tile_width=tile_width, base_tile_height=tile_height, border=tile_border, paths=paths)
+        sr = models.models[model_type](base_tile_width=tile_width, base_tile_height=tile_height,
+                                       border=tile_border, trim_left=240, trim_right=240, paths=paths)
         sr.create_model()
         sr.fit(nb_epochs=epochs)
         sr.save()

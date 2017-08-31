@@ -1,13 +1,11 @@
 from __future__ import print_function, division, absolute_import
+import __main__
 
 import numpy as np
 from scipy.misc import imsave, imread, imresize
-
 from keras import backend as K
-
+import Modules.frameops as frameops
 import os
-
-import __main__
 
 """ LIST OF TODO """
 """
@@ -27,10 +25,15 @@ import __main__
     Uses default paths in Data directory if a path is not specified
 """
 
+# Model parameter class
+
 class PathManager():
 
-    def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16, paths={}):
+    def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
+                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, paths={}):
 
+        self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
+        self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
         self.tile_width, self.tile_height = base_tile_width + 2*border, base_tile_height + 2*border
         self.channels = channels
 
@@ -58,11 +61,13 @@ class PathManager():
         self.alpha = 'Alpha'
         self.beta = 'Beta'
 
-    """
-        Following functions check the image count of important directories
-        Asserts equality in image number for certain directories
-        See _image_count for base helper function
-    """
+    # Following functions check the image count of important directories
+    # Asserts equality in image number for certain directories
+    # See _image_count for base helper function
+
+    # MUST ADJUST FOR TILINGS PER IMAGE
+    # Move load of path lists into PM init self variables!!!
+
     def train_images_count(self):
         a = self._image_count(os.path.join(self.training_path, self.alpha))
         b = self._image_count(os.path.join(self.training_path, self.beta))
@@ -90,28 +95,92 @@ class PathManager():
     def input_images_count(self):
         return self._image_count(os.path.join(self.input_path, self.alpha))
 
-    """
-        Convenience Functions for data generators
-        See _image_generator, _index_generate, _predict_image_generator for base code
-    """
+    # Convenience Functions for data generators
+    # See _image_generator, _index_generate, _predict_image_generator for base code
 
     def training_data_generator(self, shuffle=True):
-        return self._image_generator(self.training_path, shuffle)
+        return self._image_generator_frameops(self.training_path, shuffle)
 
     def validation_data_generator(self, shuffle=True):
-        return self._image_generator(self.validation_path, shuffle)
+        return self._image_generator_frameops(self.validation_path, shuffle)
 
     def evaluation_data_generator(self, shuffle=True):
-        return self._image_generator(self.evaluation_path, shuffle)
+        return self._image_generator_frameops(self.evaluation_path, shuffle)
 
     def prediction_data_generator(self, shuffle=False):
-        return self._predict_image_generator(self.predict_path, shuffle)
+        return self._predict_image_generator_frameops(self.predict_path, shuffle)
 
+    # Frameops versions of image generators
 
-    """
-        Internal Helper functions
-        START : Code derived from Image-Super-Resolution/img_utils.py for _image_generator, _index_generate
-    """
+    def _image_generator_frameops(self, directory, shuffle=True):
+
+        # frameops.image_files returns a list with an element for each image file type,
+        # but at this point, we'll only ever have one...
+
+        alpha_paths = frameops.image_files(os.path.join(directory, self.alpha), deep=True)[0]
+        beta_paths = frameops.image_files(os.path.join(directory, self.beta), deep=True)[0]
+
+        alpha_tiles = np.empty((self.batch_size, ) + self.image_shape)
+        beta_tiles = np.empty((self.batch_size, ) + self.image_shape)
+        batch_index = 0
+
+        # Generate batches of tiles
+
+        for alpha_tile, beta_tile in frameops.tesselate_pair(
+                                        alpha_paths, beta_paths,
+                                        self.base_tile_width, self.base_tile_height, self.border,
+                                        trim_left=self.trim_left, trim_right=self.trim_right,
+                                        trim_top=self.trim_top, trim_bottom=self.trim_bottom,
+                                        shuffle=shuffle):
+            if K.image_dim_ordering() == 'th':
+                alpha_tile = alpha_tile.transpose((2, 0, 1))
+                beta_tile = beta_tile.transpose((2, 0, 1))
+            alpha_tiles[batch_index] = alpha_tile
+            beta_tiles[batch_index] = beta_tile
+            batch_index += 1
+            if batch_index >= self.batch_size:
+                batch_index = 0
+                yield (alpha_tiles, beta_tiles)
+
+        # If there are leftover tiles, yield a short batch
+
+        if batch_index > 0:
+            alpha_tiles = alpha_tiles[:batch_index]
+            beta_tiles = beta_tiles[:batch_index]
+            yield (alpha_tiles, beta_tiles)
+
+    def _predict_image_generator_frameops(self, directory, shuffle=True):
+
+        alpha_paths = frameops.image_files(os.path.join(directory, self.alpha), deep=True)[0]
+
+        alpha_tiles = np.empty((self.batch_size, ) + self.image_shape)
+        batch_index = 0
+
+        # Generate batches of tiles
+
+        for alpha_tile in frameops.tesselate(
+                            alpha_paths,
+                            self.base_tile_width, self.base_tile_height, self.border,
+                            trim_left=self.trim_left, trim_right=self.trim_right,
+                            trim_top=self.trim_top, trim_bottom=self.trim_bottom,
+                            shuffle=shuffle):
+            if K.image_dim_ordering() == 'th':
+                alpha_tile = alpha_tile.transpose((2, 0, 1))
+
+            alpha_tiles[batch_index] = alpha_tile
+            batch_index += 1
+            if batch_index >= self.batch_size:
+                batch_index = 0
+                yield (alpha_tiles)
+
+        # If there are leftover tiles, yield a short batch
+
+        if batch_index > 0:
+            alpha_tiles = alpha_tiles[:batch_index]
+            yield (alpha_tiles)
+
+    # Internal Helper functions
+    # START : Code derived from Image-Super-Resolution/img_utils.py for _image_generator, _index_generate
 
     def _image_generator(self, directory, shuffle=True):
 
@@ -151,7 +220,8 @@ class PathManager():
 
             yield (batch_x, batch_y)
 
-    # Helper to generate batch numbers
+    # Helper to generate batch number
+
     def _index_generator(self, N, batch_size, shuffle=True):
         batch_index = 0
         total_batches_seen = 0
@@ -175,12 +245,11 @@ class PathManager():
             yield (index_array[current_index: current_index + current_batch_size],
                    current_index, current_batch_size)
 
-    """
-        END : Code derived from Image-Super-Resolution/img_utils.py
-    """
+    # END : Code derived from Image-Super-Resolution/img_utils.py
 
     # Image generator for model.predict_generator function (Keras)
     # Returns a single value
+
     def _predict_image_generator(self, directory, shuffle=True):
 
         file_names = [f for f in sorted(os.listdir(os.path.join(directory, self.alpha)))]
@@ -208,8 +277,7 @@ class PathManager():
 
             yield (batch)
 
-    """
-        Helper for getting image count
-    """
+    # Helper for getting image count
+
     def _image_count(self, imgs_path):
         return len([name for name in os.listdir(imgs_path)])

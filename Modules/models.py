@@ -53,7 +53,8 @@ class BaseSRCNNModel(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16, paths={}):
+    def __init__(self, name, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
+                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, paths={}):
         """
         Base model to provide a standard interface of adding Super Resolution models
         """
@@ -90,7 +91,7 @@ class BaseSRCNNModel(object):
         callback_list = [callbacks.ModelCheckpoint(self.pm.weight_path, monitor='val_PeekSignaltoNoiseRatio', save_best_only=True,
                                                    mode='max', save_weights_only=True)]
         if save_history:
-            callback_list.append(HistoryCheckpoint(self.history_path))
+            callback_list.append(HistoryCheckpoint(self.pm.history_path))
         print('Training model : %s' % (self.__class__.__name__))
         print(self.pm.weight_path)
 
@@ -162,8 +163,10 @@ class BaseSRCNNModel(object):
 
 class BasicSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16, paths={}):
-        super(BasicSR, self).__init__('BasicSR', base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16, paths=paths)
+    def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
+                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, paths={}):
+        super(BasicSR, self).__init__('BasicSR', base_tile_width, base_tile_height, border, channels, batch_size,
+                                       trim_top, trim_bottom, trim_left, trim_right, paths)
 
     def create_model(self, channels=3, load_weights=False):
         """
