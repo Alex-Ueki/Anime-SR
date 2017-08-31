@@ -4,6 +4,10 @@ Credit to
 *<a href="https://github.com/titu1994/Image-Super-Resolution">Image-Super-Resolution</a>*
 for base code, https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc for DPX file io.
 
+## Important note for GPU
+
+Look for "# PU" comments in models.py for questions about "PeekSignaltoNoiseRatio"
+
 ## Setup
 
 Set up Data directory as follows:
@@ -45,6 +49,10 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=255
+    trimleft=nnn        pixels to trim on image left edge, default = 240
+    trimright=nnn       pixels to trim on image right edge, default = 240
+    trimtop=nnn         pixels to trim on image top edge, default = 0
+    trimbottom=nnn      pixels to trim on image bottom edge, default = 0
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
@@ -56,11 +64,12 @@ Options are:
 ## TODOS
 
 - Parental Unit
-    - Complete train.py, currently it's testing the tiling.
-    - Update basemodel.py and models.py to handle arbitrary tile and border sizes.
+    - Better error handling on file IO
+    - Create path structure in Data folder if necessary
+    - Path structure validation improvements
     - Update dpx.py to extract black levels automatically.
     - Write evaluate.py, hallucinate.py, etc.
-    - Cleanup pass to conform to PEP 8 (find prettyprinter for python/atom)
+    - Cleanup pass to conform to PEP 8 (find pretty-printer for python/atom)
     - Improve Documentation
 - Gene-Perpetuation Unit
     - New, better models

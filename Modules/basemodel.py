@@ -30,12 +30,13 @@ import os
 class PathManager():
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
-                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, paths={}):
+                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
 
         self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
         self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
         self.tile_width, self.tile_height = base_tile_width + 2*border, base_tile_height + 2*border
-        self.channels = channels
+        self.channels, self.tiles_per_image = channels, tiles_per_image
+        self.paths = paths
 
         # Getting the image size dimensions
         if K.image_dim_ordering() == 'th':
@@ -61,39 +62,34 @@ class PathManager():
         self.alpha = 'Alpha'
         self.beta = 'Beta'
 
-    # Following functions check the image count of important directories
-    # Asserts equality in image number for certain directories
-    # See _image_count for base helper function
-
-    # MUST ADJUST FOR TILINGS PER IMAGE
-    # Move load of path lists into PM init self variables!!!
+    # Check the image counts of important directories. Assumes error checking will be done at an outer level.
 
     def train_images_count(self):
-        a = self._image_count(os.path.join(self.training_path, self.alpha))
-        b = self._image_count(os.path.join(self.training_path, self.beta))
-        assert a == b, 'WARNING: Alpha and Beta set have different image sizes.\n' \
-                       'Check ' + self.training_path
-        return a
+
+        # We may have the list of files, otherwise go fetch it
+
+        files = self.paths['training.alpha'] if 'training.alpha' in self.paths else frameops.image_files(os.path.join(self.training_path, self.alpha))
+
+        # files will (hopefully) be a single element list containing a list of all the filenames.
+
+        return self.tiles_per_image * len(files[0])
 
     def val_images_count(self):
-        a = self._image_count(os.path.join(self.validation_path, self.alpha))
-        b = self._image_count(os.path.join(self.validation_path, self.beta))
-        assert a == b, 'WARNING: Alpha and Beta set have different image sizes.\n' \
-                       'Check ' + self.validation_path
-        return a
+
+        files = self.paths['validation.alpha'] if 'validation.alpha' in self.paths else frameops.image_files(os.path.join(self.validation_path, self.alpha))
+        return self.tiles_per_image * len(files[0])
 
     def eval_images_count(self):
-        a = self._image_count(os.path.join(self.evaluation_path, self.alpha))
-        b = self._image_count(os.path.join(self.evaluation_path, self.beta))
-        assert a == b, 'WARNING: Alpha and Beta set have different image sizes.\n' \
-                       'Check ' + self.evaluation_path
-        return a
+        files = self.paths['evaluation.alpha'] if 'evaluation.alpha' in self.paths else frameops.image_files(os.path.join(self.evaluation_path, self.alpha))
+        return self.tiles_per_image * len(files[0])
 
     def predict_images_count(self):
-        return self._image_count(os.path.join(self.predict_path, self.alpha))
+        files = self.paths['predict.alpha'] if 'predict.alpha' in self.paths else frameops.image_files(os.path.join(self.predict_path, self.alpha))
+        return self.tiles_per_image * len(files[0])
 
     def input_images_count(self):
-        return self._image_count(os.path.join(self.input_path, self.alpha))
+        files = self.paths['input.alpha'] if 'input.alpha' in self.paths else frameops.image_files(os.path.join(self.input_path, self.alpha))
+        return self.tiles_per_image * len(files[0])
 
     # Convenience Functions for data generators
     # See _image_generator, _index_generate, _predict_image_generator for base code
@@ -124,30 +120,24 @@ class PathManager():
         beta_tiles = np.empty((self.batch_size, ) + self.image_shape)
         batch_index = 0
 
-        # Generate batches of tiles
+        # Generate batches of tiles, repeating through the list as needed
 
-        for alpha_tile, beta_tile in frameops.tesselate_pair(
-                                        alpha_paths, beta_paths,
-                                        self.base_tile_width, self.base_tile_height, self.border,
-                                        trim_left=self.trim_left, trim_right=self.trim_right,
-                                        trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                                        shuffle=shuffle):
-            if K.image_dim_ordering() == 'th':
-                alpha_tile = alpha_tile.transpose((2, 0, 1))
-                beta_tile = beta_tile.transpose((2, 0, 1))
-            alpha_tiles[batch_index] = alpha_tile
-            beta_tiles[batch_index] = beta_tile
-            batch_index += 1
-            if batch_index >= self.batch_size:
-                batch_index = 0
-                yield (alpha_tiles, beta_tiles)
-
-        # If there are leftover tiles, yield a short batch
-
-        if batch_index > 0:
-            alpha_tiles = alpha_tiles[:batch_index]
-            beta_tiles = beta_tiles[:batch_index]
-            yield (alpha_tiles, beta_tiles)
+        while True:
+            for alpha_tile, beta_tile in frameops.tesselate_pair(
+                                            alpha_paths, beta_paths,
+                                            self.base_tile_width, self.base_tile_height, self.border,
+                                            trim_left=self.trim_left, trim_right=self.trim_right,
+                                            trim_top=self.trim_top, trim_bottom=self.trim_bottom,
+                                            shuffle=shuffle):
+                if K.image_dim_ordering() == 'th':
+                    alpha_tile = alpha_tile.transpose((2, 0, 1))
+                    beta_tile = beta_tile.transpose((2, 0, 1))
+                alpha_tiles[batch_index] = alpha_tile
+                beta_tiles[batch_index] = beta_tile
+                batch_index += 1
+                if batch_index >= self.batch_size:
+                    batch_index = 0
+                    yield (alpha_tiles, beta_tiles)
 
     def _predict_image_generator_frameops(self, directory, shuffle=True):
 
@@ -156,28 +146,23 @@ class PathManager():
         alpha_tiles = np.empty((self.batch_size, ) + self.image_shape)
         batch_index = 0
 
-        # Generate batches of tiles
+        # Generate batches of tiles, repeating through list as needed
 
-        for alpha_tile in frameops.tesselate(
-                            alpha_paths,
-                            self.base_tile_width, self.base_tile_height, self.border,
-                            trim_left=self.trim_left, trim_right=self.trim_right,
-                            trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                            shuffle=shuffle):
-            if K.image_dim_ordering() == 'th':
-                alpha_tile = alpha_tile.transpose((2, 0, 1))
+        while True:
+            for alpha_tile in frameops.tesselate(
+                                alpha_paths,
+                                self.base_tile_width, self.base_tile_height, self.border,
+                                trim_left=self.trim_left, trim_right=self.trim_right,
+                                trim_top=self.trim_top, trim_bottom=self.trim_bottom,
+                                shuffle=shuffle):
+                if K.image_dim_ordering() == 'th':
+                    alpha_tile = alpha_tile.transpose((2, 0, 1))
 
-            alpha_tiles[batch_index] = alpha_tile
-            batch_index += 1
-            if batch_index >= self.batch_size:
-                batch_index = 0
-                yield (alpha_tiles)
-
-        # If there are leftover tiles, yield a short batch
-
-        if batch_index > 0:
-            alpha_tiles = alpha_tiles[:batch_index]
-            yield (alpha_tiles)
+                alpha_tiles[batch_index] = alpha_tile
+                batch_index += 1
+                if batch_index >= self.batch_size:
+                    batch_index = 0
+                    yield (alpha_tiles)
 
     # Internal Helper functions
     # START : Code derived from Image-Super-Resolution/img_utils.py for _image_generator, _index_generate

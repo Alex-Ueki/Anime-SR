@@ -15,6 +15,10 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=255
+    trimleft=nnn        pixels to trim on image left edge, default = 240
+    trimright=nnn       pixels to trim on image right edge, default = 240
+    trimtop=nnn         pixels to trim on image top edge, default = 0
+    trimbottom=nnn      pixels to trim on image bottom edge, default = 0
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
@@ -73,6 +77,10 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=255
+    trimleft=nnn        pixels to trim on image left edge, default = 240
+    trimright=nnn       pixels to trim on image right edge, default = 240
+    trimtop=nnn         pixels to trim on image top edge, default = 0
+    trimbottom=nnn      pixels to trim on image bottom edge, default = 0
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
@@ -89,9 +97,11 @@ if __name__ == '__main__':
 
     model_type = sys.argv[1]
 
-    # Initialize defaults
+    # Initialize defaults. Note that we trim 240 pixels off right and left, this is
+    # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
 
-    (tile_width, tile_height, tile_border, epochs) = (60, 60, 2, 255)
+    tile_width, tile_height, tile_border, epochs = 60, 60, 2, 255
+    trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     paths = {}
 
     # Parse options
@@ -104,7 +114,9 @@ if __name__ == '__main__':
             op, value = opvalue
             vnum = int(value) if value.isdigit() else -1
 
-            opmatch = [s for s in ['width', 'height', 'border', 'epochs', 'training', 'validation', 'model', 'data', 'history'] if s.startswith(op)]
+            opmatch = [s for s in ['width', 'height', 'border', 'epochs', 'training',
+                                   'validation', 'model', 'data', 'history',
+                                   'trimleft', 'trimright', 'trimtop', 'trimbottom'] if s.startswith(op)]
 
             if len(opmatch) == 0:
                 errors = oops(errors, True, 'Unknown option ({})', op)
@@ -124,6 +136,18 @@ if __name__ == '__main__':
                 elif op == 'epochs':
                     epochs = vnum
                     errors = oops(errors, vnum <= 0, 'Epochs invalid ({})', option)
+                elif op == 'trimleft':
+                    trim_left = vnum
+                    errors = oops(errors, vnum <= 0, 'Left trim value invalid ({})', option)
+                elif op == 'trimright':
+                    trim_right = vnum
+                    errors = oops(errors, vnum <= 0, 'Right trim value invalid ({})', option)
+                elif op == 'trimtop':
+                    trim_top = vnum
+                    errors = oops(errors, vnum <= 0, 'Top trim value invalid ({})', option)
+                elif op == 'trimbottom':
+                    trim_bottom = vnum
+                    errors = oops(errors, vnum <= 0, 'Bottom trim value invalid ({})', option)
                 elif op == 'data':
                     paths['data'] = os.path.abspath(value)
                 elif op == 'training':
@@ -155,15 +179,15 @@ if __name__ == '__main__':
 
     # Remind user what we're about to do.
 
-    print('            Model : {}'.format(model_type))
-    print('       Tile Width : {}'.format(tile_width))
-    print('      Tile Height : {}'.format(tile_height))
-    print('      Tile Border : {}'.format(tile_border))
-    print('           Epochs : {}'.format(epochs))
-    print('   Data root path : {}'.format(paths['data']))
-    print('  Training Images : {}'.format(paths['training']))
-    print('Validation Images : {}'.format(paths['validation']))
-    print('       Model File : {}'.format(paths['weights']))
+    print('             Model : {}'.format(model_type))
+    print('        Tile Width : {}'.format(tile_width))
+    print('       Tile Height : {}'.format(tile_height))
+    print('       Tile Border : {}'.format(tile_border))
+    print('            Epochs : {}'.format(epochs))
+    print('    Data root path : {}'.format(paths['data']))
+    print('   Training Images : {}'.format(paths['training']))
+    print(' Validation Images : {}'.format(paths['validation']))
+    print('        Model File : {}'.format(paths['weights']))
 
     # Validation and error checking
 
@@ -207,7 +231,6 @@ if __name__ == '__main__':
 
     for f in [0, 1]:
         s1, s2 = np.shape(test_images[f][0]), np.shape(test_images[f][1])
-        print(s1, s2)
         errors = oops(errors, s1 != s2, '{} {} and {} images do not have identical size ({} vs {})', (image_paths[f], sub_folders[0], sub_folders[1], s1, s2))
 
     s1, s2 = np.shape(test_images[0][0]), np.shape(test_images[1][0])
@@ -219,12 +242,29 @@ if __name__ == '__main__':
 
     terminate(errors, False)
 
-    errors = oops(errors, (s1[0] % tile_width) != 0, 'Images do not evenly tile horizontally ({} % {} != 0)', (s1[0], tile_width))
-    errors = oops(errors, (s1[1] % tile_height) != 0, 'Images do not evenly tile vertically ({} % {} != 0)', (s1[1], tile_height))
+    trimmed_width, trimmed_height = s1[0] - (trim_left + trim_right), s1[1] - (trim_top + trim_bottom)
+
+    errors = oops(errors, trimmed_width <= 0, 'Trimmed images have invalid width ({} - ({} + {}) <= 0)', (s1[0], trim_left, trim_right))
+    errors = oops(errors, trimmed_width <= 0, 'Trimmed images have invalid height ({} - ({} + {}) <= 0)', (s1[1], trim_top, trim_bottom))
 
     terminate(errors, False)
 
-    print(' Image dimensions : {} x {}'.format(s1[0], s1[1]))
+    errors = oops(errors, (trimmed_width % tile_width) != 0, 'Trimmed images do not evenly tile horizontally ({} % {} != 0)', (trimmed_width, tile_width))
+    errors = oops(errors, (trimmed_height % tile_height) != 0, 'Trimmed images do not evenly tile vertically ({} % {} != 0)', (trimmed_height, tile_height))
+
+    terminate(errors, False)
+
+    tiles_per_image = (trimmed_width // tile_width) * (trimmed_height // tile_height)
+
+    # Since we've gone to the trouble of reading in all the path data, let's make it available to our models for reuse
+    for fc, f in enumerate(image_paths):
+        for sc, s in enumerate(sub_folders):
+            paths[f + '.' + s] = image_info[fc][sc]
+
+    print('  Image dimensions : {} x {}'.format(s1[0], s1[1]))
+    print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(trim_top, trim_bottom, trim_left, trim_right))
+    print('Trimmed dimensions : {} x {}'.format(trimmed_width, trimmed_height))
+    print('   Tiles per image : {}'.format(tiles_per_image))
     print('')
 
     """
@@ -245,7 +285,8 @@ if __name__ == '__main__':
 
     if model_type in models.models:
         sr = models.models[model_type](base_tile_width=tile_width, base_tile_height=tile_height,
-                                       border=tile_border, trim_left=240, trim_right=240, paths=paths)
+                                       border=tile_border, trim_left=trim_left, trim_right=trim_left,
+                                       tiles_per_image=tiles_per_image, paths=paths)
         sr.create_model()
         sr.fit(nb_epochs=epochs)
         sr.save()

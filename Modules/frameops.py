@@ -61,17 +61,20 @@ def imread(file_path):
 
     file_type = os.path.splitext(file_path)[1]
 
-    if file_type == '.dpx':
-        with open(file_path, 'rb') as f:
-            meta = dpx.readDPXMetaData(f)
-            if meta is None:
-                img = None
-            else:
-                img = dpx.readDPXImageData(f, meta)
-                last_meta = copy.deepcopy(meta)
+    if os.path.isfile(file_path):
+        if file_type == '.dpx':
+            with open(file_path, 'rb') as f:
+                meta = dpx.readDPXMetaData(f)
+                if meta is None:
+                    img = None
+                else:
+                    img = dpx.readDPXImageData(f, meta)
+                    last_meta = copy.deepcopy(meta)
+        else:
+            img = misc.imread(file_path, mode='RGB')
+            img = img.astype('float32') / 255.0
     else:
-        img = misc.imread(file_path, mode='RGB')
-        img = img.astype('float32') / 255.0
+        img = None
 
     return img
 
@@ -122,45 +125,48 @@ def tesselate(file_paths, tile_width, tile_height, border, border_color = 0, tri
     for f in file_paths:
         img = imread(f)
 
-        # Trim the image
-
-        if trim_top + trim_bottom + trim_left + trim_right > 0:
-            shape = np.shape(img)
-            img = img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
-
-        # Tessellate image
-
-        shape = np.shape(img)
-        rows = shape[0] // tile_height
-        cols = shape[1] // tile_width
-
-        if len(shape) != 3 or (shape[0] > rows * tile_height) or (shape[1] > cols * tile_width):
-            print('Tesselation Error: file {} has incorrect shape {}'.format(f,str(shape)))
+        if img is None:
+            print('Tesselation error: could not read image {}'.format(f))
         else:
-            # Pad the image - the pixels added have value (border_color, border_color, border_color)
+            # Trim the image
 
-            img = np.pad(img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
+            if trim_top + trim_bottom + trim_left + trim_right > 0:
+                shape = np.shape(img)
+                img = img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
 
-            # Actual tile width and height
+            # Tessellate image
 
-            across, down = tile_width+(2 * border), tile_height+(2 * border)
+            shape = np.shape(img)
+            rows = shape[0] // tile_height
+            cols = shape[1] // tile_width
 
-            # Shuffle tiles
+            if len(shape) != 3 or (shape[0] > rows * tile_height) or (shape[1] > cols * tile_width):
+                print('Tesselation Error: file {} has incorrect shape {}'.format(f,str(shape)))
+            else:
+                # Pad the image - the pixels added have value (border_color, border_color, border_color)
 
-            row_list = list(range(rows))
-            col_list = list(range(cols))
-            if shuffle:
-                random.shuffle(row_list)
-                random.shuffle(col_list)
+                img = np.pad(img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
 
-            # Generate tiles
+                # Actual tile width and height
 
-            for row in row_list:
-                rpos = row * tile_width
-                for col in col_list:
-                    cpos = col * tile_height
-                    tile = img[rpos:rpos + down, cpos:cpos + across,:]
-                    yield tile
+                across, down = tile_width+(2 * border), tile_height+(2 * border)
+
+                # Shuffle tiles
+
+                row_list = list(range(rows))
+                col_list = list(range(cols))
+                if shuffle:
+                    random.shuffle(row_list)
+                    random.shuffle(col_list)
+
+                # Generate tiles
+
+                for row in row_list:
+                    rpos = row * tile_width
+                    for col in col_list:
+                        cpos = col * tile_height
+                        tile = img[rpos:rpos + down, cpos:cpos + across,:]
+                        yield tile
 
 # This version tesellates matched pairs of images, with identical shuffling behavior. Used for model training
 
@@ -181,56 +187,59 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bor
     # Process the image file pairs
     print(len(all_paths))
     for alpha_path, beta_path in all_paths:
-        print(alpha_path)
-        print(beta_path)
         alpha_img = imread(alpha_path)
         beta_img = imread(beta_path)
 
-        # Trim the images
-
-        if trim_top + trim_bottom + trim_left + trim_right > 0:
-            shape = np.shape(alpha_img)
-            alpha_img = alpha_img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
-            beta_img = beta_img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
-
-        # Tessellate image pairs
-
-        alpha_shape = np.shape(alpha_img)
-        beta_shape = np.shape(beta_img)
-        rows = alpha_shape[0] // tile_height
-        cols = alpha_shape[1] // tile_width
-
-        if alpha_shape != beta_shape:
-            print('Tesselation eroror: file pairs {} and {} have different shapes {} and {}'.format(alpha_path, beta_path, str(alpha_shape), str(beta_shape)))
-        elif len(alpha_shape) != 3 or (alpha_shape[0] > rows * tile_height) or (alpha_shape[1] > cols * tile_width):
-            print('Tesselation error: file pairs {} and {} have incorrect shape {}'.format(alpha_path, beta_path, str(alpha_shape)))
+        if alpha_img is None:
+            print('Tesselation error: could not read image {}'.format(alpha_path))
+        elif beta_img is None:
+            print('Tesselation error: could not read image {}'.format(beta_path))
         else:
-            # Pad the images - the pixels added have value (border_color, border_color, border_color)
+            # Trim the images
 
-            alpha_img = np.pad(alpha_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
-            beta_img = np.pad(beta_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
+            if trim_top + trim_bottom + trim_left + trim_right > 0:
+                shape = np.shape(alpha_img)
+                alpha_img = alpha_img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
+                beta_img = beta_img[trim_top:shape[0]-trim_bottom, trim_left:shape[1]-trim_right, :]
 
-            # Actual tile width and height
+            # Tessellate image pairs
 
-            across, down = tile_width+(2 * border), tile_height+(2 * border)
+            alpha_shape = np.shape(alpha_img)
+            beta_shape = np.shape(beta_img)
+            rows = alpha_shape[0] // tile_height
+            cols = alpha_shape[1] // tile_width
 
-            # Shuffle tiles
+            if alpha_shape != beta_shape:
+                print('Tesselation eroror: file pairs {} and {} have different shapes {} and {}'.format(alpha_path, beta_path, str(alpha_shape), str(beta_shape)))
+            elif len(alpha_shape) != 3 or (alpha_shape[0] > rows * tile_height) or (alpha_shape[1] > cols * tile_width):
+                print('Tesselation error: file pairs {} and {} have incorrect shape {}'.format(alpha_path, beta_path, str(alpha_shape)))
+            else:
+                # Pad the images - the pixels added have value (border_color, border_color, border_color)
 
-            row_list = list(range(rows))
-            col_list = list(range(cols))
-            if shuffle:
-                random.shuffle(row_list)
-                random.shuffle(col_list)
+                alpha_img = np.pad(alpha_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
+                beta_img = np.pad(beta_img, ((border, border), (border, border), (0, 0)), mode='constant', constant_values=border_color)
 
-            # Generate tiles
+                # Actual tile width and height
 
-            for row in row_list:
-                rpos = row * tile_width
-                for col in col_list:
-                    cpos = col * tile_height
-                    alpha_tile = alpha_img[rpos:rpos + down, cpos:cpos + across,:]
-                    beta_tile = beta_img[rpos:rpos + down, cpos:cpos + across,:]
-                    yield (alpha_tile, beta_tile)
+                across, down = tile_width+(2 * border), tile_height+(2 * border)
+
+                # Shuffle tiles
+
+                row_list = list(range(rows))
+                col_list = list(range(cols))
+                if shuffle:
+                    random.shuffle(row_list)
+                    random.shuffle(col_list)
+
+                # Generate tiles
+
+                for row in row_list:
+                    rpos = row * tile_width
+                    for col in col_list:
+                        cpos = col * tile_height
+                        alpha_tile = alpha_img[rpos:rpos + down, cpos:cpos + across,:]
+                        beta_tile = beta_img[rpos:rpos + down, cpos:cpos + across,:]
+                        yield (alpha_tile, beta_tile)
 
 # Quasi-inverse to tesselate; glue together tiles to form a final image; takes list of numpy tile arrays,
 # trims off the borders, stitches them together, and pads as needed.
@@ -278,27 +287,18 @@ def grout(tiles, border, row_width, border_color=0, pad_top=0, pad_bottom=0, pad
 
     return img
 
-# Test code
+# Compute the size of the tile grid for an image
 
-def test_list(folder_path, deep=False):
+def tile_grid(file_path, tile_width=60, tile_height=60, border=2, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0):
 
-    files = image_files(folder_path, deep)
+    # We might get passed a list, unpack until we get a string (filepath)
 
-    print('Listing ' + folder_path)
+    while type(file_path) is list:
+        file_path = file_path[0]
 
-    for img_type in files:
-        if len(img_type) > 0:
-            fname = img_type[len(img_type)//4]
-            fname_info = os.path.splitext(os.path.basename(fname))
-            print('Type  : ' + fname_info[1])
-            print('Number: ' + str(len(img_type)))
-            img = imread(fname)
-            shape = np.shape(img)
-            print('File  : ' + fname)
-            print('Shape : ' + str(shape))
-            print('Center: ' + str(img[shape[0]//2][shape[1]//2]))
-            print('')
-            tfilename = 'X-'+''.join(fname_info)
-            imsave(tfilename, img)
-            img2 = imread(tfilename)
-            print('save/load OK!' if np.array_equal(img, img2) else 'save/load bad!')
+    img = imread(file_path)
+    shape = np.shape(img)
+
+    rows, cols = shape[0] - (trim_top + trim_bottom) // tile_height, shape[1] - (trim_left + trim_right) // tile_width
+
+    return (rows, cols)
