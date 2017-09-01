@@ -15,6 +15,13 @@ import keras.optimizers as optimizers
 from Modules.basemodel import PathManager
 from Modules.advanced import HistoryCheckpoint
 
+class LossHistory(callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+
+    def on_epoch_end(self, batch, logs={}):
+        self.losses.append(logs)
+
 def PSNRLoss(y_true, y_pred):
 
     # PSNR is Peak Signal to Noise Ratio, which is similar to mean squared error.
@@ -101,11 +108,14 @@ class BaseSRCNNModel(object):
 
         if self.model == None: self.create_model()
 
+        loss_history = LossHistory()
+
         # PU Question: This was val_PeekSignaltoNoiseRatio. Is that a typo? Where is documentation on how to use monitor
         # field. PU is very confused.
 
         callback_list = [callbacks.ModelCheckpoint(self.pm.weight_path, monitor='val_PeakSignaltoNoiseRatio', save_best_only=True,
-                                                   mode='max', save_weights_only=True)]
+                                                   mode='max', save_weights_only=True),
+                         loss_history]
         if save_history:
             callback_list.append(HistoryCheckpoint(self.pm.history_path))
         print('Training model : %s' % (self.__class__.__name__))
@@ -116,6 +126,16 @@ class BaseSRCNNModel(object):
                                  callbacks=callback_list,
                                  validation_data=self.pm.validation_data_generator(),
                                  validation_steps=val_count // self.pm.batch_size)
+
+        print('')
+        print('          Training results for : %s' % (self.__class__.__name__))
+
+        for key in sorted(loss_history.losses[0].keys()):
+            vals = [epoch[key] for epoch in loss_history.losses]
+            min_val = min(vals)
+            print('{0:>30} : {1} @ epoch {2}'.format(key, min_val, 1+vals.index(min_val)))
+        print('')
+
         return self.model
 
     # Evaluate the model on self.evaluation_path
