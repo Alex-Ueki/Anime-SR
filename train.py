@@ -1,6 +1,6 @@
 """
 
-Usage: train.py [model] [option(s)] ...
+Usage: train.py [option(s)] ...
 
     Trains a model. The available models are:
 
@@ -11,6 +11,7 @@ Usage: train.py [model] [option(s)] ...
 
 Options are:
 
+    model=model         model type, default is BasicSR
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
@@ -23,7 +24,7 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    model=path          path to model file, default = Weights/{model}-{width}-{height}-{border}.h5
+    weights=path        path to weights file, default = Weights/{model}-{width}-{height}-{border}.h5
     history=path        path to checkpoint file, default = Weights/{model}-{width}-{height}-{border}_history.h5
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
@@ -65,7 +66,7 @@ def terminate(sarah_connor, verbose=True):
     if sarah_connor:
         if verbose:
             print("""
-Usage: train.py [model] [option(s)] ...
+Usage: train.py [option(s)] ...
 
     Trains a model. The available models are:
 
@@ -76,6 +77,7 @@ Usage: train.py [model] [option(s)] ...
 
 Options are:
 
+    model=model         model type, default is BasicSR
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
@@ -88,7 +90,7 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    model=path          path to model file, default = weights/{model}-{width}-{height}-{border}.h5
+    weights=path        path to weights file, default = Weights/{model}-{width}-{height}-{border}.h5
     history=path        path to checkpoint file, default = weights/{model}-{width}-{height}-{border}_history.h5
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
@@ -98,14 +100,10 @@ Options are:
 
 if __name__ == '__main__':
 
-    errors = oops(False, len(sys.argv) == 1,
-                  'Model type not specified', len(sys.argv) - 1, True)
-
-    model_type = sys.argv[1]
-
     # Initialize defaults. Note that we trim 240 pixels off right and left, this is
     # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
 
+    model_type = 'BasicSR'
     tile_width, tile_height, tile_border, epochs = 60, 60, 2, 255
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level = -1.0
@@ -113,7 +111,9 @@ if __name__ == '__main__':
 
     # Parse options
 
-    for option in sys.argv[2:]:
+    errors = False
+
+    for option in sys.argv[1:]:
         opvalue = option.split('=', maxsplit=1)
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
@@ -128,8 +128,8 @@ if __name__ == '__main__':
                 fnum = -1.0
             vnum = fnum
 
-            opmatch = [s for s in ['width', 'height', 'border', 'epochs', 'training',
-                                   'validation', 'model', 'data', 'history', 'black',
+            opmatch = [s for s in ['model', 'width', 'height', 'border', 'epochs', 'training',
+                                   'validation', 'weights', 'data', 'history', 'black',
                                    'trimleft', 'trimright', 'trimtop', 'trimbottom'] if s.startswith(op)]
 
             if len(opmatch) == 0:
@@ -138,6 +138,10 @@ if __name__ == '__main__':
                 errors = oops(errors, True, 'Ambiguous option ({})', op)
             else:
                 op = opmatch[0]
+                if op == 'model':
+                    model_type = value
+                    errors = oops(errors, model_type not in models.models,
+                                  'Unknown model type ({})', value)
                 if op == 'width':
                     tile_width = vnum
                     errors = oops(errors, vnum <= 0,
@@ -181,7 +185,7 @@ if __name__ == '__main__':
                     paths['training'] = os.path.abspath(value)
                 elif op == 'validation':
                     paths['validation'] = os.path.abspath(value)
-                elif op == 'model':
+                elif op == 'weights':
                     paths['weights'] = os.path.abspath(value)
                 elif op == 'history':
                     paths['history'] = os.path.abspath(value)
@@ -221,7 +225,7 @@ if __name__ == '__main__':
     print('    Data root path : {}'.format(paths['data']))
     print('   Training Images : {}'.format(paths['training']))
     print(' Validation Images : {}'.format(paths['validation']))
-    print('        Model File : {}'.format(paths['weights']))
+    print('      Weights File : {}'.format(paths['weights']))
     print('      History File : {}'.format(paths['history']))
 
     # Validation and error checking
@@ -333,15 +337,11 @@ if __name__ == '__main__':
 
     # Train the model
 
-    if model_type in models.models:
-        sr = models.models[model_type](base_tile_width=tile_width, base_tile_height=tile_height,
-                                       border=tile_border, black_level=black_level,
-                                       trim_left=trim_left, trim_right=trim_left,
-                                       tiles_per_image=tiles_per_image, paths=paths)
-        sr.create_model()
-        sr.fit(nb_epochs=epochs)
-        sr.save()
-        print('Training completed...')
-    else:
-        errors = oops(errors, True, 'Unknown model type ({})',
-                      model_type, True)
+    sr = models.models[model_type](base_tile_width=tile_width, base_tile_height=tile_height,
+                                   border=tile_border, black_level=black_level,
+                                   trim_left=trim_left, trim_right=trim_left,
+                                   tiles_per_image=tiles_per_image, paths=paths)
+    sr.create_model()
+    sr.fit(nb_epochs=epochs)
+    sr.save()
+    print('Training completed...')

@@ -34,7 +34,7 @@ Data
 ## Usage
 
 ```
-train.py [model] [option(s)] ...
+Usage: train.py [option(s)] ...
 
     Trains a model. The available models are:
 
@@ -45,6 +45,7 @@ train.py [model] [option(s)] ...
 
 Options are:
 
+    model=model         model type, default is BasicSR
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
@@ -57,7 +58,7 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    model=path          path to model file, default = Weights/{model}-{width}-{height}-{border}.h5
+    weights=path        path to weights file, default = Weights/{model}-{width}-{height}-{border}.h5
     history=path        path to checkpoint file, default = Weights/{model}-{width}-{height}-{border}_history.h5
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
