@@ -4,27 +4,28 @@ from keras.callbacks import Callback
 from keras.engine.topology import Layer
 from keras import backend as K
 
-''' Callbacks '''
+# Callbacks
+
+
 class HistoryCheckpoint(Callback):
-    '''Callback that records events
-        into a `History` object.
 
-        It then saves the history after each epoch into a file.
-        To read the file into a python dict:
-            history = {}
-            with open(filename, "r") as f:
-                history = eval(f.read())
+    # Callback that records events into a `History` object.
+    #
+    # It then saves the history after each epoch into a file.
+    #
+    # To read the file into a python dict:
+    #   history = {}
+    #   with open(filename, "r") as f:
+    #       history = eval(f.read())
+    #
+    # This may be unsafe since eval() will evaluate any string
+    # A safer alternative:
 
-        This may be unsafe since eval() will evaluate any string
-        A safer alternative:
+    # import ast
 
-        import ast
-
-        history = {}
-        with open(filename, "r") as f:
-            history = ast.literal_eval(f.read())
-
-    '''
+    # history = {}
+    #   with open(filename, "r") as f:
+    #       history = ast.literal_eval(f.read())
 
     def __init__(self, filename):
         super(Callback, self).__init__()
@@ -45,10 +46,12 @@ class HistoryCheckpoint(Callback):
             f.write(str(self.history))
 
 
-''' Theano Backend function '''
+# Theano Backend function
+
 
 def depth_to_scale(x, scale, output_shape, dim_ordering=K.image_dim_ordering(), name=None):
-    ''' Uses phase shift algorithm [1] to convert channels/depth for spacial resolution '''
+
+    # Uses phase shift algorithm [1] to convert channels/depth for spacial resolution
 
     import theano.tensor as T
 
@@ -70,11 +73,12 @@ def depth_to_scale(x, scale, output_shape, dim_ordering=K.image_dim_ordering(), 
 
         for i in range(out_row):
             for j in range(out_col):
-                a = i // scale #T.floor(i / scale).astype('int32')
-                b = j // scale #T.floor(j / scale).astype('int32')
+                a = i // scale  # T.floor(i / scale).astype('int32')
+                b = j // scale  # T.floor(j / scale).astype('int32')
                 d = channel * scale * (j % scale) + channel * (i % scale)
 
-                T.set_subtensor(out[:, channel - 1, i, j], x[:, d, a, b], inplace=True)
+                T.set_subtensor(out[:, channel - 1, i, j],
+                                x[:, d, a, b], inplace=True)
 
     if dim_ordering == 'tf':
         out = out.transpose((0, 2, 3, 1))
@@ -82,9 +86,13 @@ def depth_to_scale(x, scale, output_shape, dim_ordering=K.image_dim_ordering(), 
     return out
 
 
-''' Theano Backend function '''
+# Theano Backend function
+
+
 def depth_to_scale_th(input, scale, channels):
-    ''' Uses phase shift algorithm [1] to convert channels/depth for spacial resolution '''
+
+    # Uses phase shift algorithm [1] to convert channels/depth for spacial resolution
+
     import theano.tensor as T
 
     b, k, row, col = input.shape
@@ -94,12 +102,15 @@ def depth_to_scale_th(input, scale, channels):
     r = scale
 
     for y, x in itertools.product(range(scale), repeat=2):
-        out = T.inc_subtensor(out[:, :, y::r, x::r], input[:, r * y + x :: r * r, :, :])
+        out = T.inc_subtensor(out[:, :, y::r, x::r],
+                              input[:, r * y + x:: r * r, :, :])
 
     return out
 
 
-''' Tensorflow Backend Function '''
+# Tensorflow Backend Function
+
+
 def depth_to_scale_tf(input, scale, channels):
     try:
         import tensorflow as tf
@@ -107,12 +118,15 @@ def depth_to_scale_tf(input, scale, channels):
         print("Could not import Tensorflow for depth_to_scale operation. Please install Tensorflow or switch to Theano backend")
         exit()
 
-        # THROWS AN ERROR
+    # THROWS AN ERROR
+
     def _phase_shift(I, r):
-        ''' Function copied as is from https://github.com/Tetrachrome/subpixel/blob/master/subpixel.py'''
+
+        # Function copied as is from https://github.com/Tetrachrome/subpixel/blob/master/subpixel.py
 
         bsize, a, b, c = I.get_shape().as_list()
-        bsize = tf.shape(I)[0]  # Handling Dimension(None) type for undefined batch dim
+        # Handling Dimension(None) type for undefined batch dim
+        bsize = tf.shape(I)[0]
         X = tf.reshape(I, (bsize, a, b, r, r))
         X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
         X = tf.split(1, a, X)  # a, [bsize, b, r, r]
@@ -128,9 +142,8 @@ def depth_to_scale_tf(input, scale, channels):
         X = _phase_shift(input, scale)
     return X
 
-'''
-Implementation is incomplete. Use lambda layer for now.
-'''
+# Implementation is incomplete. Use lambda layer for now.
+
 
 class SubPixelUpscaling(Layer):
 

@@ -65,14 +65,11 @@ Options are:
 ## TODOS
 
 - Parental Unit
-    - Add skip tile feature to trainer?
     - Some way of skipping low-contrast tiles? Use blz to compress tiles and check size? Probably too slow though.
     - Better error handling on file IO
     - Create path structure in Data folder if necessary
     - Path structure validation improvements
-    - Update dpx.py to extract black levels automatically.
     - Write evaluate.py, hallucinate.py, etc.
-    - Cleanup pass to conform to PEP 8 (find pretty-printer for python/atom)
     - Improve Documentation
 - Gene-Perpetuation Unit
     - New, better models

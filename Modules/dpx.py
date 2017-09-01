@@ -139,6 +139,7 @@ propertymap = [
 
 ]
 
+
 def readDPXMetaData(f):
     f.seek(0)
     bytes = f.read(4)
@@ -166,8 +167,8 @@ def readDPXMetaData(f):
         elif p[3] == 'f':
             meta[p[0]] = struct.unpack(endianness + 'f', bytes)[0]
 
-
     return meta
+
 
 def readDPXImageData(f, meta):
     if meta['depth'] != 10 or meta['packing'] != 1 or meta['encoding'] != 0 or meta['descriptor'] != 50:
@@ -178,7 +179,8 @@ def readDPXImageData(f, meta):
     image = np.empty((height, width, 3), dtype=float)
 
     f.seek(meta['offset'])
-    raw = np.fromfile(f, dtype=np.dtype(np.int32), count=width*height, sep='')
+    raw = np.fromfile(f, dtype=np.dtype(np.int32),
+                      count=width * height, sep='')
     raw = raw.reshape((height, width))
 
     if meta['endianness'] == 'be':
@@ -192,13 +194,15 @@ def readDPXImageData(f, meta):
 
     return image
 
+
 def writeDPX(f, image, meta):
     endianness = '>' if meta['endianness'] == 'be' else '<'
     for p in propertymap:
         if p[0] in meta:
             f.seek(p[1])
             if p[3] == 'magic':
-                bytes = ('SDPX' if meta['endianness'] == 'be' else 'XPDS').encode(encoding='UTF-8')
+                bytes = ('SDPX' if meta['endianness'] ==
+                         'be' else 'XPDS').encode(encoding='UTF-8')
             elif p[3] == 'utf8':
                 bytes = meta[p[0]].encode(encoding='UTF-8')
             else:
@@ -206,9 +210,9 @@ def writeDPX(f, image, meta):
             f.write(bytes)
 
     raw = ((((image[:, :, 0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
-            | (((image[:, :, 1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
-            | (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
-        )
+           | (((image[:, :, 1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
+           | (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
+           )
 
     if meta['endianness'] == 'be':
         raw = raw.byteswap()

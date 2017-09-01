@@ -27,6 +27,7 @@ import os
 
 # Model parameter class
 
+
 class PathManager():
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
@@ -34,7 +35,8 @@ class PathManager():
 
         self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
         self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
-        self.tile_width, self.tile_height = base_tile_width + 2*border, base_tile_height + 2*border
+        self.tile_width, self.tile_height = base_tile_width + \
+            2 * border, base_tile_height + 2 * border
         self.channels, self.tiles_per_image = channels, tiles_per_image
         self.black_level, self.batch_size = black_level, batch_size
         self.name = name
@@ -42,6 +44,7 @@ class PathManager():
 
         # Passed Parameter Paranoia
 
+        print('')
         print('PathManager Initialization...')
         print('            Name : {}'.format(self.name))
         print(' base_tile_width : {}'.format(self.base_tile_width))
@@ -50,28 +53,39 @@ class PathManager():
         print('        channels : {}'.format(self.channels))
         print('      batch_size : {}'.format(self.batch_size))
         print('     black_level : {}'.format(self.black_level))
-        print('       trim tblr : {} {} {} {}'.format(self.trim_top, self.trim_bottom, self.trim_left, self.trim_right))
+        print('       trim tblr : {} {} {} {}'.format(self.trim_top,
+                                                      self.trim_bottom, self.trim_left, self.trim_right))
         print(' tiles_per_image : {}'.format(self.tiles_per_image))
         print('    path entries : {}'.format(self.paths.keys()))
 
         # Getting the image size dimensions
         if K.image_dim_ordering() == 'th':
-            self.image_shape = (self.channels, self.tile_width, self.tile_height)
+            self.image_shape = (
+                self.channels, self.tile_width, self.tile_height)
         else:
-            self.image_shape = (self.tile_width, self.tile_height, self.channels)
+            self.image_shape = (
+                self.tile_width, self.tile_height, self.channels)
 
         self.data_path = paths['data'] if 'data' in paths else 'Data'
-        self.base_dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__main__.__file__)), self.data_path)
+        self.base_dataset_dir = os.path.join(os.path.dirname(
+            os.path.abspath(__main__.__file__)), self.data_path)
 
         # use specified or default paths
-        self.input_path = paths['input'] if 'input' in paths else os.path.join(self.base_dataset_dir, 'input_images')
-        self.training_path = paths['training'] if 'training' in paths else os.path.join(self.base_dataset_dir, 'train_images', 'training')
-        self.validation_path = paths['validation'] if 'validation' in paths else os.path.join(self.base_dataset_dir, 'train_images', 'validation')
-        self.evaluation_path = paths['evaluation'] if 'evaluation' in paths else os.path.join(self.base_dataset_dir, 'eval_images')
-        self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(self.base_dataset_dir, 'predict_images')
-        self.history_path = paths['history'] if 'history' in paths else os.path.join(self.base_dataset_dir, 'weights', '%s-%d-%d-%d_history.h5' % (name, base_tile_width, base_tile_height, border))
+        self.input_path = paths['input'] if 'input' in paths else os.path.join(
+            self.base_dataset_dir, 'input_images')
+        self.training_path = paths['training'] if 'training' in paths else os.path.join(
+            self.base_dataset_dir, 'train_images', 'training')
+        self.validation_path = paths['validation'] if 'validation' in paths else os.path.join(
+            self.base_dataset_dir, 'train_images', 'validation')
+        self.evaluation_path = paths['evaluation'] if 'evaluation' in paths else os.path.join(
+            self.base_dataset_dir, 'eval_images')
+        self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
+            self.base_dataset_dir, 'predict_images')
+        self.history_path = paths['history'] if 'history' in paths else os.path.join(
+            self.base_dataset_dir, 'weights', '%s-%d-%d-%d_history.h5' % (name, base_tile_width, base_tile_height, border))
         # weight_path is the path to weight.h5 file for this model
-        self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(self.base_dataset_dir, 'weights', '%s-%d-%d-%d.h5' % (name, base_tile_width, base_tile_height, border))
+        self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(
+            self.base_dataset_dir, 'weights', '%s-%d-%d-%d.h5' % (name, base_tile_width, base_tile_height, border))
 
         self.alpha = 'Alpha'
         self.beta = 'Beta'
@@ -82,7 +96,8 @@ class PathManager():
 
         # We may have the list of files, otherwise go fetch it
 
-        files = self.paths['training.alpha'] if 'training.alpha' in self.paths else frameops.image_files(os.path.join(self.training_path, self.alpha))
+        files = self.paths['training.alpha'] if 'training.alpha' in self.paths else frameops.image_files(
+            os.path.join(self.training_path, self.alpha))
 
         # files will (hopefully) be a single element list containing a list of all the filenames.
 
@@ -90,45 +105,51 @@ class PathManager():
 
     def val_images_count(self):
 
-        files = self.paths['validation.alpha'] if 'validation.alpha' in self.paths else frameops.image_files(os.path.join(self.validation_path, self.alpha))
+        files = self.paths['validation.alpha'] if 'validation.alpha' in self.paths else frameops.image_files(
+            os.path.join(self.validation_path, self.alpha))
         return self.tiles_per_image * len(files[0])
 
     def eval_images_count(self):
-        files = self.paths['evaluation.alpha'] if 'evaluation.alpha' in self.paths else frameops.image_files(os.path.join(self.evaluation_path, self.alpha))
+        files = self.paths['evaluation.alpha'] if 'evaluation.alpha' in self.paths else frameops.image_files(
+            os.path.join(self.evaluation_path, self.alpha))
         return self.tiles_per_image * len(files[0])
 
     def predict_images_count(self):
-        files = self.paths['predict.alpha'] if 'predict.alpha' in self.paths else frameops.image_files(os.path.join(self.predict_path, self.alpha))
+        files = self.paths['predict.alpha'] if 'predict.alpha' in self.paths else frameops.image_files(
+            os.path.join(self.predict_path, self.alpha))
         return self.tiles_per_image * len(files[0])
 
     def input_images_count(self):
-        files = self.paths['input.alpha'] if 'input.alpha' in self.paths else frameops.image_files(os.path.join(self.input_path, self.alpha))
+        files = self.paths['input.alpha'] if 'input.alpha' in self.paths else frameops.image_files(
+            os.path.join(self.input_path, self.alpha))
         return self.tiles_per_image * len(files[0])
 
     # Convenience Functions for data generators
     # See _image_generator, _index_generate, _predict_image_generator for base code
 
-    def training_data_generator(self, shuffle=True, jitter=True):
-        return self._image_generator_frameops(self.training_path, shuffle)
+    def training_data_generator(self, shuffle=True, jitter=True, skip=True):
+        return self._image_generator_frameops(self.training_path, shuffle, skip)
 
-    def validation_data_generator(self, shuffle=True, jitter=True):
-        return self._image_generator_frameops(self.validation_path, shuffle)
+    def validation_data_generator(self, shuffle=True, jitter=True, skip=True):
+        return self._image_generator_frameops(self.validation_path, shuffle, skip)
 
-    def evaluation_data_generator(self, shuffle=True, jitter=True):
-        return self._image_generator_frameops(self.evaluation_path, shuffle)
+    def evaluation_data_generator(self, shuffle=True, jitter=True, skip=True):
+        return self._image_generator_frameops(self.evaluation_path, shuffle, skip)
 
-    def prediction_data_generator(self, shuffle=False, jitter=False):
-        return self._predict_image_generator_frameops(self.predict_path, shuffle)
+    def prediction_data_generator(self, shuffle=False, jitter=False, skip=True):
+        return self._predict_image_generator_frameops(self.predict_path, shuffle, skip)
 
     # Frameops versions of image generators
 
-    def _image_generator_frameops(self, directory, shuffle=True, jitter=False):
+    def _image_generator_frameops(self, directory, shuffle=True, jitter=False, skip=False):
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
 
-        alpha_paths = frameops.image_files(os.path.join(directory, self.alpha), deep=True)[0]
-        beta_paths = frameops.image_files(os.path.join(directory, self.beta), deep=True)[0]
+        alpha_paths = frameops.image_files(
+            os.path.join(directory, self.alpha), deep=True)[0]
+        beta_paths = frameops.image_files(
+            os.path.join(directory, self.beta), deep=True)[0]
 
         alpha_tiles = np.empty((self.batch_size, ) + self.image_shape)
         beta_tiles = np.empty((self.batch_size, ) + self.image_shape)
@@ -138,12 +159,12 @@ class PathManager():
 
         while True:
             for alpha_tile, beta_tile in frameops.tesselate_pair(
-                                            alpha_paths, beta_paths,
-                                            self.base_tile_width, self.base_tile_height, self.border,
-                                            black_level=self.black_level,
-                                            trim_left=self.trim_left, trim_right=self.trim_right,
-                                            trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                                            shuffle=shuffle, jitter=jitter):
+                    alpha_paths, beta_paths,
+                    self.base_tile_width, self.base_tile_height, self.border,
+                    black_level=self.black_level,
+                    trim_left=self.trim_left, trim_right=self.trim_right,
+                    trim_top=self.trim_top, trim_bottom=self.trim_bottom,
+                    shuffle=shuffle, jitter=jitter, skip=skip):
                 if K.image_dim_ordering() == 'th':
                     alpha_tile = alpha_tile.transpose((2, 0, 1))
                     beta_tile = beta_tile.transpose((2, 0, 1))
@@ -156,7 +177,8 @@ class PathManager():
 
     def _predict_image_generator_frameops(self, directory, shuffle=True, jitter=False):
 
-        alpha_paths = frameops.image_files(os.path.join(directory, self.alpha), deep=True)[0]
+        alpha_paths = frameops.image_files(
+            os.path.join(directory, self.alpha), deep=True)[0]
 
         alpha_tiles = np.empty((self.batch_size, ) + self.image_shape)
         batch_index = 0
@@ -165,11 +187,11 @@ class PathManager():
 
         while True:
             for alpha_tile in frameops.tesselate(
-                                alpha_paths,
-                                self.base_tile_width, self.base_tile_height, self.border,
-                                trim_left=self.trim_left, trim_right=self.trim_right,
-                                trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                                shuffle=shuffle, jitter=jitter):
+                    alpha_paths,
+                    self.base_tile_width, self.base_tile_height, self.border,
+                    trim_left=self.trim_left, trim_right=self.trim_right,
+                    trim_top=self.trim_top, trim_bottom=self.trim_bottom,
+                    shuffle=shuffle, jitter=jitter, skip=skip):
                 if K.image_dim_ordering() == 'th':
                     alpha_tile = alpha_tile.transpose((2, 0, 1))
 
@@ -184,17 +206,22 @@ class PathManager():
 
     def _image_generator(self, directory, shuffle=True):
 
-        file_names = [f for f in sorted(os.listdir(os.path.join(directory, self.alpha)))]
-        X_filenames = [os.path.join(directory, self.alpha, f) for f in file_names]
-        y_filenames = [os.path.join(directory, self.beta, f) for f in file_names]
+        file_names = [f for f in sorted(
+            os.listdir(os.path.join(directory, self.alpha)))]
+        X_filenames = [os.path.join(directory, self.alpha, f)
+                       for f in file_names]
+        y_filenames = [os.path.join(directory, self.beta, f)
+                       for f in file_names]
 
         nb_images = len(file_names)
         print('Found %d images.' % nb_images)
 
-        index_generator = self._index_generator(nb_images, self.batch_size, shuffle)
+        index_generator = self._index_generator(
+            nb_images, self.batch_size, shuffle)
 
         while 1:
-            index_array, current_index, current_batch_size = next(index_generator)
+            index_array, current_index, current_batch_size = next(
+                index_generator)
 
             batch_x = np.zeros((current_batch_size, ) + self.image_shape)
             batch_y = np.zeros((current_batch_size, ) + self.image_shape)
@@ -252,18 +279,22 @@ class PathManager():
 
     def _predict_image_generator(self, directory, shuffle=True):
 
-        file_names = [f for f in sorted(os.listdir(os.path.join(directory, self.alpha)))]
-        filenames = [os.path.join(directory, self.alpha, f) for f in file_names]
+        file_names = [f for f in sorted(
+            os.listdir(os.path.join(directory, self.alpha)))]
+        filenames = [os.path.join(directory, self.alpha, f)
+                     for f in file_names]
 
         nb_images = len(file_names)
         print('Found %d images.' % nb_images)
 
-        index_generator = self._index_generator(nb_images, self.batch_size, shuffle)
+        index_generator = self._index_generator(
+            nb_images, self.batch_size, shuffle)
 
         while 1:
-            index_array, current_index, current_batch_size = next(index_generator)
+            index_array, current_index, current_batch_size = next(
+                index_generator)
 
-            batch= np.zeros((current_batch_size, ) + self.image_shape)
+            batch = np.zeros((current_batch_size, ) + self.image_shape)
 
             for i, j in enumerate(index_array):
                 fn = filenames[j]
