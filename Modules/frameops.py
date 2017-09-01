@@ -215,7 +215,7 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
         random.shuffle(all_paths)
 
     # Process the image file pairs
-    print(len(all_paths))
+
     for alpha_path, beta_path in all_paths:
         alpha_img = imread(alpha_path)
         beta_img = imread(beta_path)
@@ -288,6 +288,7 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
                                                    down, cpos:cpos + across, :]
                             beta_tile = beta_img[rpos:rpos +
                                                  down, cpos:cpos + across, :]
+                            # Debug code, will be removed next push
                             if np.shape(alpha_tile) != np.shape(beta_tile) or np.shape(alpha_tile) != (64,64,3):
                                 print('')
                                 print('')
