@@ -14,7 +14,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=255
+    epochs=nnn          epoch size, default=150
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -71,6 +71,9 @@ Usage: train.py [model] [option(s)] ...
         ExpansionSR
         DeepDenoiseSR
         VDSR
+        All
+
+    All: train all models sequentially with the same options
 
 Options are:
 
@@ -93,12 +96,8 @@ Options are:
 """)
         sys.exit(1)
 
-if __name__ == '__main__':
-
-    errors = oops(False, len(sys.argv) == 1, 'Model type not specified', len(sys.argv)-1, True)
-
-    model_type = sys.argv[1]
-
+# Moved to a separate function to allow multiple models to be specified for training
+def main(model_type, args, errors):
     # Initialize defaults. Note that we trim 240 pixels off right and left, this is
     # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
 
@@ -109,7 +108,7 @@ if __name__ == '__main__':
 
     # Parse options
 
-    for option in sys.argv[2:]:
+    for option in args[2:]:
         opvalue = option.split('=', maxsplit=1)
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
@@ -295,8 +294,32 @@ if __name__ == '__main__':
                                        trim_left=trim_left, trim_right=trim_left,
                                        tiles_per_image=tiles_per_image, paths=paths)
         sr.create_model()
+        print('Training started...')
         sr.fit(nb_epochs=epochs)
-        sr.save()
         print('Training completed...')
     else:
         errors = oops(errors, True, 'Unknown model type ({})', model_type, True)
+
+
+
+if __name__ == '__main__':
+
+    errors = oops(False, len(sys.argv) == 1, 'Model type not specified', len(sys.argv)-1, True)
+
+    # Sanity check for initializing directories
+    pm = basemodel.PathManager("",verbose=False)
+    pm.main()
+
+    model_type = sys.argv[1]
+
+    # Allows all models to be trained in sequence, without a break
+    if model_type != "All":
+        main(model_type, sys.argv, errors)
+    else:
+        for model in models.models:
+            try:
+                print "Training " + model
+                main(model, sys.argv, errors)
+            except:
+                pass
+                # Overriding an exit so we can move to the next model

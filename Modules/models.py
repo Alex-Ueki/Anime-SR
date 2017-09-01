@@ -94,8 +94,6 @@ class BaseSRCNNModel(object):
     # Uses images in self.pm.validation_path for Validation
 
     def fit(self, nb_epochs=80, save_history=True):
-
-
         samples_per_epoch = self.pm.train_images_count()
         val_count = self.pm.val_images_count()
 
@@ -104,10 +102,14 @@ class BaseSRCNNModel(object):
         # PU Question: This was val_PeekSignaltoNoiseRatio. Is that a typo? Where is documentation on how to use monitor
         # field. PU is very confused.
 
+        # GPU : 'val_PeakSignaltoNoiseRatio' should be correct. It needs to follow the evaluation function's name with val_ as a header
+        # The evaluation functions, even with the functional programming voodoo, is PeakSignaltoNoiseRatio
+
         callback_list = [callbacks.ModelCheckpoint(self.pm.weight_path, monitor='val_PeakSignaltoNoiseRatio', save_best_only=True,
                                                    mode='max', save_weights_only=True)]
         if save_history:
-            callback_list.append(HistoryCheckpoint(self.pm.history_path))
+            history_file = os.path.join(self.pm.history_path, self.name + "_history.txt")
+            callback_list.append(HistoryCheckpoint(history_file))
         print('Training model : %s' % (self.__class__.__name__))
 
         self.model.fit_generator(self.pm.training_data_generator(),
@@ -188,12 +190,12 @@ class BasicSR(BaseSRCNNModel):
 
     # Create a model to be used to scale images of specific height and width.
 
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
         model = Sequential()
 
         model.add(Conv2D(64, (9, 9), activation='relu', padding='same', input_shape=self.pm.image_shape))
         model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(channels, (5, 5), padding='same'))
+        model.add(Conv2D(self.pm.channels, (5, 5), padding='same'))
 
         adam = optimizers.Adam(lr=1e-3)
 
@@ -229,7 +231,7 @@ class ExpansionSR(BaseSRCNNModel):
 
         x = Average()([x1, x2, x3])
 
-        out = Conv2D(self.channels, (5, 5), activation='relu', padding='same', name='output')(x)
+        out = Conv2D(self.pm.channels, (5, 5), activation='relu', padding='same', name='output')(x)
 
         model = Model(init, out)
 
@@ -252,7 +254,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
                                              trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
                                              tiles_per_image=tiles_per_image, paths=paths)
 
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
 
         init = Input(shape=self.pm.image_shape)
         c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
@@ -280,7 +282,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
         m2 = Add()([c1, c1_2])
 
-        decoded = Conv2D(channels, (5, 5), activation='linear', border_mode='same')(m2)
+        decoded = Conv2D(self.pm.channels, (5, 5), activation='linear', padding='same')(m2)
 
         model = Model(init, decoded)
 
@@ -297,7 +299,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 class VDSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
                  tiles_per_image=1, paths={}):
 
         super(VDSR, self).__init__('VDSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
@@ -305,7 +307,7 @@ class VDSR(BaseSRCNNModel):
                                    trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
                                    tiles_per_image=tiles_per_image, paths=paths)
 
-    def create_model(self, channels=3, load_weights=False):
+    def create_model(self, load_weights=False):
 
         init = Input(shape=self.pm.image_shape)
         x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
@@ -313,7 +315,7 @@ class VDSR(BaseSRCNNModel):
         for i in range(0, 19):
             x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
 
-        decode = Conv2D(channels, (3, 3), activation='linear', border_mode='same')(x)
+        decode = Conv2D(self.pm.channels, (3, 3), activation='linear', padding='same')(x)
 
         model = Model(init, decode)
         adam = optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=0.01, decay=0.0)

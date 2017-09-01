@@ -42,6 +42,9 @@ train.py [model] [option(s)] ...
         ExpansionSR
         DeepDenoiseSR
         VDSR
+        All
+
+    All: train all models sequentially with the same options
 
 Options are:
 
@@ -84,7 +87,7 @@ The following are the models sourced from Image-Super-Resolution
 
 1. Super Resolution CNN (SR)
 2. Expanded Super Resolution CNN (ESR)
-3.  Deep Denoiseing Super Resolution (DDSR)
+3. Deep Denoiseing Super Resolution (DDSR)
 
 There is also an incomplete implementation of *<a href="https://arxiv.org/abs/1511.04587">Accurate Image Super-Resolution Using Very Deep Convolutional Networks</a>*.
 

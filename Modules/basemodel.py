@@ -25,12 +25,17 @@ import os
     Uses default paths in Data directory if a path is not specified
 """
 
+def safe_build_dir(path):
+    if not os.path.exists(path):
+        print ("Built " + str(path))
+        os.makedirs(path)
+
 # Model parameter class
 
 class PathManager():
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}, verbose=True):
 
         self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
         self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
@@ -42,17 +47,18 @@ class PathManager():
 
         # Passed Parameter Paranoia
 
-        print('PathManager Initialization...')
-        print('            Name : {}'.format(self.name))
-        print(' base_tile_width : {}'.format(self.base_tile_width))
-        print('base_tile_height : {}'.format(self.base_tile_height))
-        print('          border : {}'.format(self.border))
-        print('        channels : {}'.format(self.channels))
-        print('      batch_size : {}'.format(self.batch_size))
-        print('     black_level : {}'.format(self.black_level))
-        print('       trim tblr : {} {} {} {}'.format(self.trim_top, self.trim_bottom, self.trim_left, self.trim_right))
-        print(' tiles_per_image : {}'.format(self.tiles_per_image))
-        print('    path entries : {}'.format(self.paths.keys()))
+        if verbose:
+            print('PathManager Initialization...')
+            print('            Name : {}'.format(self.name))
+            print(' base_tile_width : {}'.format(self.base_tile_width))
+            print('base_tile_height : {}'.format(self.base_tile_height))
+            print('          border : {}'.format(self.border))
+            print('        channels : {}'.format(self.channels))
+            print('      batch_size : {}'.format(self.batch_size))
+            print('     black_level : {}'.format(self.black_level))
+            print('       trim tblr : {} {} {} {}'.format(self.trim_top, self.trim_bottom, self.trim_left, self.trim_right))
+            print(' tiles_per_image : {}'.format(self.tiles_per_image))
+            print('    path entries : {}'.format(self.paths.keys()))
 
         # Getting the image size dimensions
         if K.image_dim_ordering() == 'th':
@@ -69,7 +75,7 @@ class PathManager():
         self.validation_path = paths['validation'] if 'validation' in paths else os.path.join(self.base_dataset_dir, 'train_images', 'validation')
         self.evaluation_path = paths['evaluation'] if 'evaluation' in paths else os.path.join(self.base_dataset_dir, 'eval_images')
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(self.base_dataset_dir, 'predict_images')
-        self.history_path = paths['history'] if 'history' in paths else os.path.join(self.base_dataset_dir, 'weights', '%s-%d-%d-%d_history.h5' % (name, base_tile_width, base_tile_height, border))
+        self.history_path = paths['history'] if 'history' in paths else os.path.join(self.base_dataset_dir, 'history')
         # weight_path is the path to weight.h5 file for this model
         self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(self.base_dataset_dir, 'weights', '%s-%d-%d-%d.h5' % (name, base_tile_width, base_tile_height, border))
 
@@ -77,6 +83,17 @@ class PathManager():
         self.beta = 'Beta'
 
     # Check the image counts of important directories. Assumes error checking will be done at an outer level.
+
+    def main(self):
+        paths = [self.training_path, self.validation_path, self.evaluation_path]
+        for p in paths:
+            path_alpha = os.path.join(p, self.alpha)
+            safe_build_dir(path_alpha)
+            path_beta = os.path.join(p, self.beta)
+            safe_build_dir(path_beta)
+
+        safe_build_dir(os.path.join(self.predict_path, self.alpha))
+        safe_build_dir(self.history_path)
 
     def train_images_count(self):
 
