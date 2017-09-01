@@ -88,8 +88,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    model=path          path to model file, default = Weights/{model}-{width}-{height}-{border}.h5
-    history=path        path to checkpoint file, default = Weights/{model}-{width}-{height}-{border}_history.h5
+    model=path          path to model file, default = weights/{model}-{width}-{height}-{border}.h5
+    history=path        path to checkpoint file, default = weights/{model}-{width}-{height}-{border}_history.h5
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 """)
@@ -207,6 +207,10 @@ if __name__ == '__main__':
         paths['weights'] = os.path.abspath(os.path.join(
             dpath, 'weights', '%s-%d-%d-%d.h5' % (model_type, tile_width, tile_height, tile_border)))
 
+    if 'history' not in paths:
+        paths['history'] = os.path.abspath(os.path.join(
+            dpath, 'weights', '%s-%d-%d-%d_history.h5' % (model_type, tile_width, tile_height, tile_border)))
+
     # Remind user what we're about to do.
 
     print('             Model : {}'.format(model_type))
@@ -218,6 +222,7 @@ if __name__ == '__main__':
     print('   Training Images : {}'.format(paths['training']))
     print(' Validation Images : {}'.format(paths['validation']))
     print('        Model File : {}'.format(paths['weights']))
+    print('      History File : {}'.format(paths['history']))
 
     # Validation and error checking
 
@@ -234,6 +239,12 @@ if __name__ == '__main__':
         for s in [0, 1]:
             errors = oops(
                 errors, image_info[f][s] == None, '{} images folder does not exist', image_paths[f] + '/' + sub_folders[s])
+
+    tpath = os.path.dirname(paths['history'])
+    errors = oops(errors,not os.path.exists(tpath),'History path ({}) does not exist'.format(tpath))
+
+    tpath = os.path.dirname(paths['weights'])
+    errors = oops(errors,not os.path.exists(tpath),'Weights path ({}) does not exist'.format(tpath))
 
     terminate(errors, False)
 

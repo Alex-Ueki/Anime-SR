@@ -65,12 +65,9 @@ Options are:
 ## TODOS
 
 - Parental Unit
+    - Write evaluate.py, hallucinate.py, etc.
     - Test whether jitter and shuffle improve training accuracy
     - Some way of skipping low-contrast tiles? Use blz to compress tiles and check size? Probably too slow though.
-    - Better error handling on file IO
-    - Create path structure in Data folder if necessary
-    - Path structure validation improvements
-    - Write evaluate.py, hallucinate.py, etc.
     - Improve Documentation
 - Gene-Perpetuation Unit
     - New, better models

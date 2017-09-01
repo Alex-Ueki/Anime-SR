@@ -83,7 +83,6 @@ class PathManager():
             self.base_dataset_dir, 'predict_images')
         self.history_path = paths['history'] if 'history' in paths else os.path.join(
             self.base_dataset_dir, 'weights', '%s-%d-%d-%d_history.h5' % (name, base_tile_width, base_tile_height, border))
-        # weight_path is the path to weight.h5 file for this model
         self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(
             self.base_dataset_dir, 'weights', '%s-%d-%d-%d.h5' % (name, base_tile_width, base_tile_height, border))
 
