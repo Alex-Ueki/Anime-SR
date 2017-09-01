@@ -65,6 +65,7 @@ Options are:
 ## TODOS
 
 - Parental Unit
+    - Test whether jitter and shuffle improve training accuracy
     - Some way of skipping low-contrast tiles? Use blz to compress tiles and check size? Probably too slow though.
     - Better error handling on file IO
     - Create path structure in Data folder if necessary
@@ -81,7 +82,7 @@ The following are the models sourced from Image-Super-Resolution
 
 1. Super Resolution CNN (SR)
 2. Expanded Super Resolution CNN (ESR)
-3.  Deep Denoiseing Super Resolution (DDSR)
+3. Deep Denoiseing Super Resolution (DDSR)
 
 There is also an incomplete implementation of *<a href="https://arxiv.org/abs/1511.04587">Accurate Image Super-Resolution Using Very Deep Convolutional Networks</a>*.
 

@@ -166,10 +166,10 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
 
                 # Jitter tiles; if we are jittering, then the number of tiles along an axis is reduced by 1
 
-                jitter_x, jitter_y = (random.randint(
-                    0, tile_width - 1), random.randint(0, tile_height - 1)) if jitter else (0, 0)
-                rows = rows if jitter_x == 0 else rows - 1
-                cols = cols if jitter_y == 0 else cols - 1
+                jitter_x = random.randint(0, tile_width - 1) if jitter else 0
+                jitter_y = random.randint(0, tile_width - 1) if jitter else 0
+                rows = rows if jitter_y == 0 else rows - 1
+                cols = cols if jitter_x == 0 else cols - 1
 
                 # Shuffle tiles
 
@@ -184,11 +184,11 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
                 skip_count = random.randint(0, 4) if skip else 0
 
                 for row in row_list:
-                    rpos = (row * tile_width) + jitter_y
+                    rpos = (row * tile_height) + jitter_y
                     for col in col_list:
                         if skip_count <= 0:
                             skip_count = random.randint(0, 4) if skip else 0
-                            cpos = (col * tile_height) + jitter_x
+                            cpos = (col * tile_width) + jitter_x
                             tile = img[rpos:rpos + down, cpos:cpos + across, :]
                             yield tile
                         else:
@@ -242,7 +242,7 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
             cols = alpha_shape[1] // tile_width
 
             if alpha_shape != beta_shape:
-                print('Tesselation eroror: file pairs {} and {} have different shapes {} and {}'.format(
+                print('Tesselation error: file pairs {} and {} have different shapes {} and {}'.format(
                     alpha_path, beta_path, str(alpha_shape), str(beta_shape)))
             elif len(alpha_shape) != 3 or (alpha_shape[0] > rows * tile_height) or (alpha_shape[1] > cols * tile_width):
                 print('Tesselation error: file pairs {} and {} have incorrect shape {}'.format(
@@ -257,15 +257,14 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
 
                 # Actual tile width and height
 
-                across, down = tile_width + \
-                    (2 * border), tile_height + (2 * border)
+                across, down = tile_width + 2 * border, tile_height + 2 * border
 
                 # Jitter tiles; if we are jittering, then the number of tiles along an axis is reduced by 1
 
-                jitter_x, jitter_y = (random.randint(
-                    0, tile_width - 1), random.randint(0, tile_height - 1)) if jitter else (0, 0)
-                rows = rows if jitter_x == 0 else rows - 1
-                cols = cols if jitter_y == 0 else cols - 1
+                jitter_x = random.randint(0, tile_width - 1) if jitter else 0
+                jitter_y = random.randint(0, tile_width - 1) if jitter else 0
+                rows = rows if jitter_y == 0 else rows - 1
+                cols = cols if jitter_x == 0 else cols - 1
 
                 # Shuffle tiles
 
@@ -280,15 +279,28 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
                 skip_count = random.randint(0, 4) if skip else 0
 
                 for row in row_list:
-                    rpos = (row * tile_width) + jitter_y
+                    rpos = (row * tile_height) + jitter_y
                     for col in col_list:
                         if skip_count <= 0:
                             skip_count = random.randint(0, 4) if skip else 0
-                            cpos = (col * tile_height) + jitter_x
+                            cpos = (col * tile_width) + jitter_x
                             alpha_tile = alpha_img[rpos:rpos +
                                                    down, cpos:cpos + across, :]
                             beta_tile = beta_img[rpos:rpos +
                                                  down, cpos:cpos + across, :]
+                            if np.shape(alpha_tile) != np.shape(beta_tile) or np.shape(alpha_tile) != (64,64,3):
+                                print('')
+                                print('')
+                                print(alpha_path)
+                                print(np.shape(alpha_img))
+                                print(beta_path)
+                                print(np.shape(beta_img))
+                                print(np.shape(alpha_tile))
+                                print(np.shape(beta_tile))
+                                print('row {} tile {} jitter {} rpos {} down {} rpos+down {}'.format(row,tile_height,jitter_y,rpos,down,rpos+down))
+                                print('col {} tile {} jitter {} cpos {} across {} cpos+across {}'.format(col,tile_width,jitter_x,cpos,across,cpos+across))
+                                print('')
+                                print('')
                             yield (alpha_tile, beta_tile)
                         else:
                             skip_count -= 1
