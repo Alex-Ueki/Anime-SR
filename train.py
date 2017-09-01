@@ -321,5 +321,7 @@ if __name__ == '__main__':
                 print "Training " + model
                 main(model, sys.argv, errors)
             except:
+                print("Error occured training " + model)
+                print("Try running it separately : python train.py " + model)
                 pass
                 # Overriding an exit so we can move to the next model
