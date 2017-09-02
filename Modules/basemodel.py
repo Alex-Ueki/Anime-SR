@@ -126,13 +126,13 @@ class PathManager():
     # Convenience Functions for data generators
     # See _image_generator, _index_generate, _predict_image_generator for base code
 
-    def training_data_generator(self, shuffle=True, jitter=True, skip=True):
+    def training_data_generator(self, shuffle=True, jitter=False, skip=True):
         return self._image_generator_frameops(self.training_path, shuffle, skip)
 
-    def validation_data_generator(self, shuffle=True, jitter=True, skip=True):
+    def validation_data_generator(self, shuffle=True, jitter=False, skip=True):
         return self._image_generator_frameops(self.validation_path, shuffle, skip)
 
-    def evaluation_data_generator(self, shuffle=True, jitter=True, skip=True):
+    def evaluation_data_generator(self, shuffle=True, jitter=False, skip=True):
         return self._image_generator_frameops(self.evaluation_path, shuffle, skip)
 
     def prediction_data_generator(self, shuffle=False, jitter=False, skip=True):
