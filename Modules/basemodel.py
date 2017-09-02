@@ -126,21 +126,21 @@ class PathManager():
     # Convenience Functions for data generators
     # See _image_generator, _index_generate, _predict_image_generator for base code
 
-    def training_data_generator(self, shuffle=True, jitter=False, skip=True):
-        return self._image_generator_frameops(self.training_path, shuffle, skip)
+    def training_data_generator(self, shuffle=True, jitter=True, skip=True):
+        return self._image_generator_frameops(self.training_path, jitter, shuffle, skip)
 
-    def validation_data_generator(self, shuffle=True, jitter=False, skip=True):
-        return self._image_generator_frameops(self.validation_path, shuffle, skip)
+    def validation_data_generator(self, shuffle=True, jitter=True, skip=True):
+        return self._image_generator_frameops(self.validation_path, jitter, shuffle, skip)
 
-    def evaluation_data_generator(self, shuffle=True, jitter=False, skip=True):
-        return self._image_generator_frameops(self.evaluation_path, shuffle, skip)
+    def evaluation_data_generator(self, shuffle=True, jitter=True, skip=True):
+        return self._image_generator_frameops(self.evaluation_path, jitter, shuffle, skip)
 
-    def prediction_data_generator(self, shuffle=False, jitter=False, skip=True):
-        return self._predict_image_generator_frameops(self.predict_path, shuffle, skip)
+    def prediction_data_generator(self, shuffle=False, jitter=True, skip=True):
+        return self._predict_image_generator_frameops(self.predict_path, jitter, shuffle, skip)
 
     # Frameops versions of image generators
 
-    def _image_generator_frameops(self, directory, shuffle=True, jitter=False, skip=False):
+    def _image_generator_frameops(self, directory, shuffle=True, jitter=True, skip=True):
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...

@@ -18,10 +18,10 @@ import Modules.dpx as dpx
 
 IMAGETYPES = ['.jpg', '.png', '.dpx']
 
-# Simple in-memory cache of decoded images. Since we are constantly cycling
+# Simple in-memory cache of decoded image tiles. Since we are constantly cycling
 # through the same images, we use a FINO (First-In-Never-Out) cache.
 
-cached_images = {}
+cached_tiles = {}
 caching = True
 MINFREEMEMORY = 1000 * 1000 * 1000
 
@@ -80,15 +80,9 @@ def image_files(folder_path, deep=False):
 
 def imread(file_path):
 
-    global last_meta
-    global cached_images
-    global caching
-
     file_type = os.path.splitext(file_path)[1]
 
-    if file_path in cached_images:
-        return cached_images[file_path]
-    elif os.path.isfile(file_path):
+    if os.path.isfile(file_path):
         if file_type == '.dpx':
             with open(file_path, 'rb') as f:
                 meta = dpx.readDPXMetaData(f)
@@ -102,20 +96,6 @@ def imread(file_path):
             img = img.astype('float32') / 255.0
     else:
         img = None
-
-    if caching:
-        cached_images[file_path] = img
-        mem = psutil.virtual_memory()
-        caching = mem.free > MINFREEMEMORY
-        if not caching or len(cached_images) % 10 == 0:
-            print('')
-            print('')
-            print('Images cached : {}'.format(len(cached_images)))
-            print('      Caching : {}'.format(caching))
-            print('Memory status : {}'.format(mem))
-            print('MINFREEMEMORY : {}'.format(MINFREEMEMORY))
-            print('')
-            print('')
 
     return img
 
@@ -155,12 +135,13 @@ def imsave(file_path, img, meta=None):
 
 
 def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
-              trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False, skip=False):
+              trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
+              shuffle=True, jitter=False, skip=False):
 
     # Convert non-list to list
 
-    file_paths = file_paths if type(file_paths) in (
-        list, tuple) else [file_paths]
+    file_paths = file_paths if type(file_paths) in (list, tuple) \
+        else [file_paths]
 
     # Shuffle the list
 
@@ -170,67 +151,32 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
     # Process image files
 
     for f in file_paths:
-        img = imread(f)
 
-        if img is None:
-            print('Tesselation error: could not read image {}'.format(f))
+        # Extract tiles from image
+
+        if f in cached_tiles:
+            tiles = cached_tiles[f]
         else:
-            # Trim the image
+            tiles = extract_tiles(f, tile_width, tile_height, border, black_level,
+                                  trim_top, trim_bottom, trim_left, trim_right, jitter)
 
-            if trim_top + trim_bottom + trim_left + trim_right > 0:
-                shape = np.shape(img)
-                img = img[trim_top:shape[0] - trim_bottom,
-                          trim_left:shape[1] - trim_right, :]
+        if tiles != []:
+            # Shuffle tiles
 
-            # Tessellate image
+            tiles_list = list(range(len(tiles)))
+            if shuffle:
+                random.shuffle(tiles_list)
 
-            shape = np.shape(img)
-            rows = shape[0] // tile_height
-            cols = shape[1] // tile_width
+            # Generate tiles
 
-            if len(shape) != 3 or (shape[0] > rows * tile_height) or (shape[1] > cols * tile_width):
-                print('Tesselation Error: file {} has incorrect shape {}'.format(
-                    f, str(shape)))
-            else:
-                # Pad the image - the pixels added have value (black_level, black_level, black_level)
+            skip_count = random.randint(0, 4) if skip else 0
 
-                img = np.pad(img, ((border, border), (border, border),
-                                   (0, 0)), mode='constant', constant_values=black_level)
-
-                # Actual tile width and height
-
-                across, down = tile_width + \
-                    (2 * border), tile_height + (2 * border)
-
-                # Jitter tiles; if we are jittering, then the number of tiles along an axis is reduced by 1
-
-                jitter_x = random.randint(0, tile_width - 1) if jitter else 0
-                jitter_y = random.randint(0, tile_width - 1) if jitter else 0
-                rows = rows if jitter_y == 0 else rows - 1
-                cols = cols if jitter_x == 0 else cols - 1
-
-                # Shuffle tiles
-
-                row_list = list(range(rows))
-                col_list = list(range(cols))
-                if shuffle:
-                    random.shuffle(row_list)
-                    random.shuffle(col_list)
-
-                # Generate tiles
-
-                skip_count = random.randint(0, 4) if skip else 0
-
-                for row in row_list:
-                    rpos = (row * tile_height) + jitter_y
-                    for col in col_list:
-                        if skip_count <= 0:
-                            skip_count = random.randint(0, 4) if skip else 0
-                            cpos = (col * tile_width) + jitter_x
-                            tile = img[rpos:rpos + down, cpos:cpos + across, :]
-                            yield tile
-                        else:
-                            skip_count -= 1
+            for tile_index in tiles_list:
+                if skip_count <= 0:
+                    skip_count = random.randint(0, 4) if skip else 0
+                    yield tiles[tile_index]
+                else:
+                    skip_count -= 1
 
 # This version tesellates matched pairs of images, with identical shuffling behavior. Used for model training
 
@@ -240,10 +186,10 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
 
     # Convert non-lists to lists
 
-    alpha_paths = alpha_paths if type(alpha_paths) in (
-        list, tuple) else [alpha_paths]
-    beta_paths = beta_paths if type(beta_paths) in (
-        list, tuple) else [beta_paths]
+    alpha_paths = alpha_paths if type(alpha_paths) in (list, tuple) \
+        else [alpha_paths]
+    beta_paths = beta_paths if type(beta_paths) in (list, tuple) \
+        else [beta_paths]
 
     all_paths = list(zip(alpha_paths, beta_paths))
 
@@ -255,96 +201,117 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
     # Process the image file pairs
 
     for alpha_path, beta_path in all_paths:
-        alpha_img = imread(alpha_path)
-        beta_img = imread(beta_path)
 
-        if alpha_img is None:
-            print('Tesselation error: could not read image {}'.format(alpha_path))
-        elif beta_img is None:
-            print('Tesselation error: could not read image {}'.format(beta_path))
+        # Extract the tiles from paired image files
+
+        if alpha_path in cached_tiles:
+            alpha_tiles = cached_tiles[alpha_path]
         else:
-            # Trim the images
+            alpha_tiles = extract_tiles(alpha_path, tile_width, tile_height, border, black_level,
+                                        trim_top, trim_bottom, trim_left, trim_right, jitter)
 
-            if trim_top + trim_bottom + trim_left + trim_right > 0:
-                shape = np.shape(alpha_img)
-                alpha_img = alpha_img[trim_top:shape[0] -
-                                      trim_bottom, trim_left:shape[1] - trim_right, :]
-                beta_img = beta_img[trim_top:shape[0] -
-                                    trim_bottom, trim_left:shape[1] - trim_right, :]
+        if beta_path in cached_tiles:
+            beta_tiles = cached_tiles[beta_path]
+        else:
+            beta_tiles = extract_tiles(beta_path, tile_width, tile_height, border, black_level,
+                                       trim_top, trim_bottom, trim_left, trim_right, jitter)
 
-            # Tessellate image pairs
+        if len(alpha_tiles) != len(beta_tiles):
+            print('Tesselation error: file pairs {} and {} have different numbers of tiles {} and {}'.format(
+                alpha_path, beta_path, len(alpha_tiles), len(beta_tiles)))
+        elif len(alpha_tiles) > 0:
+            # Shuffle tiles
 
-            alpha_shape = np.shape(alpha_img)
-            beta_shape = np.shape(beta_img)
-            rows = alpha_shape[0] // tile_height
-            cols = alpha_shape[1] // tile_width
+            tiles_list = list(range(len(alpha_tiles)))
+            if shuffle:
+                random.shuffle(tiles_list)
 
-            if alpha_shape != beta_shape:
-                print('Tesselation error: file pairs {} and {} have different shapes {} and {}'.format(
-                    alpha_path, beta_path, str(alpha_shape), str(beta_shape)))
-            elif len(alpha_shape) != 3 or (alpha_shape[0] > rows * tile_height) or (alpha_shape[1] > cols * tile_width):
-                print('Tesselation error: file pairs {} and {} have incorrect shape {}'.format(
-                    alpha_path, beta_path, str(alpha_shape)))
-            else:
-                # Pad the images - the pixels added have value (black_level, black_level, black_level)
+            # Generate tiles
 
-                alpha_img = np.pad(alpha_img, ((border, border), (border, border),
-                                               (0, 0)), mode='constant', constant_values=black_level)
-                beta_img = np.pad(beta_img, ((border, border), (border, border),
-                                             (0, 0)), mode='constant', constant_values=black_level)
+            skip_count = random.randint(0, 4) if skip else 0
 
-                # Actual tile width and height
+            for tile_index in tiles_list:
+                if skip_count <= 0:
+                    skip_count = random.randint(0, 4) if skip else 0
+                    yield (alpha_tiles[tile_index], beta_tiles[tile_index])
+                else:
+                    skip_count -= 1
 
-                across, down = tile_width + 2 * border, tile_height + 2 * border
+# Helper function that reads in a file, extracts the tiles, and caches them if possible
 
-                # Jitter tiles; if we are jittering, then the number of tiles along an axis is reduced by 1
 
-                jitter_x = random.randint(0, tile_width - 1) if jitter else 0
-                jitter_y = random.randint(0, tile_width - 1) if jitter else 0
-                rows = rows if jitter_y == 0 else rows - 1
-                cols = cols if jitter_x == 0 else cols - 1
+def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
+                  trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, jitter=False):
 
-                # Shuffle tiles
+    global last_meta
+    global cached_tiles
+    global caching
 
-                row_list = list(range(rows))
-                col_list = list(range(cols))
-                if shuffle:
-                    random.shuffle(row_list)
-                    random.shuffle(col_list)
+    img = imread(file_path)
 
-                # Generate tiles
+    # Trim image
+    if trim_top + trim_bottom + trim_left + trim_right > 0:
+        shape = np.shape(img)
+        img = img[trim_top:shape[0] - trim_bottom,
+                  trim_left:shape[1] - trim_right, :]
 
-                skip_count = random.randint(0, 4) if skip else 0
+    # Generate image tile offsets
 
-                for row in row_list:
-                    rpos = (row * tile_height) + jitter_y
-                    for col in col_list:
-                        if skip_count <= 0:
-                            skip_count = random.randint(0, 4) if skip else 0
-                            cpos = (col * tile_width) + jitter_x
-                            alpha_tile = alpha_img[rpos:rpos +
-                                                   down, cpos:cpos + across, :]
-                            beta_tile = beta_img[rpos:rpos +
-                                                 down, cpos:cpos + across, :]
-                            # Debug code, will be removed next push
-                            if np.shape(alpha_tile) != np.shape(beta_tile) or np.shape(alpha_tile) != (64, 64, 3):
-                                print('')
-                                print('')
-                                print(alpha_path)
-                                print(np.shape(alpha_img))
-                                print(beta_path)
-                                print(np.shape(beta_img))
-                                print(np.shape(alpha_tile))
-                                print(np.shape(beta_tile))
-                                print('row {} tile {} jitter {} rpos {} down {} rpos+down {}'.format(
-                                    row, tile_height, jitter_y, rpos, down, rpos + down))
-                                print('col {} tile {} jitter {} cpos {} across {} cpos+across {}'.format(
-                                    col, tile_width, jitter_x, cpos, across, cpos + across))
-                                print('')
-                                print('')
-                            yield (alpha_tile, beta_tile)
-                        else:
-                            skip_count -= 1
+    shape = np.shape(img)
+    rows = shape[0] // tile_height
+    cols = shape[1] // tile_width
+
+    if len(shape) != 3 or (shape[0] > rows * tile_height) or (shape[1] > cols * tile_width):
+        print('Tesselation Error: file {} has incorrect shape {}'.format(
+            file_path, str(shape)))
+        tiles = []
+    else:
+        # Pad the image - the pixels added have value (black_level, black_level, black_level)
+
+        img = np.pad(img, ((border, border), (border, border),
+                           (0, 0)), mode='constant', constant_values=black_level)
+
+        # Actual tile width and height
+
+        across, down = tile_width + \
+            (2 * border), tile_height + (2 * border)
+
+        # Unjittered tile offsets
+
+        offsets = [(row * tile_height, col * tile_width)
+                   for row in range(0, rows) for col in range(0, cols)]
+
+        # Jittered offsets are shifted half a tile across and down
+
+        if jitter:
+            half_across = across // 2
+            half_down = down // 2
+            jittered_offsets = [(row * tile_height + half_down, col * tile_width + half_across)
+                                for row in range(0, rows - 1) for col in range(0, cols - 1)]
+            offsets.extend(jittered_offsets)
+
+        # Extract tiles from the image
+
+        tiles = [img[rpos:rpos + down, cpos:cpos + across, :]
+                 for (rpos, cpos) in offsets]
+
+        # Cache the tiles if possible
+
+        if caching:
+            cached_tiles[file_path] = tiles
+            mem = psutil.virtual_memory()
+            caching = mem.free > MINFREEMEMORY
+            if not caching or len(cached_tiles) % 10 == 0:
+                print('')
+                print('')
+                print('Images cached : {}'.format(len(cached_tiles)))
+                print('      Caching : {}'.format(caching))
+                print('Memory status : {}'.format(mem))
+                print('MINFREEMEMORY : {}'.format(MINFREEMEMORY))
+                print('')
+                print('')
+
+    return tiles
 
 # Quasi-inverse to tesselate; glue together tiles to form a final image; takes list of numpy tile arrays,
 # trims off the borders, stitches them together, and pads as needed.
@@ -361,14 +328,11 @@ def grout(tiles, border, row_width, black_level=0.0, pad_top=0, pad_bottom=0, pa
     # Figure out the size of the final image and allocate it
 
     tile_shape = np.shape(tiles[0])
-    print(tile_shape)
     tile_width, tile_height = tile_shape[1] - \
         border * 2, tile_shape[0] - border * 2
-    print(tile_width, tile_height)
 
     row_count = (len(tiles) // row_width)
     img_width, img_height = tile_width * row_width, tile_height * row_count
-    print(img_width, img_height)
 
     img = np.empty((img_height, img_width, 3), dtype='float32')
 
