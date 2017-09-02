@@ -12,10 +12,34 @@ import scipy.misc as misc
 import os
 import copy
 import random
+import psutil
 
 import Modules.dpx as dpx
 
 IMAGETYPES = ['.jpg', '.png', '.dpx']
+
+# Simple in-memory cache of decoded images. Since we are constantly cycling
+# through the same images, we use a FINO (First-In-Never-Out) cache.
+
+cached_images = {}
+caching = True
+MINFREEMEMORY = 1000 * 1000 * 1000
+
+# In case we ever need to reset or disable the cache
+
+
+def reset_cache(enable=True):
+
+    global cached_images
+    global caching
+
+    cached_images = {}
+    caching = enabled
+
+# Keep a copy of the last DPX meta information read
+
+
+last_meta = None
 
 # Look in folder_path for all the files that are of one of the IMAGETYPES,
 # and return a sorted list of lists containing the absolute paths to those files. So if
@@ -45,10 +69,6 @@ def image_files(folder_path, deep=False):
 
     return file_lists
 
-# Keep a copy of the last meta information read
-
-
-last_meta = None
 
 # Read an image file and return numpy array of pixel values. Extends scipy.misc.imread
 # with support for 10-bit DPX files. Always returns RGB images, with pixel values
@@ -61,10 +81,14 @@ last_meta = None
 def imread(file_path):
 
     global last_meta
+    global cached_images
+    global caching
 
     file_type = os.path.splitext(file_path)[1]
 
-    if os.path.isfile(file_path):
+    if file_path in cached_images:
+        return cached_images[file_path]
+    elif os.path.isfile(file_path):
         if file_type == '.dpx':
             with open(file_path, 'rb') as f:
                 meta = dpx.readDPXMetaData(f)
@@ -78,6 +102,20 @@ def imread(file_path):
             img = img.astype('float32') / 255.0
     else:
         img = None
+
+    if caching:
+        cached_images[file_path] = img
+        mem = psutil.virtual_memory()
+        caching = mem.free > MINFREEMEMORY
+        if not caching or len(cached_images) % 10 == 0:
+            print('')
+            print('')
+            print('Images cached : {}'.format(len(cached_images)))
+            print('      Caching : {}'.format(caching))
+            print('Memory status : {}'.format(mem))
+            print('MINFREEMEMORY : {}'.format(MINFREEMEMORY))
+            print('')
+            print('')
 
     return img
 
@@ -289,7 +327,7 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
                             beta_tile = beta_img[rpos:rpos +
                                                  down, cpos:cpos + across, :]
                             # Debug code, will be removed next push
-                            if np.shape(alpha_tile) != np.shape(beta_tile) or np.shape(alpha_tile) != (64,64,3):
+                            if np.shape(alpha_tile) != np.shape(beta_tile) or np.shape(alpha_tile) != (64, 64, 3):
                                 print('')
                                 print('')
                                 print(alpha_path)
@@ -298,8 +336,10 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
                                 print(np.shape(beta_img))
                                 print(np.shape(alpha_tile))
                                 print(np.shape(beta_tile))
-                                print('row {} tile {} jitter {} rpos {} down {} rpos+down {}'.format(row,tile_height,jitter_y,rpos,down,rpos+down))
-                                print('col {} tile {} jitter {} cpos {} across {} cpos+across {}'.format(col,tile_width,jitter_x,cpos,across,cpos+across))
+                                print('row {} tile {} jitter {} rpos {} down {} rpos+down {}'.format(
+                                    row, tile_height, jitter_y, rpos, down, rpos + down))
+                                print('col {} tile {} jitter {} cpos {} across {} cpos+across {}'.format(
+                                    col, tile_width, jitter_x, cpos, across, cpos + across))
                                 print('')
                                 print('')
                             yield (alpha_tile, beta_tile)
