@@ -3,10 +3,9 @@
 Data/eval_images/Alpha/*
 Data/eval_images/Beta/*
 Data/train_images/Alpha/*
-Data/train_images/Alpha/*
+Data/train_images/Beta/*
 Data/predict_images/*
 Data/input_images/*
-Data/weights/*
 
 Frames/
 Temp/
