@@ -156,7 +156,7 @@ if __name__ == '__main__':
                 op = opmatch[0]
                 if op == 'model':
                     model_type = valuecase
-                    errors = oops(errors, value != 'all' and valuecase not in models,
+                    errors = oops(errors, value != 'all' and valuecase not in models.models,
                                   'Unknown model type ({})', valuecase)
                 if op == 'width':
                     tile_width = vnum
@@ -197,15 +197,15 @@ if __name__ == '__main__':
                                   'Bottom trim value invalid ({})', option)
                 elif op == 'jitter':
                     jitter = vnum
-                    errors = oops(errors, vnum !=0 and vnum != 1,
+                    errors = oops(errors, vnum != 0 and vnum != 1,
                                   'Jitter value invalid ({}). Must be 0, 1, T, F.', option)
                 elif op == 'skip':
                     jitter = vnum
-                    errors = oops(errors, vnum !=0 and vnum != 1,
+                    errors = oops(errors, vnum != 0 and vnum != 1,
                                   'Skip value invalid ({}). Must be 0, 1, T, F.', option)
                 elif op == 'shuffle':
                     jitter = vnum
-                    errors = oops(errors, vnum !=0 and vnum != 1,
+                    errors = oops(errors, vnum != 0 and vnum != 1,
                                   'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
                 elif op == 'data':
                     paths['data'] = os.path.abspath(value)
@@ -347,11 +347,11 @@ if __name__ == '__main__':
 
     if 'weights' not in paths:
         paths['weights'] = os.path.abspath(os.path.join(
-            dpath, 'weights', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix)))
+            dpath, 'weights', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
 
     if 'history' not in paths:
         paths['history'] = os.path.abspath(os.path.join(
-            dpath, 'weights', '{}-{}-{}-{}-{}_history.txt'.format(model_type, tile_width, tile_height, tile_border,img_suffix)))
+            dpath, 'weights', '{}-{}-{}-{}-{}_history.txt'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
 
     tpath = os.path.dirname(paths['history'])
     errors = oops(errors, not os.path.exists(tpath),
@@ -378,7 +378,7 @@ if __name__ == '__main__':
 
     # Train the model
 
-    model_list = models.models if model_type.lower() == 'all' else [ model_type ]
+    model_list = models.models if model_type.lower() == 'all' else [model_type]
     for model in model_list:
 
         # Put proper model name in the history and weights path
@@ -391,13 +391,13 @@ if __name__ == '__main__':
             file_name = '-'.join(file_name_parts)
             path = os.path.join(folder_name, file_name)
             paths[entry] = path
-            
+
         sr = models.models[model](base_tile_width=tile_width, base_tile_height=tile_height,
-                                       border=tile_border, black_level=black_level,
-                                       trim_left=trim_left, trim_right=trim_left,
-                                       tiles_per_image=tiles_per_image,
-                                       jitter=jitter, shuffle=shuffle, skip=skip,
-                                       img_suffix=img_suffix, paths=paths)
+                                  border=tile_border, black_level=black_level,
+                                  trim_left=trim_left, trim_right=trim_left,
+                                  tiles_per_image=tiles_per_image,
+                                  jitter=jitter, shuffle=shuffle, skip=skip,
+                                  img_suffix=img_suffix, paths=paths)
         sr.create_model()
         sr.fit(nb_epochs=epochs)
         sr.save()

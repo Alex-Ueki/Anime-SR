@@ -140,8 +140,8 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
 
     # Convert non-list to list
 
-    file_paths = file_paths if type(file_paths) in (list, tuple) \
-        else [file_paths]
+    file_paths = file_paths if type(file_paths) in (
+        list, tuple) else [file_paths]
 
     # Shuffle the list
 
@@ -186,10 +186,10 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
 
     # Convert non-lists to lists
 
-    alpha_paths = alpha_paths if type(alpha_paths) in (list, tuple) \
-        else [alpha_paths]
-    beta_paths = beta_paths if type(beta_paths) in (list, tuple) \
-        else [beta_paths]
+    alpha_paths = alpha_paths if type(alpha_paths) in (
+        list, tuple) else [alpha_paths]
+    beta_paths = beta_paths if type(beta_paths) in (
+        list, tuple) else [beta_paths]
 
     all_paths = list(zip(alpha_paths, beta_paths))
 
