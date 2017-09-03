@@ -33,7 +33,7 @@ class PathManager():
     def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
                  black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1,
                  jitter=True, shuffle=True, skip= True,
-                 paths={}):
+                 img_suffix='',paths={}):
 
         self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
         self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
@@ -59,9 +59,9 @@ class PathManager():
         print('       trim tblr : {} {} {} {}'.format(self.trim_top,
                                                       self.trim_bottom, self.trim_left, self.trim_right))
         print(' tiles_per_image : {}'.format(self.tiles_per_image))
-        print('          jitter : {}'.format(jitter == 1)
-        print('         shuffle : {}'.format(shuffle == 1)
-        print('            skip : {}'.format(skip == 1)
+        print('          jitter : {}'.format(jitter == 1))
+        print('         shuffle : {}'.format(shuffle == 1))
+        print('            skip : {}'.format(skip == 1))
         print('    path entries : {}'.format(self.paths.keys()))
 
         # Getting the image size dimensions
@@ -88,9 +88,9 @@ class PathManager():
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
             self.base_dataset_dir, 'predict_images')
         self.history_path = paths['history'] if 'history' in paths else os.path.join(
-            self.base_dataset_dir, 'weights', '%s-%d-%d-%d_history.txt' % (name, base_tile_width, base_tile_height, border))
+            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
         self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(
-            self.base_dataset_dir, 'weights', '%s-%d-%d-%d.h5' % (name, base_tile_width, base_tile_height, border))
+            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
 
         self.alpha = 'Alpha'
         self.beta = 'Beta'

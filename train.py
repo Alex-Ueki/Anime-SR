@@ -27,8 +27,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    weights=path        path to weights file, default = Weights/{model}-{width}-{height}-{border}.h5
-    history=path        path to checkpoint file, default = Weights/{model}-{width}-{height}-{border}_history.h5
+    weights=path        path to weights file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}.h5
+    history=path        path to checkpoint file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}_history.txt
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
@@ -96,8 +96,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    weights=path        path to weights file, default = Weights/{model}-{width}-{height}-{border}.h5
-    history=path        path to checkpoint file, default = weights/{model}-{width}-{height}-{border}_history.h5
+    weights=path        path to weights file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}.h5
+    history=path        path to checkpoint file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}_history.txt
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 """)
@@ -121,11 +121,14 @@ if __name__ == '__main__':
     errors = False
 
     for option in sys.argv[1:]:
-        opvalue = option.lower.split('=', maxsplit=1)
+
+        opvalue = option.split('=', maxsplit=1)
+
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
         else:
-            op, value = opvalue
+            op, value = [s.lower() for s in opvalue]
+            _, valuecase = opvalue
 
             # convert boolean arguments to integer
 
@@ -152,9 +155,9 @@ if __name__ == '__main__':
             else:
                 op = opmatch[0]
                 if op == 'model':
-                    model_type = value
-                    errors = oops(errors, model_type not in models.models,
-                                  'Unknown model type ({})', value)
+                    model_type = valuecase
+                    errors = oops(errors, value != 'all' and valuecase not in models,
+                                  'Unknown model type ({})', valuecase)
                 if op == 'width':
                     tile_width = vnum
                     errors = oops(errors, vnum <= 0,
@@ -232,14 +235,6 @@ if __name__ == '__main__':
         paths['validation'] = os.path.abspath(
             os.path.join(dpath, 'train_images', 'validation'))
 
-    if 'weights' not in paths:
-        paths['weights'] = os.path.abspath(os.path.join(
-            dpath, 'weights', '%s-%d-%d-%d.h5' % (model_type, tile_width, tile_height, tile_border)))
-
-    if 'history' not in paths:
-        paths['history'] = os.path.abspath(os.path.join(
-            dpath, 'weights', '%s-%d-%d-%d_history.txt' % (model_type, tile_width, tile_height, tile_border)))
-
     # Remind user what we're about to do.
 
     print('             Model : {}'.format(model_type))
@@ -250,8 +245,6 @@ if __name__ == '__main__':
     print('    Data root path : {}'.format(paths['data']))
     print('   Training Images : {}'.format(paths['training']))
     print(' Validation Images : {}'.format(paths['validation']))
-    print('      Weights File : {}'.format(paths['weights']))
-    print('      History File : {}'.format(paths['history']))
 
     # Validation and error checking
 
@@ -268,14 +261,6 @@ if __name__ == '__main__':
         for s in [0, 1]:
             errors = oops(
                 errors, image_info[f][s] == None, '{} images folder does not exist', image_paths[f] + '/' + sub_folders[s])
-
-    tpath = os.path.dirname(paths['history'])
-    errors = oops(errors, not os.path.exists(tpath),
-                  'History path ({}) does not exist'.format(tpath))
-
-    tpath = os.path.dirname(paths['weights'])
-    errors = oops(errors, not os.path.exists(tpath),
-                  'Weights path ({}) does not exist'.format(tpath))
 
     terminate(errors, False)
 
@@ -306,6 +291,10 @@ if __name__ == '__main__':
     test_files = [[image_info[f][g][0][0] for g in [0, 1]] for f in [0, 1]]
     test_images = [[frameops.imread(image_info[f][g][0][0])
                     for g in [0, 1]] for f in [0, 1]]
+
+    # What kind of file is it? Do I win an award for the most brackets?
+
+    img_suffix = os.path.splitext(image_info[0][0][0][0])[1][1:]
 
     for f in [0, 1]:
         s1, s2 = np.shape(test_images[f][0]), np.shape(test_images[f][1])
@@ -354,26 +343,64 @@ if __name__ == '__main__':
         for sc, s in enumerate(sub_folders):
             paths[f + '.' + s] = image_info[fc][sc]
 
+    # Only at this point can we set default weights because that depends on image type
+
+    if 'weights' not in paths:
+        paths['weights'] = os.path.abspath(os.path.join(
+            dpath, 'weights', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix)))
+
+    if 'history' not in paths:
+        paths['history'] = os.path.abspath(os.path.join(
+            dpath, 'weights', '{}-{}-{}-{}-{}_history.txt'.format(model_type, tile_width, tile_height, tile_border,img_suffix)))
+
+    tpath = os.path.dirname(paths['history'])
+    errors = oops(errors, not os.path.exists(tpath),
+                  'History path ({}) does not exist'.format(tpath))
+
+    tpath = os.path.dirname(paths['weights'])
+    errors = oops(errors, not os.path.exists(tpath),
+                  'Weights path ({}) does not exist'.format(tpath))
+
+    terminate(errors, False)
+
+    print('      Weights File : {}'.format(paths['weights']))
+    print('      History File : {}'.format(paths['history']))
     print('  Image dimensions : {} x {}'.format(s1[1], s1[0]))
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(
         trim_top, trim_bottom, trim_left, trim_right))
     print('Trimmed dimensions : {} x {}'.format(trimmed_width, trimmed_height))
     print('   Tiles per image : {}'.format(tiles_per_image))
     print('       Black level : {}'.format(black_level))
-    print('            Jitter : {}'.format(jitter == 1)
-    print('           Shuffle : {}'.format(shuffle == 1)
-    print('              Skip : {}'.format(skip == 1)
+    print('            Jitter : {}'.format(jitter == 1))
+    print('           Shuffle : {}'.format(shuffle == 1))
+    print('              Skip : {}'.format(skip == 1))
     print('')
 
     # Train the model
 
-    sr = models.models[model_type](base_tile_width=tile_width, base_tile_height=tile_height,
-                                   border=tile_border, black_level=black_level,
-                                   trim_left=trim_left, trim_right=trim_left,
-                                   tiles_per_image=tiles_per_image,
-                                   jitter=jitter, shuffle=shuffle, skip=skip,
-                                   paths=paths)
-    sr.create_model()
-    sr.fit(nb_epochs=epochs)
-    sr.save()
+    model_list = models.models if model_type.lower() == 'all' else [ model_type ]
+    for model in model_list:
+
+        # Put proper model name in the history and weights path
+
+        for entry in ['history', 'weights']:
+            path = paths[entry]
+            folder_name, file_name = os.path.split(path)
+            file_name_parts = file_name.split('-')
+            file_name_parts[0] = model
+            file_name = '-'.join(file_name_parts)
+            path = os.path.join(folder_name, file_name)
+            paths[entry] = path
+            
+        sr = models.models[model](base_tile_width=tile_width, base_tile_height=tile_height,
+                                       border=tile_border, black_level=black_level,
+                                       trim_left=trim_left, trim_right=trim_left,
+                                       tiles_per_image=tiles_per_image,
+                                       jitter=jitter, shuffle=shuffle, skip=skip,
+                                       img_suffix=img_suffix, paths=paths)
+        sr.create_model()
+        sr.fit(nb_epochs=epochs)
+        sr.save()
+
+    print('')
     print('Training completed...')

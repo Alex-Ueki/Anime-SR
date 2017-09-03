@@ -58,8 +58,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    weights=path        path to weights file, default = Weights/{model}-{width}-{height}-{border}.h5
-    history=path        path to checkpoint file, default = Weights/{model}-{width}-{height}-{border}_history.h5
+    weights=path        path to weights file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}.h5
+    history=path        path to checkpoint file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}_history.txt
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 ```
