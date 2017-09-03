@@ -1,17 +1,3 @@
-basemode.py:
-
-if K.image_dim_ordering() == 'th':
-    alpha_tile = alpha_tile.transpose((2, 0, 1))
-    beta_tile = beta_tile.transpose((2, 0, 1))
-
-Move this up into frameops so that it gets cached?
-
-Check if jitter, skip provide better results
-
-Move cacheing down into tesselate routines so it can cache trimmed, bordered version
-
-could be moved even lower to tile level if jitter proves worthless.
-
 # Anime Image Super Resolution using in Keras 2+ (TensorFlow Backend)
 
 Credit to
@@ -20,25 +6,26 @@ for base code, https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc for DPX 
 
 ## Setup
 
-Set up Data directory as follows:
+Run setup.py in project directory to create Data directory as follows:
 
 ```
 Data
     eval_images/    
-      Alpha/    
-      Beta/   
+        Alpha/    
+        Beta/   
     input_images/   
-      Alpha/    
-      Beta/   
+        Alpha/    
+        Beta/   
     predict_images/   
-      Alpha/    
+        Alpha/
+        Beta/
     train_images/           Images to use for training
-      training/                 Actual training images
-        Alpha/                      Input images
-        Beta/                       Target images
-      validation/               Model validation images
-        Alpha/                      Input images
-        Beta/                       Target images
+        training/                 Actual training images
+            Alpha/                      Input images
+            Beta/                       Target images
+        validation/               Model validation images
+            Alpha/                      Input images
+            Beta/                       Target images
 ```
 
 ## Usage
