@@ -1,3 +1,9 @@
+Data/
+Frames/
+Temp/
+Obsolete/
+scratchpad.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
