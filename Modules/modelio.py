@@ -58,6 +58,7 @@ class ModelIO():
 
         # Passed Parameter Paranoia
 
+        """
         print('')
         print('ModelIO Initialization...')
         print(' base_tile_width : {}'.format(self.base_tile_width))
@@ -74,7 +75,8 @@ class ModelIO():
         print('         shuffle : {}'.format(shuffle == 1))
         print('            skip : {}'.format(skip == 1))
         print('    path entries : {}'.format(self.paths.keys()))
-
+        """
+        
         # Set image shape
 
         if K.image_dim_ordering() == 'th':

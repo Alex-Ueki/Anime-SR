@@ -4,7 +4,7 @@ import numpy as np
 import os
 import time
 
-from keras.models import Sequential, Model
+from keras.models import Sequential, Model, load_model
 from keras.layers import Concatenate, Add, Average, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
 from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D, Conv2DTranspose
 from keras import backend as K
@@ -19,8 +19,10 @@ from Modules.advanced import HistoryCheckpoint
 class LossHistory(callbacks.Callback):
     def on_train_begin(self, logs={}):
         self.losses = []
+        print('Training commences...')
 
     def on_epoch_end(self, batch, logs={}):
+        print('Completed epoch ',len(self.losses))
         self.losses.append(logs)
 
 
@@ -68,13 +70,20 @@ class BaseSRCNNModel(object):
 
     def __init__(self, name, io):
 
-        self.model = None
         self.name = name
         self.io = io
         self.evaluation_function = PSNRLossBorder(io.border)
 
+        if os.path.isfile(io.weight_path):
+            print('Loading existing .h5 model')
+            self.model = load_model(io.weight_path, custom_objects={'PeakSignaltoNoiseRatio': self.evaluation_function})
+        else:
+            print('Creating new untrained model')
+            self.model = self.create_model(load_weights=False)
+
+
     @abstractmethod
-    def create_model(self, load_weights=False):
+    def create_model(self, load_weights):
         pass
 
     # Standard method to train any of the models.
@@ -86,26 +95,25 @@ class BaseSRCNNModel(object):
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
 
-        if self.model == None:
-            self.create_model()
-
         loss_history = LossHistory()
         learning_rate = callbacks.ReduceLROnPlateau(monitor='val_PeakSignaltoNoiseRatio',
                                                     mode='min',
-                                                    factor=0.5,
-                                                    min_lr=0.001,
+                                                    factor=0.75,
+                                                    min_lr=0.0001,
                                                     patience=10,
                                                     verbose=1)
 
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
 
+        # We much checkpoint the entire model if we want to be able to resume training
+
         model_checkpoint = callbacks.ModelCheckpoint(self.io.weight_path,
                                                      monitor='val_PeakSignaltoNoiseRatio',
                                                      save_best_only=True,
                                                      verbose=1,
                                                      mode='min',
-                                                     save_weights_only=True)
+                                                     save_weights_only=False)
 
         callback_list = [model_checkpoint,
                          learning_rate,
@@ -120,6 +128,7 @@ class BaseSRCNNModel(object):
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=nb_epochs,
                                  callbacks=callback_list,
+                                 verbose=0,
                                  validation_data=self.io.validation_data_generator(),
                                  validation_steps=val_count // self.io.batch_size)
 
@@ -141,8 +150,6 @@ class BaseSRCNNModel(object):
     def evaluate(self):
 
         print('Validating %s model' % self.name)
-        if self.model == None:
-            self.create_model(load_weights=True)
 
         results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
                                                 steps=self.io.eval_images_count() // self.io.batch_size)
@@ -155,16 +162,10 @@ class BaseSRCNNModel(object):
         import os
         from Modules.frameops import imsave
 
-        # Read images from predict_path, creating a generator
-
-        model = self.create_model(load_weights=True)
-        if verbose:
-            print('Model loaded.')
-
         # Create prediction for image patches
-        result = model.predict_generator(self.io.prediction_data_generator(),
-                                         steps=self.io.predict_images_count() // self.io.batch_size,
-                                         verbose=verbose)
+        result = self.model.predict_generator(self.io.prediction_data_generator(),
+                                              steps=self.io.predict_images_count() // self.io.batch_size,
+                                              verbose=verbose)
 
         if verbose:
             print('\nDe-processing images.')
@@ -211,7 +212,7 @@ class BasicSR(BaseSRCNNModel):
 
     # Create a model to be used to scale images of specific height and width.
 
-    def create_model(self, load_weights=False):
+    def create_model(self, load_weights):
         model = Sequential()
 
         model.add(Conv2D(64, (9, 9), activation='relu',
@@ -223,6 +224,7 @@ class BasicSR(BaseSRCNNModel):
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
+
         if load_weights:
             model.load_weights(self.io.weight_path)
 
@@ -240,7 +242,7 @@ class ExpansionSR(BaseSRCNNModel):
 
     # Create a model to be used to scale images of specific height and width.
 
-    def create_model(self, load_weights=False):
+    def create_model(self, load_weights):
 
         init = Input(shape=self.io.image_shape)
         x = Conv2D(64, (9, 9), activation='relu',
@@ -264,6 +266,7 @@ class ExpansionSR(BaseSRCNNModel):
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
+
         if load_weights:
             model.load_weights(self.io.weight_path)
 
@@ -277,7 +280,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
         super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', io)
 
-    def create_model(self, load_weights=False):
+    def create_model(self, load_weights):
 
         init = Input(shape=self.io.image_shape)
         c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
@@ -314,6 +317,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
+
         if load_weights:
             model.load_weights(self.io.weight_path)
 
@@ -329,7 +333,7 @@ class VDSR(BaseSRCNNModel):
 
         super(VDSR, self).__init__('VDSR', io)
 
-    def create_model(self, load_weights=False):
+    def create_model(self, load_weights):
 
         init = Input(shape=self.io.image_shape)
         x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
@@ -346,6 +350,7 @@ class VDSR(BaseSRCNNModel):
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
+
         if load_weights:
             model.load_weights(self.io.weight_path)
 

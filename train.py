@@ -403,12 +403,10 @@ if __name__ == '__main__':
                      img_suffix=img_suffix,
                      paths=paths)
 
-        # Create and train model
+        # Create and fit model (best model state will be automatically saved)
 
         sr = models.models[model](io)
-        sr.create_model()
         sr.fit(nb_epochs=epochs)
-        sr.save()
 
     print('')
     print('Training completed...')

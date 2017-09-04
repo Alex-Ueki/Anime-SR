@@ -299,12 +299,11 @@ def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
         if caching:
             cached_tiles[file_path] = tiles
             mem = psutil.virtual_memory()
-            caching = mem.free > MINFREEMEMORY
-            if not caching or len(cached_tiles) % 10 == 0:
+            if caching and mem.free < MINFREEMEMORY:
+                caching = False
                 print('')
                 print('')
-                print('Images cached : {}'.format(len(cached_tiles)))
-                print('      Caching : {}'.format(caching))
+                print('Cache is full : {} images in cache'.format(len(cached_tiles)))
                 print('Memory status : {}'.format(mem))
                 print('MINFREEMEMORY : {}'.format(MINFREEMEMORY))
                 print('')
