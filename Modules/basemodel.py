@@ -31,7 +31,10 @@ import os
 class PathManager():
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
+
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1,
+                 jitter=True, shuffle=True, skip= True,
+                 img_suffix='',paths={}):
 
         self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
         self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
@@ -39,6 +42,8 @@ class PathManager():
             2 * border, base_tile_height + 2 * border
         self.channels, self.tiles_per_image = channels, tiles_per_image
         self.black_level, self.batch_size = black_level, batch_size
+
+        self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
         self.name = name
         self.paths = paths
 
@@ -56,6 +61,10 @@ class PathManager():
         print('       trim tblr : {} {} {} {}'.format(self.trim_top,
                                                       self.trim_bottom, self.trim_left, self.trim_right))
         print(' tiles_per_image : {}'.format(self.tiles_per_image))
+
+        print('          jitter : {}'.format(jitter == 1))
+        print('         shuffle : {}'.format(shuffle == 1))
+        print('            skip : {}'.format(skip == 1))
         print('    path entries : {}'.format(self.paths.keys()))
 
         # Getting the image size dimensions
@@ -82,9 +91,9 @@ class PathManager():
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
             self.base_dataset_dir, 'predict_images')
         self.history_path = paths['history'] if 'history' in paths else os.path.join(
-            self.base_dataset_dir, 'weights', '%s-%d-%d-%d_history.h5' % (name, base_tile_width, base_tile_height, border))
+            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
         self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(
-            self.base_dataset_dir, 'weights', '%s-%d-%d-%d.h5' % (name, base_tile_width, base_tile_height, border))
+            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
 
         self.alpha = 'Alpha'
         self.beta = 'Beta'
@@ -126,21 +135,25 @@ class PathManager():
     # Convenience Functions for data generators
     # See _image_generator, _index_generate, _predict_image_generator for base code
 
-    def training_data_generator(self, shuffle=True, jitter=True, skip=True):
-        return self._image_generator_frameops(self.training_path, jitter, shuffle, skip)
 
-    def validation_data_generator(self, shuffle=True, jitter=True, skip=True):
-        return self._image_generator_frameops(self.validation_path, jitter, shuffle, skip)
+    def training_data_generator(self):
+        return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip)
 
-    def evaluation_data_generator(self, shuffle=True, jitter=True, skip=True):
-        return self._image_generator_frameops(self.evaluation_path, jitter, shuffle, skip)
+    def validation_data_generator(self):
+        return self._image_generator_frameops(self.validation_path, self.jitter, self.shuffle, self.skip)
 
-    def prediction_data_generator(self, shuffle=False, jitter=True, skip=True):
-        return self._predict_image_generator_frameops(self.predict_path, jitter, shuffle, skip)
+    # Evaluation and Prediction generators will never shuffle, jitter or skip.
+
+    def evaluation_data_generator(self):
+        return self._image_generator_frameops(self.evaluation_path, False, False, False)
+
+    def prediction_data_generator(self):
+        return self._predict_image_generator_frameops(self.predict_path, False, False, False)
 
     # Frameops versions of image generators
 
-    def _image_generator_frameops(self, directory, shuffle=True, jitter=True, skip=True):
+    def _image_generator_frameops(self, directory, shuffle, jitter, skip):
+
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
@@ -174,7 +187,8 @@ class PathManager():
                     batch_index = 0
                     yield (alpha_tiles, beta_tiles)
 
-    def _predict_image_generator_frameops(self, directory, shuffle=True, jitter=False):
+
+    def _predict_image_generator_frameops(self, directory, shuffle, jitter, skip):
 
         alpha_paths = frameops.image_files(
             os.path.join(directory, self.alpha), deep=True)[0]

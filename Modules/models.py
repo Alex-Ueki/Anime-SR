@@ -64,7 +64,8 @@ class BaseSRCNNModel(object):
     # Base model to provide a standard interface of adding Super Resolution models
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1, paths={}):
+                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1,
+                 jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
 
         self.model = None
         self.name = name
@@ -84,6 +85,9 @@ class BaseSRCNNModel(object):
         print('       trim tblr : {} {} {} {}'.format(
             trim_top, trim_bottom, trim_left, trim_right))
         print(' tiles_per_image : {}'.format(tiles_per_image))
+        print('          jitter : {}'.format(jitter == 1))
+        print('         shuffle : {}'.format(shuffle == 1))
+        print('            skip : {}'.format(skip == 1))
         print('    path entries : {}'.format(paths.keys()))
 
         # pm (PathManager) is a class that holds all the directory information
@@ -94,8 +98,9 @@ class BaseSRCNNModel(object):
         self.pm = PathManager(name, base_tile_width=base_tile_width, base_tile_height=base_tile_height,
                               border=border, channels=channels, batch_size=batch_size,
                               black_level=black_level, trim_top=trim_top, trim_bottom=trim_bottom,
-                              trim_left=trim_left, trim_right=trim_right, tiles_per_image=tiles_per_image, paths=paths)
-
+                              trim_left=trim_left, trim_right=trim_right, tiles_per_image=tiles_per_image,
+                              jitter=jitter, shuffle=shuffle, skip=skip, img_suffix='', paths=paths)
+        
         self.evaluation_function = PSNRLossBorder(border)
 
     @abstractmethod
@@ -118,6 +123,8 @@ class BaseSRCNNModel(object):
 
         # PU Question: This was val_PeekSignaltoNoiseRatio. Is that a typo? Where is documentation on how to use monitor
         # field. PU is very confused.
+        
+        # val_PeekSignaltoNoiseRatio is correct. Documentation is bad...
 
         callback_list = [callbacks.ModelCheckpoint(self.pm.weight_path, monitor='val_PeakSignaltoNoiseRatio', save_best_only=True,
                                                    mode='max', save_weights_only=True),
@@ -217,11 +224,13 @@ class BasicSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
                  black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, paths={}):
+                 tiles_per_image=1, jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
+      
         super(BasicSR, self).__init__('BasicSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
                                       border=border, channels=channels, batch_size=batch_size, black_level=black_level,
                                       trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                      tiles_per_image=tiles_per_image, paths=paths)
+                                      tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
+                                      img_suffix='', paths=paths)
 
     # Create a model to be used to scale images of specific height and width.
 
@@ -250,13 +259,13 @@ class ExpansionSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
                  black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, paths={}):
+                 tiles_per_image=1, jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
 
         super(ExpansionSR, self).__init__('ExpansionSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
                                           border=border, channels=channels, batch_size=batch_size, black_level=black_level,
                                           trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                          tiles_per_image=tiles_per_image, paths=paths)
-
+                                          tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
+                                          img_suffix='', paths=paths)
     # Create a model to be used to scale images of specific height and width.
 
     def create_model(self, load_weights=False):
@@ -294,12 +303,13 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
                  black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, paths={}):
+                 tiles_per_image=1, jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
 
         super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
                                             border=border, channels=channels, batch_size=batch_size, black_level=black_level,
                                             trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                            tiles_per_image=tiles_per_image, paths=paths)
+                                            tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
+                                            img_suffix='', paths=paths)
 
     def create_model(self, load_weights=False):
 
@@ -351,12 +361,13 @@ class VDSR(BaseSRCNNModel):
 
     def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
                  black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, paths={}):
+                 tiles_per_image=1, img_suffix='', jitter=True, shuffle=True, skip=True, paths={}):
 
         super(VDSR, self).__init__('VDSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
                                    border=border, channels=channels, batch_size=batch_size, black_level=black_level,
                                    trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                   tiles_per_image=tiles_per_image, paths=paths)
+                                   tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
+                                   img_suffix='', paths=paths)
 
     def create_model(self, load_weights=False):
 
