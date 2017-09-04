@@ -185,7 +185,6 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
                    trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False, skip=False):
 
     # Convert non-lists to lists
-
     alpha_paths = alpha_paths if type(alpha_paths) in (
         list, tuple) else [alpha_paths]
     beta_paths = beta_paths if type(beta_paths) in (

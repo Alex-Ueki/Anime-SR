@@ -121,7 +121,6 @@ if __name__ == '__main__':
     errors = False
 
     for option in sys.argv[1:]:
-
         opvalue = option.split('=', maxsplit=1)
 
         if len(opvalue) == 1:

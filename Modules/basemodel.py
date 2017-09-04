@@ -31,6 +31,7 @@ import os
 class PathManager():
 
     def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
+
                  black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1,
                  jitter=True, shuffle=True, skip= True,
                  img_suffix='',paths={}):
@@ -41,6 +42,7 @@ class PathManager():
             2 * border, base_tile_height + 2 * border
         self.channels, self.tiles_per_image = channels, tiles_per_image
         self.black_level, self.batch_size = black_level, batch_size
+
         self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
         self.name = name
         self.paths = paths
@@ -59,6 +61,7 @@ class PathManager():
         print('       trim tblr : {} {} {} {}'.format(self.trim_top,
                                                       self.trim_bottom, self.trim_left, self.trim_right))
         print(' tiles_per_image : {}'.format(self.tiles_per_image))
+
         print('          jitter : {}'.format(jitter == 1))
         print('         shuffle : {}'.format(shuffle == 1))
         print('            skip : {}'.format(skip == 1))
@@ -88,8 +91,7 @@ class PathManager():
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
             self.base_dataset_dir, 'predict_images')
         self.history_path = paths['history'] if 'history' in paths else os.path.join(
-            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix
-))
+            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
         self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(
             self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
 
@@ -133,6 +135,7 @@ class PathManager():
     # Convenience Functions for data generators
     # See _image_generator, _index_generate, _predict_image_generator for base code
 
+
     def training_data_generator(self):
         return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip)
 
@@ -150,6 +153,7 @@ class PathManager():
     # Frameops versions of image generators
 
     def _image_generator_frameops(self, directory, shuffle, jitter, skip):
+
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
@@ -182,6 +186,7 @@ class PathManager():
                 if batch_index >= self.batch_size:
                     batch_index = 0
                     yield (alpha_tiles, beta_tiles)
+
 
     def _predict_image_generator_frameops(self, directory, shuffle, jitter, skip):
 
