@@ -106,7 +106,12 @@ class BaseSRCNNModel(object):
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
 
-        # We much checkpoint the entire model if we want to be able to resume training
+        # We much checkpoint the entire model if we want to be able to resume training.
+        # UNFORTUNATELY saving/loading models does not set the values of the metrics
+        # (either ours or theirs), so whatever result we get from the first epoch will
+        # get saved, even if it isn't as good as the last result we saved!!!!!
+
+        # Looking for a workaround on this.
 
         model_checkpoint = callbacks.ModelCheckpoint(self.io.weight_path,
                                                      monitor='val_PeakSignaltoNoiseRatio',
@@ -115,6 +120,8 @@ class BaseSRCNNModel(object):
                                                      mode='min',
                                                      save_weights_only=False)
 
+        model_checkpoint.best = 1
+        
         callback_list = [model_checkpoint,
                          learning_rate,
                          loss_history]
