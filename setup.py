@@ -33,7 +33,7 @@ if __name__ == '__main__':
     train_images = [[s, ab] for s in ['training', 'validation']]
     sub_folders.append(['train_images', train_images])
 
-    sub_folders.append(['weights'])
+    sub_folders.append(['models'])
 
     print(sub_folders)
 
