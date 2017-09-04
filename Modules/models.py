@@ -90,7 +90,12 @@ class BaseSRCNNModel(object):
             self.create_model()
 
         loss_history = LossHistory()
-        learning_rate = callbacks.ReduceLROnPlateau(verbose=1)
+        learning_rate = callbacks.ReduceLROnPlateau(monitor='val_PeakSignaltoNoiseRatio',
+                                                    mode='min',
+                                                    factor=0.5,
+                                                    min_lr=0.001,
+                                                    patience=10,
+                                                    verbose=1)
 
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
@@ -99,7 +104,7 @@ class BaseSRCNNModel(object):
                                                      monitor='val_PeakSignaltoNoiseRatio',
                                                      save_best_only=True,
                                                      verbose=1,
-                                                     mode='min', 
+                                                     mode='min',
                                                      save_weights_only=True)
 
         callback_list = [model_checkpoint,
