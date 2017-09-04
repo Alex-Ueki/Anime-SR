@@ -3,6 +3,7 @@ from abc import ABCMeta, abstractmethod
 import numpy as np
 import os
 import time
+import json
 
 from keras.models import Sequential, Model, load_model
 from keras.layers import Concatenate, Add, Average, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
@@ -15,15 +16,50 @@ import keras.optimizers as optimizers
 from Modules.modelio import ModelIO
 from Modules.advanced import HistoryCheckpoint
 
+# State monitor callback. Tracks how well we are doing and writes
+# some state to a json file. This lets us resume training seamlessly.
+#
+# ModelState.state is:
+#
+# { "epoch_count": nnnn,
+#   "best_values": { dictionary of logs values },
+#   "best_epoch": { dictionary of logs values }
+# }
 
-class LossHistory(callbacks.Callback):
+class ModelState(callbacks.Callback):
+
+    def __init__(self, state_path):
+
+        self.state_path = state_path
+
+        if os.path.isfile(state_path):
+            print('Loading existing .json state')
+            with open(state_path, 'r') as f:
+                self.state = json.load(f)
+        else:
+            self.state = { 'epoch_count': 0,
+                           'best_values': {},
+                           'best_epoch': {}
+                         }
+
     def on_train_begin(self, logs={}):
-        self.losses = []
+
         print('Training commences...')
 
     def on_epoch_end(self, batch, logs={}):
-        print('Completed epoch ',len(self.losses))
-        self.losses.append(logs)
+
+        # Currently, for everything we track, lower is better
+
+        for k in logs:
+            if k not in self.state['best_values'] or logs[k] < self.state['best_values'][k]:
+                self.state['best_values'][k] = float(logs[k])
+                self.state['best_epoch'][k] = self.state['epoch_count']
+
+        with open(self.state_path, 'w') as f:
+            json.dump(self.state, f, indent=4)
+        print('Completed epoch', self.state['epoch_count'])
+
+        self.state['epoch_count'] += 1
 
 
 def PSNRLoss(y_true, y_pred):
@@ -74,9 +110,9 @@ class BaseSRCNNModel(object):
         self.io = io
         self.evaluation_function = PSNRLossBorder(io.border)
 
-        if os.path.isfile(io.weight_path):
+        if os.path.isfile(io.model_path):
             print('Loading existing .h5 model')
-            self.model = load_model(io.weight_path, custom_objects={'PeakSignaltoNoiseRatio': self.evaluation_function})
+            self.model = load_model(io.model_path, custom_objects={'PeakSignaltoNoiseRatio': self.evaluation_function})
         else:
             print('Creating new untrained model')
             self.model = self.create_model(load_weights=False)
@@ -95,7 +131,6 @@ class BaseSRCNNModel(object):
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
 
-        loss_history = LossHistory()
         learning_rate = callbacks.ReduceLROnPlateau(monitor='val_PeakSignaltoNoiseRatio',
                                                     mode='min',
                                                     factor=0.75,
@@ -106,30 +141,34 @@ class BaseSRCNNModel(object):
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
 
-        # We much checkpoint the entire model if we want to be able to resume training.
-        # UNFORTUNATELY saving/loading models does not set the values of the metrics
-        # (either ours or theirs), so whatever result we get from the first epoch will
-        # get saved, even if it isn't as good as the last result we saved!!!!!
-
-        # Looking for a workaround on this.
-
-        model_checkpoint = callbacks.ModelCheckpoint(self.io.weight_path,
+        model_checkpoint = callbacks.ModelCheckpoint(self.io.model_path,
                                                      monitor='val_PeakSignaltoNoiseRatio',
                                                      save_best_only=True,
                                                      verbose=1,
                                                      mode='min',
                                                      save_weights_only=False)
 
-        model_checkpoint.best = 1
-        
+        # Set up the model state, reading in prior results info if available
+
+        model_state = ModelState(self.io.state_path)
+
+        # If we have trained previously, set up the model checkpoint so it won't save
+        # until it finds something better. Otherwise, it would always save the results
+        # of the first epoch.
+
+        if 'best_values' in model_state.state:
+            model_checkpoint.best = model_state.state['best_values']['val_PeakSignaltoNoiseRatio']
+
         callback_list = [model_checkpoint,
                          learning_rate,
-                         loss_history]
-
-        if save_history:
-            callback_list.append(HistoryCheckpoint(self.io.history_path))
+                         model_state]
 
         print('Training model : %s' % (self.__class__.__name__))
+
+        # Offset epoch counts if we are doing multiple training
+
+        initial_epoch = model_state.state['epoch_count']
+        nb_epochs += initial_epoch
 
         self.model.fit_generator(self.io.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
@@ -137,17 +176,17 @@ class BaseSRCNNModel(object):
                                  callbacks=callback_list,
                                  verbose=0,
                                  validation_data=self.io.validation_data_generator(),
-                                 validation_steps=val_count // self.io.batch_size)
+                                 validation_steps=val_count // self.io.batch_size,
+                                 initial_epoch=initial_epoch)
 
         print('')
         print('          Training results for : %s' %
               (self.__class__.__name__))
 
         for key in ['loss', 'val_loss', 'PeakSignaltoNoiseRatio', 'val_PeakSignaltoNoiseRatio']:
-            vals = [epoch[key] for epoch in loss_history.losses]
-            min_val = min(vals)
+            val = model_state.state['best_values'][key]
             print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
-                key, min_val, 1 + vals.index(min_val)))
+                key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
         print('')
 
         return self.model
@@ -208,7 +247,7 @@ class BaseSRCNNModel(object):
 
     def save(self, path=None):
 
-        self.model.save(self.io.weight_path if path == None else path)
+        self.model.save(self.io.model_path if path == None else path)
 
 
 class BasicSR(BaseSRCNNModel):
@@ -233,7 +272,7 @@ class BasicSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.weight_path)
+            model.load_weights(self.io.model_path)
 
         self.model = model
         return model
@@ -275,7 +314,7 @@ class ExpansionSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.weight_path)
+            model.load_weights(self.io.model_path)
 
         self.model = model
         return model
@@ -326,7 +365,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.weight_path)
+            model.load_weights(self.io.model_path)
 
         self.model = model
         return model
@@ -359,7 +398,7 @@ class VDSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.weight_path)
+            model.load_weights(self.io.model_path)
 
         self.model = model
         return model

@@ -11,7 +11,7 @@ Usage: train.py [option(s)] ...
 
 Options are:
 
-    model=model         model type, default is BasicSR
+    type=model          model type, default is BasicSR
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
@@ -27,8 +27,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    weights=path        path to weights file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}.h5
-    history=path        path to checkpoint file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}_history.txt
+    model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
+    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.txt
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
@@ -80,7 +80,7 @@ Usage: train.py [option(s)] ...
 
 Options are:
 
-    model=model         model type, default is BasicSR
+    type=model          model type, default is BasicSR
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
@@ -96,8 +96,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    weights=path        path to weights file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}.h5
-    history=path        path to checkpoint file, default = {Data}/weights/{model}-{width}-{height}-{border}-{img_type}_history.txt
+    model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
+    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.txt
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 """)
@@ -143,8 +143,8 @@ if __name__ == '__main__':
                 fnum = -1.0
             vnum = int(fnum)
 
-            opmatch = [s for s in ['model', 'width', 'height', 'border', 'epochs', 'training',
-                                   'validation', 'weights', 'data', 'history', 'black',
+            opmatch = [s for s in ['type', 'width', 'height', 'border', 'epochs', 'training',
+                                   'validation', 'model', 'data', 'state', 'black',
                                    'jitter', 'shuffle', 'skip',
                                    'trimleft', 'trimright', 'trimtop', 'trimbottom'] if s.startswith(op)]
 
@@ -154,7 +154,7 @@ if __name__ == '__main__':
                 errors = oops(errors, True, 'Ambiguous option ({})', op)
             else:
                 op = opmatch[0]
-                if op == 'model':
+                if op == 'type':
                     model_type = valuecase
                     errors = oops(errors, value != 'all' and valuecase not in models.models,
                                   'Unknown model type ({})', valuecase)
@@ -213,10 +213,10 @@ if __name__ == '__main__':
                     paths['training'] = os.path.abspath(value)
                 elif op == 'validation':
                     paths['validation'] = os.path.abspath(value)
-                elif op == 'weights':
-                    paths['weights'] = os.path.abspath(value)
-                elif op == 'history':
-                    paths['history'] = os.path.abspath(value)
+                elif op == 'model':
+                    paths['model'] = os.path.abspath(value)
+                elif op == 'state':
+                    paths['state'] = os.path.abspath(value)
 
     terminate(errors)
 
@@ -341,28 +341,28 @@ if __name__ == '__main__':
         for sc, s in enumerate(sub_folders):
             paths[f + '.' + s] = image_info[fc][sc]
 
-    # Only at this point can we set default weights because that depends on image type
+    # Only at this point can we set default model and state filenames because that depends on image type
 
-    if 'weights' not in paths:
-        paths['weights'] = os.path.abspath(os.path.join(
-            dpath, 'weights', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
+    if 'model' not in paths:
+        paths['model'] = os.path.abspath(os.path.join(
+            dpath, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
 
-    if 'history' not in paths:
-        paths['history'] = os.path.abspath(os.path.join(
-            dpath, 'weights', '{}-{}-{}-{}-{}_history.txt'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
+    if 'state' not in paths:
+        paths['state'] = os.path.abspath(os.path.join(
+            dpath, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
 
-    tpath = os.path.dirname(paths['history'])
+    tpath = os.path.dirname(paths['state'])
     errors = oops(errors, not os.path.exists(tpath),
-                  'History path ({}) does not exist'.format(tpath))
+                  'Model state path ({}) does not exist'.format(tpath))
 
-    tpath = os.path.dirname(paths['weights'])
+    tpath = os.path.dirname(paths['model'])
     errors = oops(errors, not os.path.exists(tpath),
-                  'Weights path ({}) does not exist'.format(tpath))
+                  'Model path ({}) does not exist'.format(tpath))
 
     terminate(errors, False)
 
-    print('      Weights File : {}'.format(paths['weights']))
-    print('      History File : {}'.format(paths['history']))
+    print('        Model File : {}'.format(paths['model']))
+    print('  Model State File : {}'.format(paths['state']))
     print('  Image dimensions : {} x {}'.format(s1[1], s1[0]))
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(
         trim_top, trim_bottom, trim_left, trim_right))
@@ -378,9 +378,9 @@ if __name__ == '__main__':
     model_list = models.models if model_type.lower() == 'all' else [model_type]
     for model in model_list:
 
-        # Put proper model name in the history and weights path
+        # Put proper model name in the model and state paths
 
-        for entry in ['history', 'weights']:
+        for entry in ['model', 'state']:
             path = paths[entry]
             folder_name, file_name = os.path.split(path)
             file_name_parts = file_name.split('-')

@@ -76,7 +76,7 @@ class ModelIO():
         print('            skip : {}'.format(skip == 1))
         print('    path entries : {}'.format(self.paths.keys()))
         """
-        
+
         # Set image shape
 
         if K.image_dim_ordering() == 'th':
@@ -102,10 +102,10 @@ class ModelIO():
             self.base_dataset_dir, 'eval_images')
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
             self.base_dataset_dir, 'predict_images')
-        self.history_path = paths['history'] if 'history' in paths else os.path.join(
-            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
-        self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(
-            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
+        self.model_path = paths['model'] if 'model' in paths else os.path.join(
+            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
+        self.state_path = paths['state'] if 'state' in paths else os.path.join(
+            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
 
         self.alpha = 'Alpha'
         self.beta = 'Beta'
