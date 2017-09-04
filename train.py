@@ -34,7 +34,7 @@ Options are:
 
 """
 
-import Modules.basemodel as basemodel
+from Modules.modelio import ModelIO
 import Modules.models as models
 import Modules.frameops as frameops
 
@@ -121,6 +121,7 @@ if __name__ == '__main__':
     errors = False
 
     for option in sys.argv[1:]:
+
         opvalue = option.split('=', maxsplit=1)
 
         if len(opvalue) == 1:
@@ -311,8 +312,9 @@ if __name__ == '__main__':
 
     terminate(errors, False)
 
-    trimmed_width, trimmed_height = s1[1] - \
-        (trim_left + trim_right), s1[0] - (trim_top + trim_bottom)
+    image_width, image_height = s1[1], s1[0]
+    trimmed_width = image_width - (trim_left + trim_right)
+    trimmed_height = image_height - (trim_top + trim_bottom)
 
     errors = oops(errors, trimmed_width <= 0,
                   'Trimmed images have invalid width ({} - ({} + {}) <= 0)', (s1[0], trim_left, trim_right))
@@ -327,9 +329,6 @@ if __name__ == '__main__':
                   'Trimmed images do not evenly tile vertically ({} % {} != 0)', (trimmed_height, tile_height))
 
     terminate(errors, False)
-
-    tiles_per_image = (trimmed_width // tile_width) * \
-        (trimmed_height // tile_height)
 
     # Attempt to automatically figure out the border color black level, by finding the minimum pixel value in one of our
     # sample images. This will definitely work if we are processing 1440x1080 4:3 embedded in 1920x1080 16:19 images
@@ -368,7 +367,6 @@ if __name__ == '__main__':
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(
         trim_top, trim_bottom, trim_left, trim_right))
     print('Trimmed dimensions : {} x {}'.format(trimmed_width, trimmed_height))
-    print('   Tiles per image : {}'.format(tiles_per_image))
     print('       Black level : {}'.format(black_level))
     print('            Jitter : {}'.format(jitter == 1))
     print('           Shuffle : {}'.format(shuffle == 1))
@@ -391,12 +389,23 @@ if __name__ == '__main__':
             path = os.path.join(folder_name, file_name)
             paths[entry] = path
 
-        sr = models.models[model](base_tile_width=tile_width, base_tile_height=tile_height,
-                                  border=tile_border, black_level=black_level,
-                                  trim_left=trim_left, trim_right=trim_left,
-                                  tiles_per_image=tiles_per_image,
-                                  jitter=jitter, shuffle=shuffle, skip=skip,
-                                  img_suffix=img_suffix, paths=paths)
+        # Configure model IO
+
+        io = ModelIO(image_width=image_width, image_height=image_height,
+                     base_tile_width=tile_width, base_tile_height=tile_height,
+                     channels=3,
+                     border=tile_border,
+                     batch_size=16,
+                     black_level=black_level,
+                     trim_top=trim_top, trim_bottom=trim_bottom,
+                     trim_left=trim_left, trim_right=trim_left,
+                     jitter=jitter, shuffle=shuffle, skip=skip,
+                     img_suffix=img_suffix,
+                     paths=paths)
+
+        # Create and train model
+
+        sr = models.models[model](io)
         sr.create_model()
         sr.fit(nb_epochs=epochs)
         sr.save()

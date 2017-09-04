@@ -14,8 +14,11 @@ __pycache__/
 # DS_Store
 .DS_Store
 
-# No PNGS to save space (Can be removed to transfer images)
+# No images to save space (Can be removed to transfer images)
 *.png
+*.dpx
+*.jpg
+*.jpeg
 
 # C extensions
 *.so

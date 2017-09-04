@@ -67,8 +67,6 @@ Options are:
 
 - Parental Unit
     - Write evaluate.py, hallucinate.py, etc.
-    - Test whether jitter and shuffle improve training accuracy
-    - Some way of skipping low-contrast tiles? Use blz to compress tiles and check size? Probably too slow though.
     - Improve Documentation
 - Gene-Perpetuation Unit
     - Clean up contents of Scripts folder

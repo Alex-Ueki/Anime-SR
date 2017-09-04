@@ -7,51 +7,59 @@ from keras import backend as K
 import Modules.frameops as frameops
 import os
 
-""" LIST OF TODO """
 """
-
-#TODO Implement a function in setup.py that tiles an HD image with a given border size
-#TODO Implement a setup.py main() function that initializes all the directories
-#TODO Implement a function that takes images from input_images and divides them
-    into train_images (for training and validation) and eval_images (for evaluation)
-    --> Should be a variety of settings, e.g. Random, Sorted
-"""
-
-"""
-    Path Manager class
-    Handles all directories, image_size and batch_size
-    Has functions to get image count
-    Has image generators for training/evaluation/prediction
+    ModelIO class
+    Handles all model IO (data generators, etc)
     Uses default paths in Data directory if a path is not specified
 """
 
 # Model parameter class
 
 
-class PathManager():
+class ModelIO():
 
-    def __init__(self, name, base_tile_width=60, base_tile_height=60, channels=3, border=2, batch_size=16,
+    def __init__(self,
+                 image_width=1920, image_height=1080,
+                 base_tile_width=60, base_tile_height=60,
+                 channels=3,
+                 border=2,
+                 batch_size=16,
+                 black_level=0.0,
+                 trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
+                 jitter=True,
+                 shuffle=True,
+                 skip=True,
+                 img_suffix='',
+                 paths={}):
 
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1,
-                 jitter=True, shuffle=True, skip= True,
-                 img_suffix='',paths={}):
-
-        self.base_tile_width, self.base_tile_height, self.border = base_tile_width, base_tile_height, border
-        self.trim_left, self.trim_right, self.trim_top, self.trim_bottom = trim_left, trim_right, trim_top, trim_bottom
-        self.tile_width, self.tile_height = base_tile_width + \
-            2 * border, base_tile_height + 2 * border
-        self.channels, self.tiles_per_image = channels, tiles_per_image
-        self.black_level, self.batch_size = black_level, batch_size
-
+        self.base_tile_width, self.base_tile_height = base_tile_width, base_tile_height
+        self.border = border
+        self.trim_left, self.trim_right = trim_left, trim_right
+        self.trim_top, self.trim_bottom = trim_top, trim_bottom
+        self.channels, self.black_level = channels, black_level
+        self.batch_size = batch_size
         self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
-        self.name = name
         self.paths = paths
+
+        # The actual internal tile size includes the overlap borders
+
+        self.tile_width = base_tile_width + 2 * border
+        self.tile_height = base_tile_height + 2 * border
+
+        # How many tiles will we get out of each image? If we are jittering, then account for that
+
+        trimmed_width = image_width - (trim_left + trim_right)
+        trimmed_height = image_height - (trim_top + trim_bottom)
+        tiles_across = trimmed_width // base_tile_width
+        tiles_down = trimmed_height // base_tile_height
+        self.tiles_per_image = tiles_across * tiles_down
+        if jitter == 1:
+            self.tiles_per_image += (tiles_across - 1) * (tiles_down - 1)
 
         # Passed Parameter Paranoia
 
         print('')
-        print('PathManager Initialization...')
-        print('            Name : {}'.format(self.name))
+        print('ModelIO Initialization...')
         print(' base_tile_width : {}'.format(self.base_tile_width))
         print('base_tile_height : {}'.format(self.base_tile_height))
         print('          border : {}'.format(self.border))
@@ -67,7 +75,8 @@ class PathManager():
         print('            skip : {}'.format(skip == 1))
         print('    path entries : {}'.format(self.paths.keys()))
 
-        # Getting the image size dimensions
+        # Set image shape
+
         if K.image_dim_ordering() == 'th':
             self.image_shape = (
                 self.channels, self.tile_width, self.tile_height)
@@ -75,11 +84,12 @@ class PathManager():
             self.image_shape = (
                 self.tile_width, self.tile_height, self.channels)
 
+        # Set paths
+
         self.data_path = paths['data'] if 'data' in paths else 'Data'
         self.base_dataset_dir = os.path.join(os.path.dirname(
             os.path.abspath(__main__.__file__)), self.data_path)
 
-        # use specified or default paths
         self.input_path = paths['input'] if 'input' in paths else os.path.join(
             self.base_dataset_dir, 'input_images')
         self.training_path = paths['training'] if 'training' in paths else os.path.join(
@@ -91,14 +101,14 @@ class PathManager():
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
             self.base_dataset_dir, 'predict_images')
         self.history_path = paths['history'] if 'history' in paths else os.path.join(
-            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
+            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
         self.weight_path = paths['weights'] if 'weights' in paths else os.path.join(
-            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border,img_suffix))
+            self.base_dataset_dir, 'weights',  '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
 
         self.alpha = 'Alpha'
         self.beta = 'Beta'
 
-    # Check the image counts of important directories. Assumes error checking will be done at an outer level.
+    # Check the image counts of important directories. Adjusts for the number of tiles we will get
 
     def train_images_count(self):
 
@@ -132,9 +142,7 @@ class PathManager():
             os.path.join(self.input_path, self.alpha))
         return self.tiles_per_image * len(files[0])
 
-    # Convenience Functions for data generators
-    # See _image_generator, _index_generate, _predict_image_generator for base code
-
+    # Data generators
 
     def training_data_generator(self):
         return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip)
@@ -153,7 +161,6 @@ class PathManager():
     # Frameops versions of image generators
 
     def _image_generator_frameops(self, directory, shuffle, jitter, skip):
-
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
@@ -187,7 +194,6 @@ class PathManager():
                     batch_index = 0
                     yield (alpha_tiles, beta_tiles)
 
-
     def _predict_image_generator_frameops(self, directory, shuffle, jitter, skip):
 
         alpha_paths = frameops.image_files(
@@ -213,115 +219,3 @@ class PathManager():
                 if batch_index >= self.batch_size:
                     batch_index = 0
                     yield (alpha_tiles)
-
-    # Internal Helper functions
-    # START : Code derived from Image-Super-Resolution/img_utils.py for _image_generator, _index_generate
-
-    def _image_generator(self, directory, shuffle=True):
-
-        file_names = [f for f in sorted(
-            os.listdir(os.path.join(directory, self.alpha)))]
-        X_filenames = [os.path.join(directory, self.alpha, f)
-                       for f in file_names]
-        y_filenames = [os.path.join(directory, self.beta, f)
-                       for f in file_names]
-
-        nb_images = len(file_names)
-        print('Found %d images.' % nb_images)
-
-        index_generator = self._index_generator(
-            nb_images, self.batch_size, shuffle)
-
-        while 1:
-            index_array, current_index, current_batch_size = next(
-                index_generator)
-
-            batch_x = np.zeros((current_batch_size, ) + self.image_shape)
-            batch_y = np.zeros((current_batch_size, ) + self.image_shape)
-
-            for i, j in enumerate(index_array):
-                x_fn = X_filenames[j]
-                img = imread(x_fn, mode='RGB')
-                img = img.astype('float32') / 255.
-
-                if K.image_dim_ordering() == 'th':
-                    batch_x[i] = img.transpose((2, 0, 1))
-                else:
-                    batch_x[i] = img
-
-                y_fn = y_filenames[j]
-                img = imread(y_fn, mode='RGB')
-                img = img.astype('float32') / 255.
-
-                if K.image_dim_ordering() == 'th':
-                    batch_y[i] = img.transpose((2, 0, 1))
-                else:
-                    batch_y[i] = img
-
-            yield (batch_x, batch_y)
-
-    # Helper to generate batch number
-
-    def _index_generator(self, N, batch_size, shuffle=True):
-        batch_index = 0
-        total_batches_seen = 0
-
-        while 1:
-            if batch_index == 0:
-                index_array = np.arange(N)
-                if shuffle:
-                    index_array = np.random.permutation(N)
-
-            current_index = (batch_index * batch_size) % N
-
-            if N >= current_index + batch_size:
-                current_batch_size = batch_size
-                batch_index += 1
-            else:
-                current_batch_size = N - current_index
-                batch_index = 0
-            total_batches_seen += 1
-
-            yield (index_array[current_index: current_index + current_batch_size],
-                   current_index, current_batch_size)
-
-    # END : Code derived from Image-Super-Resolution/img_utils.py
-
-    # Image generator for model.predict_generator function (Keras)
-    # Returns a single value
-
-    def _predict_image_generator(self, directory, shuffle=True):
-
-        file_names = [f for f in sorted(
-            os.listdir(os.path.join(directory, self.alpha)))]
-        filenames = [os.path.join(directory, self.alpha, f)
-                     for f in file_names]
-
-        nb_images = len(file_names)
-        print('Found %d images.' % nb_images)
-
-        index_generator = self._index_generator(
-            nb_images, self.batch_size, shuffle)
-
-        while 1:
-            index_array, current_index, current_batch_size = next(
-                index_generator)
-
-            batch = np.zeros((current_batch_size, ) + self.image_shape)
-
-            for i, j in enumerate(index_array):
-                fn = filenames[j]
-                img = imread(fn, mode='RGB')
-                img = img.astype('float32') / 255.
-
-                if K.image_dim_ordering() == 'th':
-                    batch[i] = img.transpose((2, 0, 1))
-                else:
-                    batch[i] = img
-
-            yield (batch)
-
-    # Helper for getting image count
-
-    def _image_count(self, imgs_path):
-        return len([name for name in os.listdir(imgs_path)])

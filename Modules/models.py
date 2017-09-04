@@ -12,7 +12,7 @@ from keras.utils.np_utils import to_categorical
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
-from Modules.basemodel import PathManager
+from Modules.modelio import ModelIO
 from Modules.advanced import HistoryCheckpoint
 
 
@@ -56,65 +56,35 @@ def PSNRLossBorder(border):
 
     return PeakSignaltoNoiseRatio
 
+# Base superresolution model; subclass for each individual model.
+
 
 class BaseSRCNNModel(object):
 
     __metaclass__ = ABCMeta
 
-    # Base model to provide a standard interface of adding Super Resolution models
+    # io is a modelio.ModelIO handler class; it deals with all the file io,
+    # tiling, image generators, etc.
 
-    def __init__(self, name, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, tiles_per_image=1,
-                 jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
+    def __init__(self, name, io):
 
         self.model = None
         self.name = name
-        # self.border = border
-
-        # Parameter passing paranoia
-
-        print('')
-        print('Model Initialization...')
-        print('            Name : {}'.format(name))
-        print(' base_tile_width : {}'.format(base_tile_width))
-        print('base_tile_height : {}'.format(base_tile_height))
-        print('          border : {}'.format(border))
-        print('        channels : {}'.format(channels))
-        print('      batch_size : {}'.format(batch_size))
-        print('     black_level : {}'.format(black_level))
-        print('       trim tblr : {} {} {} {}'.format(
-            trim_top, trim_bottom, trim_left, trim_right))
-        print(' tiles_per_image : {}'.format(tiles_per_image))
-        print('          jitter : {}'.format(jitter == 1))
-        print('         shuffle : {}'.format(shuffle == 1))
-        print('            skip : {}'.format(skip == 1))
-        print('    path entries : {}'.format(paths.keys()))
-
-        # pm (PathManager) is a class that holds all the directory information
-        # Holds batch_size, image_shape, and all directory paths
-        # Includes functions for image generators and image counts
-        # See basemodel.py for information
-
-        self.pm = PathManager(name, base_tile_width=base_tile_width, base_tile_height=base_tile_height,
-                              border=border, channels=channels, batch_size=batch_size,
-                              black_level=black_level, trim_top=trim_top, trim_bottom=trim_bottom,
-                              trim_left=trim_left, trim_right=trim_right, tiles_per_image=tiles_per_image,
-                              jitter=jitter, shuffle=shuffle, skip=skip, img_suffix='', paths=paths)
-        
-        self.evaluation_function = PSNRLossBorder(border)
+        self.io = io
+        self.evaluation_function = PSNRLossBorder(io.border)
 
     @abstractmethod
     def create_model(self, load_weights=False):
         pass
 
     # Standard method to train any of the models.
-    # Uses images in self.pm.training_path for Training
-    # Uses images in self.pm.validation_path for Validation
+    # Uses images in self.io.training_path for Training
+    # Uses images in self.io.validation_path for Validation
 
     def fit(self, nb_epochs=80, save_history=True):
 
-        samples_per_epoch = self.pm.train_images_count()
-        val_count = self.pm.val_images_count()
+        samples_per_epoch = self.io.train_images_count()
+        val_count = self.io.val_images_count()
 
         if self.model == None:
             self.create_model()
@@ -123,22 +93,22 @@ class BaseSRCNNModel(object):
 
         # PU Question: This was val_PeekSignaltoNoiseRatio. Is that a typo? Where is documentation on how to use monitor
         # field. PU is very confused.
-        
+
         # val_PeekSignaltoNoiseRatio is correct. Documentation is bad...
 
-        callback_list = [callbacks.ModelCheckpoint(self.pm.weight_path, monitor='val_PeakSignaltoNoiseRatio', save_best_only=True,
+        callback_list = [callbacks.ModelCheckpoint(self.io.weight_path, monitor='val_PeakSignaltoNoiseRatio', save_best_only=True,
                                                    mode='max', save_weights_only=True),
                          loss_history]
         if save_history:
-            callback_list.append(HistoryCheckpoint(self.pm.history_path))
+            callback_list.append(HistoryCheckpoint(self.io.history_path))
         print('Training model : %s' % (self.__class__.__name__))
 
-        self.model.fit_generator(self.pm.training_data_generator(),
-                                 steps_per_epoch=samples_per_epoch // self.pm.batch_size,
+        self.model.fit_generator(self.io.training_data_generator(),
+                                 steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=nb_epochs,
                                  callbacks=callback_list,
-                                 validation_data=self.pm.validation_data_generator(),
-                                 validation_steps=val_count // self.pm.batch_size)
+                                 validation_data=self.io.validation_data_generator(),
+                                 validation_steps=val_count // self.io.batch_size)
 
         print('')
         print('          Training results for : %s' %
@@ -161,11 +131,11 @@ class BaseSRCNNModel(object):
         if self.model == None:
             self.create_model(load_weights=True)
 
-        results = self.model.evaluate_generator(self.pm.evaluation_data_generator(),
-                                                steps=self.pm.eval_images_count() // self.pm.batch_size)
+        results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
+                                                steps=self.io.eval_images_count() // self.io.batch_size)
         print(self.name, results)
 
-    # Run predictions on images in self.pm.predict_path
+    # Run predictions on images in self.io.predict_path
 
     def predict(self, verbose=True):
 
@@ -179,8 +149,8 @@ class BaseSRCNNModel(object):
             print('Model loaded.')
 
         # Create prediction for image patches
-        result = model.predict_generator(self.pm.prediction_data_generator(),
-                                         steps=self.pm.predict_images_count() // self.pm.batch_size,
+        result = model.predict_generator(self.io.prediction_data_generator(),
+                                         steps=self.io.predict_images_count() // self.io.batch_size,
                                          verbose=verbose)
 
         if verbose:
@@ -196,7 +166,7 @@ class BaseSRCNNModel(object):
             print('Completed De-processing image.')
 
         (num, width, height, channels) = result.shape
-        output_directory = os.path.join(self.pm.predict_path, self.name)
+        output_directory = os.path.join(self.io.predict_path, self.name)
         if not os.path.exists(output_directory):
             os.makedirs(output_directory)
 
@@ -204,7 +174,7 @@ class BaseSRCNNModel(object):
             print(('Saving %d images into ' % num) + output_directory)
         # Getting old file names
         file_names = [f for f in sorted(os.listdir(
-            os.path.join(self.pm.predict_path, self.pm.alpha)))]
+            os.path.join(self.io.predict_path, self.io.alpha)))]
         for i in range(num):
             output = np.clip(result[i, :, :, :], 0, 255).astype(
                 'uint8')  # TODO Change this for new image type
@@ -217,20 +187,14 @@ class BaseSRCNNModel(object):
 
     def save(self, path=None):
 
-        self.model.save(self.pm.weight_path if path == None else path)
+        self.model.save(self.io.weight_path if path == None else path)
 
 
 class BasicSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
-      
-        super(BasicSR, self).__init__('BasicSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
-                                      border=border, channels=channels, batch_size=batch_size, black_level=black_level,
-                                      trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                      tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
-                                      img_suffix='', paths=paths)
+    def __init__(self, io):
+
+        super(BasicSR, self).__init__('BasicSR', io)
 
     # Create a model to be used to scale images of specific height and width.
 
@@ -238,16 +202,16 @@ class BasicSR(BaseSRCNNModel):
         model = Sequential()
 
         model.add(Conv2D(64, (9, 9), activation='relu',
-                         padding='same', input_shape=self.pm.image_shape))
+                         padding='same', input_shape=self.io.image_shape))
         model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(self.pm.channels, (5, 5), padding='same'))
+        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
 
         adam = optimizers.Adam(lr=1e-3)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
         if load_weights:
-            model.load_weights(self.pm.weight_path)
+            model.load_weights(self.io.weight_path)
 
         self.model = model
         return model
@@ -257,20 +221,15 @@ class BasicSR(BaseSRCNNModel):
 
 class ExpansionSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
+    def __init__(self, io):
 
-        super(ExpansionSR, self).__init__('ExpansionSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
-                                          border=border, channels=channels, batch_size=batch_size, black_level=black_level,
-                                          trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                          tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
-                                          img_suffix='', paths=paths)
+        super(ExpansionSR, self).__init__('ExpansionSR', io)
+
     # Create a model to be used to scale images of specific height and width.
 
     def create_model(self, load_weights=False):
 
-        init = Input(shape=self.pm.image_shape)
+        init = Input(shape=self.io.image_shape)
         x = Conv2D(64, (9, 9), activation='relu',
                    padding='same', name='level1')(init)
 
@@ -283,7 +242,7 @@ class ExpansionSR(BaseSRCNNModel):
 
         x = Average()([x1, x2, x3])
 
-        out = Conv2D(self.pm.channels, (5, 5), activation='relu',
+        out = Conv2D(self.io.channels, (5, 5), activation='relu',
                      padding='same', name='output')(x)
 
         model = Model(init, out)
@@ -293,7 +252,7 @@ class ExpansionSR(BaseSRCNNModel):
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
         if load_weights:
-            model.load_weights(self.pm.weight_path)
+            model.load_weights(self.io.weight_path)
 
         self.model = model
         return model
@@ -301,19 +260,13 @@ class ExpansionSR(BaseSRCNNModel):
 
 class DeepDenoiseSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, jitter=True, shuffle=True, skip=True, img_suffix='', paths={}):
+    def __init__(self, io):
 
-        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
-                                            border=border, channels=channels, batch_size=batch_size, black_level=black_level,
-                                            trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                            tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
-                                            img_suffix='', paths=paths)
+        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', io)
 
     def create_model(self, load_weights=False):
 
-        init = Input(shape=self.pm.image_shape)
+        init = Input(shape=self.io.image_shape)
         c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
         c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(c1)
 
@@ -339,7 +292,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
         m2 = Add()([c1, c1_2])
 
-        decoded = Conv2D(self.pm.channels, (5, 5), activation='linear',
+        decoded = Conv2D(self.io.channels, (5, 5), activation='linear',
                          border_mode='same')(m2)
 
         model = Model(init, decoded)
@@ -349,7 +302,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
         if load_weights:
-            model.load_weights(self.pm.weight_path)
+            model.load_weights(self.io.weight_path)
 
         self.model = model
         return model
@@ -359,25 +312,19 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
 class VDSR(BaseSRCNNModel):
 
-    def __init__(self, base_tile_width=60, base_tile_height=60, border=2, channels=3, batch_size=16,
-                 black_level=0.0, trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-                 tiles_per_image=1, img_suffix='', jitter=True, shuffle=True, skip=True, paths={}):
+    def __init__(self, io):
 
-        super(VDSR, self).__init__('VDSR', base_tile_width=base_tile_width, base_tile_height=base_tile_height,
-                                   border=border, channels=channels, batch_size=batch_size, black_level=black_level,
-                                   trim_top=trim_top, trim_bottom=trim_bottom, trim_left=trim_left, trim_right=trim_right,
-                                   tiles_per_image=tiles_per_image, jitter=True, shuffle=True, skip=True,
-                                   img_suffix='', paths=paths)
+        super(VDSR, self).__init__('VDSR', io)
 
     def create_model(self, load_weights=False):
 
-        init = Input(shape=self.pm.image_shape)
+        init = Input(shape=self.io.image_shape)
         x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
 
         for i in range(0, 19):
             x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
 
-        decode = Conv2D(self.pm.channels, (3, 3), activation='linear',
+        decode = Conv2D(self.io.channels, (3, 3), activation='linear',
                         border_mode='same')(x)
 
         model = Model(init, decode)
@@ -387,7 +334,7 @@ class VDSR(BaseSRCNNModel):
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
         if load_weights:
-            model.load_weights(self.pm.weight_path)
+            model.load_weights(self.io.weight_path)
 
         self.model = model
         return model
