@@ -90,17 +90,25 @@ class BaseSRCNNModel(object):
             self.create_model()
 
         loss_history = LossHistory()
+        learning_rate = callbacks.ReduceLROnPlateau(verbose=1)
 
-        # PU Question: This was val_PeekSignaltoNoiseRatio. Is that a typo? Where is documentation on how to use monitor
-        # field. PU is very confused.
+        # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
+        # negative) shouldn't it be 'min'?
 
-        # val_PeekSignaltoNoiseRatio is correct. Documentation is bad...
+        model_checkpoint = callbacks.ModelCheckpoint(self.io.weight_path,
+                                                     monitor='val_PeakSignaltoNoiseRatio',
+                                                     save_best_only=True,
+                                                     verbose=1,
+                                                     mode='min', 
+                                                     save_weights_only=True)
 
-        callback_list = [callbacks.ModelCheckpoint(self.io.weight_path, monitor='val_PeakSignaltoNoiseRatio', save_best_only=True,
-                                                   mode='max', save_weights_only=True),
+        callback_list = [model_checkpoint,
+                         learning_rate,
                          loss_history]
+
         if save_history:
             callback_list.append(HistoryCheckpoint(self.io.history_path))
+
         print('Training model : %s' % (self.__class__.__name__))
 
         self.model.fit_generator(self.io.training_data_generator(),
