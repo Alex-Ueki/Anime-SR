@@ -406,7 +406,7 @@ if __name__ == '__main__':
         # Create and fit model (best model state will be automatically saved)
 
         sr = models.models[model](io)
-        sr.fit(nb_epochs=epochs)
+        sr.fit(epochs=epochs)
 
     print('')
     print('Training completed...')

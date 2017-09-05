@@ -14,7 +14,6 @@ import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
 from Modules.modelio import ModelIO
-from Modules.advanced import HistoryCheckpoint
 
 # State monitor callback. Tracks how well we are doing and writes
 # some state to a json file. This lets us resume training seamlessly.
@@ -25,6 +24,8 @@ from Modules.advanced import HistoryCheckpoint
 #   "best_values": { dictionary of logs values },
 #   "best_epoch": { dictionary of logs values }
 # }
+#
+# PU: Add history when time permits
 
 class ModelState(callbacks.Callback):
 
@@ -78,8 +79,6 @@ def PSNRLoss(y_true, y_pred):
 
 def PSNRLossBorder(border):
 
-    # PU Note: GPU cannot spell "peak" correctly
-
     def PeakSignaltoNoiseRatio(y_true, y_pred):
         if border == 0:
             return PSNRLoss(y_true, y_pred)
@@ -94,6 +93,12 @@ def PSNRLossBorder(border):
 
     return PeakSignaltoNoiseRatio
 
+# Dictionary of loss functions (currently only one). All must take border as
+# a parameter and return a curried loss function.
+
+loss_functions = { 'PeakSignaltoNoiseRatio': PSNRLossBorder
+                 }
+
 # Base superresolution model; subclass for each individual model.
 
 
@@ -102,17 +107,20 @@ class BaseSRCNNModel(object):
     __metaclass__ = ABCMeta
 
     # io is a modelio.ModelIO handler class; it deals with all the file io,
-    # tiling, image generators, etc.
+    # tiling, image generators, etc. lf is the name of the
+    # loss function to use.
 
-    def __init__(self, name, io):
+    def __init__(self, name, io, lf='PeakSignaltoNoiseRatio'):
 
         self.name = name
         self.io = io
-        self.evaluation_function = PSNRLossBorder(io.border)
+        self.lf = lf
+        self.val_lf = 'val_' + lf
+        self.evaluation_function = loss_functions[lf](io.border)
 
         if os.path.isfile(io.model_path):
             print('Loading existing .h5 model')
-            self.model = load_model(io.model_path, custom_objects={'PeakSignaltoNoiseRatio': self.evaluation_function})
+            self.model = load_model(io.model_path, custom_objects={ lf: self.evaluation_function })
         else:
             print('Creating new untrained model')
             self.model = self.create_model(load_weights=False)
@@ -126,15 +134,15 @@ class BaseSRCNNModel(object):
     # Uses images in self.io.training_path for Training
     # Uses images in self.io.validation_path for Validation
 
-    def fit(self, nb_epochs=80, save_history=True):
+    def fit(self, epochs=255, save_history=True):
 
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
 
-        learning_rate = callbacks.ReduceLROnPlateau(monitor='val_PeakSignaltoNoiseRatio',
+        learning_rate = callbacks.ReduceLROnPlateau(monitor=self.val_lf,
                                                     mode='min',
-                                                    factor=0.75,
-                                                    min_lr=0.0001,
+                                                    factor=0.9,
+                                                    min_lr=0.0002,
                                                     patience=10,
                                                     verbose=1)
 
@@ -142,7 +150,7 @@ class BaseSRCNNModel(object):
         # negative) shouldn't it be 'min'?
 
         model_checkpoint = callbacks.ModelCheckpoint(self.io.model_path,
-                                                     monitor='val_PeakSignaltoNoiseRatio',
+                                                     monitor=self.val_lf,
                                                      save_best_only=True,
                                                      verbose=1,
                                                      mode='min',
@@ -156,8 +164,10 @@ class BaseSRCNNModel(object):
         # until it finds something better. Otherwise, it would always save the results
         # of the first epoch.
 
-        if 'best_values' in model_state.state:
-            model_checkpoint.best = model_state.state['best_values']['val_PeakSignaltoNoiseRatio']
+        if 'best_values' in model_state.state and self.val_lf in model_state.state['best_values']:
+            model_checkpoint.best = model_state.state['best_values'][self.val_lf]
+
+        print('Best {} found so far: {}'.format(self.val_lf,model_checkpoint.best))
 
         callback_list = [model_checkpoint,
                          learning_rate,
@@ -165,14 +175,14 @@ class BaseSRCNNModel(object):
 
         print('Training model : %s' % (self.__class__.__name__))
 
-        # Offset epoch counts if we are doing multiple training
+        # Offset epoch counts if we are resuming training
 
         initial_epoch = model_state.state['epoch_count']
-        nb_epochs += initial_epoch
+        epochs += initial_epoch
 
         self.model.fit_generator(self.io.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
-                                 epochs=nb_epochs,
+                                 epochs=epochs,
                                  callbacks=callback_list,
                                  verbose=0,
                                  validation_data=self.io.validation_data_generator(),
@@ -183,10 +193,13 @@ class BaseSRCNNModel(object):
         print('          Training results for : %s' %
               (self.__class__.__name__))
 
-        for key in ['loss', 'val_loss', 'PeakSignaltoNoiseRatio', 'val_PeakSignaltoNoiseRatio']:
-            val = model_state.state['best_values'][key]
-            print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
-                key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
+        for key in ['loss', self.lf]:
+            if key in model_state['best_values']:
+                print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
+                    key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
+                vkey = 'val_' + key
+                print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
+                    vkey, model_state.state['best_values'][vkey], model_state.state['best_epoch'][vkey]))
         print('')
 
         return self.model
@@ -209,6 +222,7 @@ class BaseSRCNNModel(object):
         from Modules.frameops import imsave
 
         # Create prediction for image patches
+
         result = self.model.predict_generator(self.io.prediction_data_generator(),
                                               steps=self.io.predict_images_count() // self.io.batch_size,
                                               verbose=verbose)
@@ -243,7 +257,7 @@ class BaseSRCNNModel(object):
         if verbose:
             print(('Save %d images into ' % num) + output_directory)
 
-    # Save the model to a weights file
+    # Save the model to a .h5 file
 
     def save(self, path=None):
 
@@ -256,7 +270,7 @@ class BasicSR(BaseSRCNNModel):
 
         super(BasicSR, self).__init__('BasicSR', io)
 
-    # Create a model to be used to scale images of specific height and width.
+    # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
         model = Sequential()
@@ -266,7 +280,7 @@ class BasicSR(BaseSRCNNModel):
         model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
         model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
 
-        adam = optimizers.Adam(lr=1e-3)
+        adam = optimizers.Adam(lr=.001)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
@@ -277,16 +291,13 @@ class BasicSR(BaseSRCNNModel):
         self.model = model
         return model
 
-# PU Note: I've only run BasicSR
-
-
 class ExpansionSR(BaseSRCNNModel):
 
     def __init__(self, io):
 
         super(ExpansionSR, self).__init__('ExpansionSR', io)
 
-    # Create a model to be used to scale images of specific height and width.
+    # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
 
@@ -308,7 +319,7 @@ class ExpansionSR(BaseSRCNNModel):
 
         model = Model(init, out)
 
-        adam = optimizers.Adam(lr=1e-3)
+        adam = optimizers.Adam(lr=.001)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
@@ -359,7 +370,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
         model = Model(init, decoded)
 
-        adam = optimizers.Adam(lr=1e-3)
+        adam = optimizers.Adam(lr=.001)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
@@ -403,7 +414,7 @@ class VDSR(BaseSRCNNModel):
         self.model = model
         return model
 
-# Handy dictionary of all the model classes
+# Dictionary of all the model classes
 
 
 models = {'BasicSR': BasicSR,

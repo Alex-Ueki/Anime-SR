@@ -139,6 +139,8 @@ class ModelIO():
             os.path.join(self.predict_path, self.alpha))
         return self.tiles_per_image * len(files[0])
 
+    # PU: not currently used -- obsolete?
+
     def input_images_count(self):
         files = self.paths['input.alpha'] if 'input.alpha' in self.paths else frameops.image_files(
             os.path.join(self.input_path, self.alpha))
