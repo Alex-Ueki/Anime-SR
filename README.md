@@ -16,23 +16,23 @@ Data
     input_images/   
         Alpha/    
         Beta/   
-    predict_images/   
-        Alpha/
-        Beta/
+    predict_images/         Images to predict
+        Alpha/                  Source images
+        Beta/                   Predicted images
     train_images/           Images to use for training
-        training/                 Actual training images
-            Alpha/                      Input images
-            Beta/                       Target images
-        validation/               Model validation images
-            Alpha/                      Input images
-            Beta/                       Target images
+        training/               Actual training images
+            Alpha/                  Input images
+            Beta/                   Target images
+        validation/             Model validation images
+            Alpha/                  Input images
+            Beta/                   Target images
     models/                 .h5 and _state.json files for trained models.
 ```
 
 ## Usage
 
 ```
-Usage: train.py [option(s)] ...
+train.py [option(s)] ...
 
     Trains a model. The available models are:
 
@@ -47,7 +47,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=255
+    epochs=nnn          epoch size, default=9999
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -63,6 +63,28 @@ Options are:
     state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.txt
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
+
+predict.py [option(s)] ...
+
+    Predicts images by applying model. The available models are:
+
+        BasicSR
+        ExpansionSR
+        DeepDenoiseSR
+        VDSR
+
+Options are:
+
+    data=path           path to the main data folder, default = Data
+    images=path         path to images folder, default = {Data}/predict_images
+    model=filename|path model filename or absolute path. If just a filename, then the
+                        path will be {Data}/models/{model}. Default = BasicSR-60-60-2-dpx.h5
+
+    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
+
+    Expects that there will be a matching _state.json file for the model
+    (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
+
 ```
 ## TODOS
 

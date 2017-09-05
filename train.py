@@ -15,7 +15,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=255
+    epochs=nnn          epoch size, default=9999
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -84,7 +84,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=255
+    epochs=nnn          epoch size, default=9999
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
 
     model_type = 'BasicSR'
-    tile_width, tile_height, tile_border, epochs = 60, 60, 2, 255
+    tile_width, tile_height, tile_border, epochs = 60, 60, 2, 9999
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level = -1.0
     jitter, shuffle, skip = 1, 1, 1
@@ -391,7 +391,8 @@ if __name__ == '__main__':
 
         # Configure model IO
 
-        io = ModelIO(image_width=image_width, image_height=image_height,
+        io = ModelIO(model_type=model,
+                     image_width=image_width, image_height=image_height,
                      base_tile_width=tile_width, base_tile_height=tile_height,
                      channels=3,
                      border=tile_border,

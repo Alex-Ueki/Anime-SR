@@ -13,6 +13,7 @@ import os
 import copy
 import random
 import psutil
+from keras import backend as K
 
 import Modules.dpx as dpx
 
@@ -28,7 +29,7 @@ MINFREEMEMORY = 1000 * 1000 * 1000
 # In case we ever need to reset or disable the cache
 
 
-def reset_cache(enable=True):
+def reset_cache(enabled=True):
 
     global cached_images
     global caching
@@ -79,6 +80,8 @@ def image_files(folder_path, deep=False):
 
 
 def imread(file_path):
+
+    global last_meta
 
     file_type = os.path.splitext(file_path)[1]
 
@@ -248,6 +251,7 @@ def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
 
     img = imread(file_path)
 
+
     # Trim image
     if trim_top + trim_bottom + trim_left + trim_right > 0:
         shape = np.shape(img)
@@ -375,3 +379,36 @@ def tile_grid(file_path, tile_width=60, tile_height=60, border=2, trim_top=0, tr
         (trim_left + trim_right) // tile_width
 
     return (rows, cols)
+
+# Turn a tile generator into a tile batch generator
+# Currently not used, was having a problem getting the model to
+# predict with a generator. See model.predict_tiles; it was
+# expecting more tiles than it actually got.
+
+def batch_generator(tile_generator, image_shape, batch_size):
+
+    tiles = np.empty((batch_size, ) + image_shape)
+    batch_index = 0
+    bnum =1
+    print('batch size ',batch_size)
+
+    # Generate batches of tiles
+
+    for tile in tile_generator:
+        if K.image_dim_ordering() == 'th':
+            tile = tile.transpose((2, 0, 1))
+
+        tiles[batch_index] = tile
+        batch_index += 1
+        if batch_index >= batch_size:
+            batch_index = 0
+            print('Yielding tile batch ',bnum)
+            bnum +=1
+            yield tiles
+
+    # Ouput residual tiles
+
+    if batch_index > 0:
+        tiles = tiles[:batch_index]
+        print('Yielding residual tiles')
+        yield tiles

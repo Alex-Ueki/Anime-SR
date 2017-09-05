@@ -19,6 +19,7 @@ import os
 class ModelIO():
 
     def __init__(self,
+                 model_type='BasicSR',
                  image_width=1920, image_height=1080,
                  base_tile_width=60, base_tile_height=60,
                  channels=3,
@@ -32,12 +33,13 @@ class ModelIO():
                  img_suffix='',
                  paths={}):
 
+        self.image_width, self.image_height = image_width, image_height
         self.base_tile_width, self.base_tile_height = base_tile_width, base_tile_height
         self.border = border
         self.trim_left, self.trim_right = trim_left, trim_right
         self.trim_top, self.trim_bottom = trim_top, trim_bottom
         self.channels, self.black_level = channels, black_level
-        self.batch_size = batch_size
+        self.batch_size, self.img_suffix = batch_size, img_suffix
         self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
         self.paths = paths
 
@@ -103,9 +105,9 @@ class ModelIO():
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
             self.base_dataset_dir, 'predict_images')
         self.model_path = paths['model'] if 'model' in paths else os.path.join(
-            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
+            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, base_tile_width, base_tile_height, border, img_suffix))
         self.state_path = paths['state'] if 'state' in paths else os.path.join(
-            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
+            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, base_tile_width, base_tile_height, border, img_suffix))
 
         self.alpha = 'Alpha'
         self.beta = 'Beta'
@@ -223,3 +225,35 @@ class ModelIO():
                 if batch_index >= self.batch_size:
                     batch_index = 0
                     yield (alpha_tiles)
+
+    # Create dictionary of parameters
+
+    def asdict(self):
+
+        return {'image_width': self.image_width,
+                'image_height': self.image_height,
+                'base_tile_width': self.base_tile_width,
+                'base_tile_height': self.base_tile_height,
+                'channels': self.channels,
+                'border': self.border,
+                'batch_size': self.batch_size,
+                'black_level': self.black_level,
+                'trim_top': self.trim_top,
+                'trim_bottom': self.trim_bottom,
+                'trim_left': self.trim_left,
+                'trim_right': self.trim_right,
+                'jitter': self.jitter,
+                'shuffle': self.shuffle,
+                'skip': self.skip,
+                'img_suffix': self.img_suffix,
+                'data_path': self.data_path,
+                'training_path': self.training_path,
+                'validation_path': self.validation_path,
+                'evaluation_path': self.evaluation_path,
+                'predict_path': self.predict_path,
+                'model_path': self.model_path,
+                'state_path': self.state_path,
+                'model_type': self.model_type,
+                'alpha': self.alpha,
+                'beta': self.beta
+              }

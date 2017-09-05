@@ -29,18 +29,23 @@ from Modules.modelio import ModelIO
 
 class ModelState(callbacks.Callback):
 
-    def __init__(self, state_path):
+    def __init__(self, io):
 
-        self.state_path = state_path
+        self.io = io
 
-        if os.path.isfile(state_path):
+        if os.path.isfile(io.state_path):
             print('Loading existing .json state')
-            with open(state_path, 'r') as f:
+            with open(io.state_path, 'r') as f:
                 self.state = json.load(f)
+
+            # Update state with current run information
+
+            self.state['io'] = io.asdict()
         else:
             self.state = { 'epoch_count': 0,
                            'best_values': {},
-                           'best_epoch': {}
+                           'best_epoch': {},
+                           'io': io.asdict()
                          }
 
     def on_train_begin(self, logs={}):
@@ -56,7 +61,7 @@ class ModelState(callbacks.Callback):
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
 
-        with open(self.state_path, 'w') as f:
+        with open(self.io.state_path, 'w') as f:
             json.dump(self.state, f, indent=4)
         print('Completed epoch', self.state['epoch_count'])
 
@@ -158,7 +163,7 @@ class BaseSRCNNModel(object):
 
         # Set up the model state, reading in prior results info if available
 
-        model_state = ModelState(self.io.state_path)
+        model_state = ModelState(self.io)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
@@ -178,7 +183,9 @@ class BaseSRCNNModel(object):
         # Offset epoch counts if we are resuming training
 
         initial_epoch = model_state.state['epoch_count']
-        epochs += initial_epoch
+        if initial_epoch > 0:
+            initial_epoch += 1
+            epochs += initial_epoch
 
         self.model.fit_generator(self.io.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
@@ -204,6 +211,23 @@ class BaseSRCNNModel(object):
 
         return self.model
 
+    # Predict a sequence of tiles. This can later be expanded to do multiprocessing
+
+    def predict_tiles(self, tile_generator, batches, verbose=True):
+
+        print('predict tiles')
+
+        result = self.model.predict_generator(generator=tile_generator,
+                                              steps=batches,
+                                              verbose=verbose)
+
+        # Deprocess patches
+        if K.image_dim_ordering() == 'th':
+            result = result.transpose((0, 2, 3, 1))
+
+        return result
+
+    """
     # Evaluate the model on self.evaluation_path
 
     def evaluate(self):
@@ -256,6 +280,7 @@ class BaseSRCNNModel(object):
             imsave(filename, output)
         if verbose:
             print(('Save %d images into ' % num) + output_directory)
+"""
 
     # Save the model to a .h5 file
 
