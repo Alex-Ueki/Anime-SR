@@ -33,6 +33,7 @@ class ModelIO():
                  img_suffix='',
                  paths={}):
 
+        self.model_type=model_type
         self.image_width, self.image_height = image_width, image_height
         self.base_tile_width, self.base_tile_height = base_tile_width, base_tile_height
         self.border = border
