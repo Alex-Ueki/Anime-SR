@@ -37,10 +37,12 @@ def reset_cache(enabled=True):
     cached_images = {}
     caching = enabled
 
+"""
 # Keep a copy of the last DPX meta information read
 
 
 last_meta = None
+"""
 
 # Look in folder_path for all the files that are of one of the IMAGETYPES,
 # and return a sorted list of lists containing the absolute paths to those files. So if
@@ -81,19 +83,22 @@ def image_files(folder_path, deep=False):
 
 def imread(file_path):
 
-    global last_meta
+    # global last_meta
 
     file_type = os.path.splitext(file_path)[1]
 
     if os.path.isfile(file_path):
         if file_type == '.dpx':
             with open(file_path, 'rb') as f:
+                img = dpx.DPXread(f)
+                """
                 meta = dpx.readDPXMetaData(f)
                 if meta is None:
                     img = None
                 else:
                     img = dpx.readDPXImageData(f, meta)
                     last_meta = copy.deepcopy(meta)
+                """
         else:
             img = misc.imread(file_path, mode='RGB')
             img = img.astype('float32') / 255.0
@@ -111,13 +116,14 @@ def imread(file_path):
 
 def imsave(file_path, img, meta=None):
 
-    global last_meta
+    # global last_meta
 
     file_type = os.path.splitext(file_path)[1]
 
     if file_type == '.dpx':
         with open(file_path, 'wb') as f:
-            dpx.writeDPX(f, img, last_meta if meta == None else meta)
+            dpx.DPXsave(f, img)
+            #dpx.writeDPX(f, img, last_meta if meta == None else meta)
     else:
         img = (img * 255.0).astype(np.uint8)
         misc.imsave(file_path, img)

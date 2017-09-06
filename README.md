@@ -2,11 +2,11 @@
 
 Credit to
 *<a href="https://github.com/titu1994/Image-Super-Resolution">Image-Super-Resolution</a>*
-for base code, https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc for DPX file io.
+for base code, *https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc* for DPX file io.
 
 ## Setup
 
-Run setup.py in project directory to create Data directory as follows:
+Run Tools/setup.py in project directory to create Data directory as follows:
 
 ```
 Data
@@ -86,11 +86,31 @@ Options are:
     (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
 
 ```
+
+## Useful Tools
+
+```
+Tools/sdcopy.sh {src folder} {from folder} {dest folder}
+
+    For each file in {src folder}, copy the file with the same name from {from folder}
+    to {dest folder}. Handy for creating matched training / validation file sets. This
+    is a bash shell script.
+
+Tools/dpxderez.py {source folder} {destination folder}
+
+    For each 1920x1080 DPX image file in {source folder}, assume it contains a 1440x1080
+    4x3 image. Crop to this and crunch it down to 720x480 (SD resolution), then scale it
+    back to 1440x1080 again, add black bars to make it 1920x1080, and save in the
+    {destination folder}. Lets you create the lower-resolution inputs to the models.
+```
+
 ## TODOS
 
 - Parental Unit
-    - Write evaluate.py, hallucinate.py, etc.
+    - Test current models
+    - Pythonate sdcopy.sh
     - Improve Documentation
+
 - Gene-Perpetuation Unit
     - Clean up contents of Scripts folder
     - Implement a function that takes images from input_images and divides them into train_images (for training and validation) and eval_images (for evaluation)

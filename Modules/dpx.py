@@ -7,9 +7,6 @@ Read Metadata and Image data from 10-bit DPX files in Python 3
 
 Copyright (c) 2016 Jack Doerner
 
-Tweaked to also work in Python 2 (fixed normalization code to ensure floating
-point division) -- RJW 08/19/17
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the 'Software'), to deal
 in the Software without restriction, including without limitation the rights
@@ -32,6 +29,14 @@ THE SOFTWARE.
 import struct
 import numpy as np
 
+# Cache of DPX header information that we set when we read a file;
+# used to write a file in the same format.
+
+dpx_header = None
+dpx_endian = None
+dpx_meta = None
+
+"""
 orientations = {
     0: 'Left to Right, Top to Bottom',
     1: 'Right to Left, Top to Bottom',
@@ -98,6 +103,7 @@ colorimetries = {
 }
 
 propertymap = [
+
     #(field name, offset, length, type)
 
     ('magic', 0, 4, 'magic'),
@@ -138,8 +144,27 @@ propertymap = [
     ('white_level', 1964, 4, 'f')
 
 ]
+"""
 
+# Just what we actually need
+# More extensive propertymap can be found in dpxderex.py
 
+simple_propertymap = [
+
+    ('magic', 0, 4, 'magic'),
+    ('offset', 4, 4, 'I'),
+
+    ('width', 772, 4, 'I'),
+    ('height', 776, 4, 'I'),
+
+    ('descriptor', 800, 1, 'B'),
+    ('depth', 803, 1, 'B'),
+    ('packing', 804, 2, 'H'),
+    ('encoding', 806, 2, 'H'),
+
+]
+
+"""
 def readDPXMetaData(f):
     f.seek(0)
     bytes = f.read(4)
@@ -194,7 +219,6 @@ def readDPXImageData(f, meta):
 
     return image
 
-
 def writeDPX(f, image, meta):
     endianness = '>' if meta['endianness'] == 'be' else '<'
     for p in propertymap:
@@ -218,4 +242,108 @@ def writeDPX(f, image, meta):
         raw = raw.byteswap()
 
     f.seek(meta['offset'])
+    raw.tofile(f, sep='')
+"""
+
+# Clear the cache of DPX meta information
+
+def DPXreset():
+
+    global dpx_header
+
+    dpx_header = None
+
+# Read a DPX file and return an img. Stash the header and meta information in a
+# gobal for use when writing. Assumes that all the images being read and written
+# have identical format and that they are 10-bit/channel images
+
+def DPXread(f):
+
+    global dpx_header
+    global dpx_meta
+
+    # If we do not have header information, read and save a copy in the globals
+
+    if dpx_header == None:
+
+        # Figure out the byte order of the file
+
+        f.seek(0)
+        magic = f.read(4)
+        magic = magic.decode(encoding='UTF-8')
+        if magic != 'SDPX' and magic != 'XPDS':
+            return None
+        endianness = '>' if magic == 'SDPX' else '<'
+
+        # Read the header values we need
+
+        dpx_meta = {}
+
+        for p in simple_propertymap:
+            f.seek(p[1])
+            bytes = f.read(p[2])
+            if p[3] == 'magic':
+                dpx_meta[p[0]] = bytes.decode(encoding='UTF-8')
+                dpx_meta['endianness'] = 'be' if magic == 'SDPX' else 'le'
+            elif p[3] == 'utf8':
+                dpx_meta[p[0]] = bytes.decode(encoding='UTF-8')
+            elif p[3] == 'B':
+                dpx_meta[p[0]] = struct.unpack(endianness + 'B', bytes)[0]
+            elif p[3] == 'H':
+                dpx_meta[p[0]] = struct.unpack(endianness + 'H', bytes)[0]
+            elif p[3] == 'I':
+                dpx_meta[p[0]] = struct.unpack(endianness + 'I', bytes)[0]
+            elif p[3] == 'f':
+                dpx_meta[p[0]] = struct.unpack(endianness + 'f', bytes)[0]
+
+        # Grab a copy of the whole header
+
+        f.seek(0)
+        dpx_header = f.read(dpx_meta['offset'])
+
+        # If the format is not what we expect, don't proceed
+
+        if dpx_meta['depth'] != 10 or dpx_meta['packing'] != 1 or dpx_meta['encoding'] != 0 or dpx_meta['descriptor'] != 50:
+            DPXreset()
+            return None
+
+    # Read and decode the image
+
+    width = dpx_meta['width']
+    height = dpx_meta['height']
+    image = np.empty((height, width, 3), dtype=float)
+
+    f.seek(dpx_meta['offset'])
+    raw = np.fromfile(f, dtype=np.dtype(np.int32),
+                      count=width * height, sep='')
+    raw = raw.reshape((height, width))
+
+    if dpx_meta['endianness'] == 'be':
+        raw = raw.byteswap()
+
+    # extract and normalize color channel values to 0..1 inclusive.
+
+    image[:, :, 0] = ((raw >> 22) & 0x000003FF) / 1023.0
+    image[:, :, 1] = ((raw >> 12) & 0x000003FF) / 1023.0
+    image[:, :, 2] = ((raw >> 2) & 0x000003FF) / 1023.0
+
+    return image
+
+def DPXsave(f, image):
+
+    global dpx_header
+    global dpx_meta
+
+    f.seek(0)
+    f.write(dpx_header)
+
+    raw = ((((image[:, :, 0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
+           | (((image[:, :, 1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
+           | (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
+           )
+
+    if dpx_meta['endianness'] == 'be':
+        raw = raw.byteswap()
+
+    f.seek(dpx_meta['offset'])
     raw.tofile(f, sep='')
