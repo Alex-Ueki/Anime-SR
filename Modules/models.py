@@ -423,8 +423,9 @@ class VDSR(BaseSRCNNModel):
         for i in range(0, 19):
             x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
 
-        decode = Conv2D(self.io.channels, (3, 3), activation='linear',
-                        border_mode='same')(x)
+        # Based on keras warning to upgrade, changed this from:
+        # decode = Conv2D(self.io.channels, (3, 3), activation='linear', border_mode='same')(x)
+        decode = Conv2D(self.io.channels, (3, 3), activation='linear', padding='same')(x)
 
         model = Model(init, decode)
         adam = optimizers.Adam(lr=0.01, beta_1=0.9,

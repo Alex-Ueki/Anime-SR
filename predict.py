@@ -32,6 +32,10 @@ import sys
 import os
 import json
 
+# Turn debug code on and off
+
+DEBUG = False
+
 # If is_error is true, display message and optionally end the run.
 # return updated error_state
 
@@ -112,7 +116,7 @@ if __name__ == '__main__':
                 errors = oops(errors, True, 'Ambiguous option ({})', op)
             else:
                 op = opmatch[0]
-                paths[op] = os.path.abspath(value)
+                paths[op] = value
 
     terminate(errors)
 
@@ -124,16 +128,16 @@ if __name__ == '__main__':
     dpath = paths['data']
 
     if 'input' not in paths:
-        paths['input'] = os.path.abspath(
-            os.path.join(dpath, 'predict_images', 'Alpha'))
+        paths['input'] = os.path.join(dpath, 'predict_images', 'Alpha')
 
     if 'output' not in paths:
-        paths['output'] = os.path.abspath(
-            os.path.join(dpath, 'predict_images', 'Beta'))
+        paths['output'] = os.path.join(dpath, 'predict_images', 'Beta')
 
     if 'model' not in paths:
-        paths['model'] = os.path.abspath(
-            os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5'))
+        paths['model'] = os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5')
+    else:
+        if os.path.dirname(paths['model']) == '':
+            paths['model'] = os.path.join(dpath, 'models', paths['model'])
 
     state_split = os.path.splitext(paths['model'])
     paths['state'] = state_split[0] + '_state.json'
@@ -217,9 +221,13 @@ if __name__ == '__main__':
                  img_suffix=iostate['img_suffix'],
                  paths={})
 
-    # create model
+    # Create model. Since the model file contains the complete model info, not just the
+    # weights, we can instantiate it using the base class. So no matter what changes we
+    # make to the definition of the models in models.py, old model files will still
+    # work.
 
-    sr = models.models[model_type](io)
+    sr = models.BaseSRCNNModel(name=model_type,
+                               io=io)
 
     # Compute some handy information
 
@@ -241,6 +249,8 @@ if __name__ == '__main__':
             tile_width, tile_height, io.channels)
 
     # Process the images
+
+    first_path = image_info[0]
 
     for img_path in image_info:
         img_filename = os.path.basename(img_path)
@@ -266,16 +276,30 @@ if __name__ == '__main__':
         # Create a batch with all the tiles
 
         tile_batch = np.empty((tiles_per_img, ) + image_shape)
-        batch_index = 0
-        for tile in tiles:
+        for i,tile in enumerate(tiles):
             if K.image_dim_ordering() == 'th':
                 tile = tile.transpose((2, 0, 1))
-            tile_batch[batch_index] = tile
-            batch_index += 1
+            tile_batch[i] = tile
+
+        # Debug code to confirm what we are doing
+
+        if DEBUG and img_path == first_path:
+            fname = os.path.basename(img_path)
+            for i in range(0,tiles_per_img):
+                ipath = os.path.join('Temp', 'PNG', 'IN', fname[0:-4] + '-' + str(i) + '.png')
+                frameops.imsave(ipath,tile_batch[i])
 
         # predicted_tiles = sr.predict_tiles(tile_generator=tile_batches, batches=batches_per_image)
 
         predicted_tiles = sr.model.predict(tile_batch, tiles_per_img)
+
+        # Debug code to confirm what we are doing
+
+        if DEBUG and img_path == first_path:
+            fname = os.path.basename(img_path)
+            for i in range(0,tiles_per_img):
+                ipath = os.path.join('Temp', 'PNG', 'OUT', fname[0:-4] + '-' + str(i) + '.png')
+                frameops.imsave(ipath,predicted_tiles[i])
 
         # Merge the tiles back into a single image
 
