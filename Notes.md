@@ -1,13 +1,13 @@
-Miscellaneous notes
+Miscellaneous notes & Todos
 
 Apple Compressor (both old and current versions) have significant issues with reverse telecine on older anime,
 because the actual anime is 8 or 12 frames per second, so if there isn't gross cell or background movement,
 visible interlace wont happen 2 frames out of 5, but 2 frames out of 10.
 
-JES Deinterlacer seems to work around this issue: https://jeschot.home.xs4all.nl/home.html
+JES Deinterlacer seems to work around this issue: https://jeschot.home.xs4all.nl/home.html Also, it seems to generate output files that are 720x480 or 486 with square pixels, which is what we want to avoid scaling to 640x480 in Final Cut and Compressor.
 
 Old Analog transfers are often going to have edge sharpening artifacts. Need to investigate how to remove these before
 upconversion.
 
-Need to document good DPX generation workflow for 720x480; there are issues with Final Cut scaling to 640x480 (because it
-wants the pixels to be square)
+Output of Predict when using 720x486 input is pretty shitty. Need to test and get the scaling working flawlessly.
+Also, probably some extra values in DPX header that need to be tweaked to make the output files 100% valid (row width?).
