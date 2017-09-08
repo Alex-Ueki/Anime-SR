@@ -130,9 +130,22 @@ class BaseSRCNNModel(object):
             print('Creating new untrained model')
             self.model = self.create_model(load_weights=False)
 
+    # Config will be a dictionary with contents similar to this:
+    # {'beta_2': 0.9990000128746033, 'beta_1': 0.8999999761581421, 'decay': 0.0, 'lr': 0.0008100000559352338, 'epsilon': 1e-08}
+
+    def get_config(self):
+
+        return self.model.optimizer.get_config()
+
+    # Learning rate setter
+
+    def set_lr(self, new_lr):
+
+        self.model.optimizer.lr = K.variable(new_lr, name='lr')
 
     @abstractmethod
     def create_model(self, load_weights):
+
         pass
 
     # Standard method to train any of the models.

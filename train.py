@@ -16,6 +16,7 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=9999
+    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -85,6 +86,7 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=9999
+    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -114,6 +116,7 @@ if __name__ == '__main__':
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level = -1.0
     jitter, shuffle, skip = 1, 1, 1
+    initial_lr = 0.0
     paths = {}
 
     # Parse options
@@ -145,7 +148,7 @@ if __name__ == '__main__':
 
             opmatch = [s for s in ['type', 'width', 'height', 'border', 'epochs', 'training',
                                    'validation', 'model', 'data', 'state', 'black',
-                                   'jitter', 'shuffle', 'skip',
+                                   'jitter', 'shuffle', 'skip', 'lr',
                                    'trimleft', 'trimright', 'trimtop', 'trimbottom'] if s.startswith(op)]
 
             if len(opmatch) == 0:
@@ -175,6 +178,10 @@ if __name__ == '__main__':
                         black_level = fnum
                         errors = oops(errors, fnum <= 0,
                                       'Black level invalid ({})', option)
+                elif op == 'lr':
+                        initial_lr = fnum
+                        errors = oops(errors, initial_lr <= 0.0 or initial_lr > 0.01,
+                                      'Learning rate out of range ({})', option)
                 elif op == 'epochs':
                     epochs = vnum
                     errors = oops(errors, vnum <= 0,
@@ -296,23 +303,25 @@ if __name__ == '__main__':
 
     img_suffix = os.path.splitext(image_info[0][0][0][0])[1][1:]
 
-    for f in [0, 1]:
-        s1, s2 = np.shape(test_images[f][0]), np.shape(test_images[f][1])
-        errors = oops(errors, s1 != s2, '{} {} and {} images do not have identical size ({} vs {})',
-                      (image_paths[f], sub_folders[0], sub_folders[1], s1, s2))
+    # Check Alpha tiles vs. Alpha and Beta vs. Beta, but allow Alpha and Beta to
+    # be different sizes
 
-    s1, s2 = np.shape(test_images[0][0]), np.shape(test_images[1][0])
-    errors = oops(errors, s1 != s2, '{} and {} images do not have identical size ({1} vs {2})',
-                  (image_paths[0], image_paths[1], s1, s2))
+    for f in [0, 1]:
+        s1, s2 = np.shape(test_images[0][f]), np.shape(test_images[1][f])
+        errors = oops(errors, s1 != s2, '{} and {} images do not have identical size ({} vs {})',
+                      (sub_folders[0], sub_folders[1], s1, s2))
 
     terminate(errors, False)
+
+    # Only check the size of the Beta output for proper configuration, since Alpha tiles will
+    # be scaled as needed.
 
     errors = oops(errors, len(s1) !=
-                  3 or s1[2] != 3, 'Images have improper shape ({0})', str(s1))
+                  3 or s2[2] != 3, 'Images have improper shape ({0})', str(s1))
 
     terminate(errors, False)
 
-    image_width, image_height = s1[1], s1[0]
+    image_width, image_height = s2[1], s2[0]
     trimmed_width = image_width - (trim_left + trim_right)
     trimmed_height = image_height - (trim_top + trim_bottom)
 
@@ -337,6 +346,7 @@ if __name__ == '__main__':
         black_level = np.min(test_images[0][0])
 
     # Since we've gone to the trouble of reading in all the path data, let's make it available to our models for reuse
+
     for fc, f in enumerate(image_paths):
         for sc, s in enumerate(sub_folders):
             paths[f + '.' + s] = image_info[fc][sc]
@@ -407,6 +417,13 @@ if __name__ == '__main__':
         # Create and fit model (best model state will be automatically saved)
 
         sr = models.models[model](io)
+
+        if initial_lr >= 0.0:
+            sr.set_lr(initial_lr)
+
+        config = sr.get_config()
+        print('Initial model config: {}'.format(config))
+
         sr.fit(epochs=epochs)
 
     print('')
