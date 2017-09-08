@@ -250,12 +250,12 @@ if __name__ == '__main__':
 
     # Process the images
 
-    first_path = image_info[0]
+    if DEBUG:
+        first_path = image_info[0]
 
     for img_path in image_info:
         img_filename = os.path.basename(img_path)
         print('Predicting',img_filename)
-        img = frameops.imread(img_path)
 
         # Generate the tiles for the image
         # Note that tiles is a generator

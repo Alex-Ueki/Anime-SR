@@ -14,6 +14,7 @@ import copy
 import random
 import psutil
 from keras import backend as K
+from skimage import transform as tf
 
 import Modules.dpx as dpx
 
@@ -141,11 +142,13 @@ def imsave(file_path, img, meta=None):
 #   shuffle         Do a random permutation of files
 #   jitter          Jitter the tile position randomly
 #   skip            Randomly skip 0 to 4 tiles between returned tiles
+#   expected_       Expected width and height, default is HD
 
 
 def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
               trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-              shuffle=True, jitter=False, skip=False):
+              shuffle=True, jitter=False, skip=False,
+              expected_width=1920, expected_height=1080):
 
     # Convert non-list to list
 
@@ -167,7 +170,8 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
             tiles = cached_tiles[f]
         else:
             tiles = extract_tiles(f, tile_width, tile_height, border, black_level,
-                                  trim_top, trim_bottom, trim_left, trim_right, jitter)
+                                  trim_top, trim_bottom, trim_left, trim_right, jitter,
+                                  expected_width, expected_height)
 
         if tiles != []:
             # Shuffle tiles
@@ -191,7 +195,8 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
 
 
 def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, black_level=0.0,
-                   trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False, skip=False):
+                   trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False, skip=False,
+                   expected_width=1920, expected_height=1080):
 
     # Convert non-lists to lists
     alpha_paths = alpha_paths if type(alpha_paths) in (
@@ -216,13 +221,15 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
             alpha_tiles = cached_tiles[alpha_path]
         else:
             alpha_tiles = extract_tiles(alpha_path, tile_width, tile_height, border, black_level,
-                                        trim_top, trim_bottom, trim_left, trim_right, jitter)
+                                        trim_top, trim_bottom, trim_left, trim_right, jitter,
+                                        expected_width, expected_height)
 
         if beta_path in cached_tiles:
             beta_tiles = cached_tiles[beta_path]
         else:
             beta_tiles = extract_tiles(beta_path, tile_width, tile_height, border, black_level,
-                                       trim_top, trim_bottom, trim_left, trim_right, jitter)
+                                       trim_top, trim_bottom, trim_left, trim_right, jitter,
+                                       expected_width, expected_height)
 
         if len(alpha_tiles) != len(beta_tiles):
             print('Tesselation error: file pairs {} and {} have different numbers of tiles {} and {}'.format(
@@ -245,24 +252,74 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
                 else:
                     skip_count -= 1
 
-# Helper function that reads in a file, extracts the tiles, and caches them if possible
+# Helper function that reads in a file, extracts the tiles, and caches them if possible. Handles
+# size conversion if needed.
 
+resize_warning = True
 
 def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
-                  trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, jitter=False):
+                  trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, jitter=False,
+                  expected_width=1920, expected_height=1080):
 
-    global last_meta
+    # global last_meta
     global cached_tiles
     global caching
+    global resize_warning
 
     img = imread(file_path)
 
+    # If we just read in an image that is not the expected size, we need to scale.
+    # The resolutions we currently are likely to see are 640x480, 720x480 and
+    # 720x486. In the latter case we chop off 3 rows top and bottom to get 720x480
+    # before scaling. When we upscale, we do so into the trimmed image area.
 
-    # Trim image
-    if trim_top + trim_bottom + trim_left + trim_right > 0:
-        shape = np.shape(img)
+    shape = np.shape(img)
+
+    if shape[0] > expected_height or shape[1] > expected_width:
+        if resize_warning:
+            print('Warning: Read image larger than expected {} - downscaling'.format(shape))
+            print('(This warning will not repeat)')
+            resize_warning = False
+        img = tf.resize(img,
+                        (expected_height, expected_width, 3),
+                        order=1,
+                        mode='constant')
+    elif shape[0] < expected_height or shape[1] < expected_width:
+
+        if resize_warning:
+            print('Warning - Read image smaller than expected {} - upscaling'.format(shape))
+
+        # Handle 486 special-case
+
+        if shape[0] == 486:
+            img = img[3:-3, :, :]
+            shape = np.shape(img)
+            if resize_warning:
+                print('Scaled from 486v to {}'.format(shape))
+
+        trimmed_height = expected_height - trim_top - trim_bottom
+        trimmed_width = expected_width - trim_left - trim_right
+
+        img = tf.resize(img,
+                        (trimmed_height, trimmed_width, 3),
+                         order=1,
+                         mode='constant')
+                         
+        if resize_warning:
+            print('Uprezzed to {}'.format(np.shape(img)))
+            print('(This warning will not repeat)')
+            resize_warning = False
+
+    elif trim_top + trim_bottom + trim_left + trim_right > 0:
+
+        # Input image is expected size, but we have to trim it
+
         img = img[trim_top:shape[0] - trim_bottom,
                   trim_left:shape[1] - trim_right, :]
+
+    # Shape may have changed due to all of the munging above
+
+    shape = np.shape(img)
 
     # Generate image tile offsets
 
