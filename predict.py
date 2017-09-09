@@ -13,7 +13,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     images=path         path to images folder, default = {Data}/predict_images
     model=filename|path model filename or absolute path. If just a filename, then the
-                        path will be {Data}/models/{model}. Default = BasicSR-60-60-2-dpx.h5
+                        path will be {Data}/models/{model}. The .h5 extension may be omitted.
+                        Default = BasicSR-60-60-2-dpx.h5
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
@@ -78,7 +79,8 @@ Options are:
     input=path          path to images folder, default = {Data}/predict_images/Alpha
     output=path         path to the output images folder, default = {Data}/predict_images/Beta
     model=filename|path model filename or absolute path. If just a filename, then the
-                        path will be {Data}/models/{model}. Default = BasicSR-60-60-2-dpx.h5
+                        path will be {Data}/models/{model}. The .h5 extension may be omitted.
+                        Default = BasicSR-60-60-2-dpx.h5
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
@@ -136,6 +138,9 @@ if __name__ == '__main__':
     if 'model' not in paths:
         paths['model'] = os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5')
     else:
+        model_split = os.path.splitext(paths['model'])
+        if model_split[1] == '':
+            paths['model'] = paths['model'] + '.h5'
         if os.path.dirname(paths['model']) == '':
             paths['model'] = os.path.join(dpath, 'models', paths['model'])
 

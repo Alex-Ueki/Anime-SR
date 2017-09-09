@@ -1,10 +1,12 @@
-Miscellaneous notes & Todos
+# Miscellaneous Notes & Todos
 
 Apple Compressor (both old and current versions) have significant issues with reverse telecine on older anime,
 because the actual anime is 8 or 12 frames per second, so if there isn't gross cell or background movement,
 visible interlace wont happen 2 frames out of 5, but 2 frames out of 10.
 
-JES Deinterlacer seems to work around this issue: https://jeschot.home.xs4all.nl/home.html Also, it seems to generate output files that are 720x480 or 486 with square pixels, which is what we want to avoid scaling to 640x480 in Final Cut and Compressor.
+JES Deinterlacer seems to work around this issue: https://jeschot.home.xs4all.nl/home.html Also, it seems to generate
+output files that are 720x480 or 486 with square pixels, which is what we want to avoid scaling to 640x480 in
+Final Cut and Compressor.
 
 Old Analog transfers are often going to have edge sharpening artifacts. Need to investigate how to remove these before
 upconversion.

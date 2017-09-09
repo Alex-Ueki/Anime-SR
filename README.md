@@ -48,6 +48,7 @@ Options are:
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          epoch size, default=9999
+    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -78,7 +79,8 @@ Options are:
     data=path           path to the main data folder, default = Data
     images=path         path to images folder, default = {Data}/predict_images
     model=filename|path model filename or absolute path. If just a filename, then the
-                        path will be {Data}/models/{model}. Default = BasicSR-60-60-2-dpx.h5
+                        path will be {Data}/models/{model}. The .h5 extension may be omitted.
+                        Default = BasicSR-60-60-2-dpx.h5
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 

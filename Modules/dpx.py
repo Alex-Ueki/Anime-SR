@@ -26,6 +26,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+# Note: this only works for simple, uncompressed DPX files.
+
 import struct
 import numpy as np
 
@@ -151,12 +153,14 @@ propertymap = [
 
 simple_propertymap = [
 
-    # These entries must come first, and in this order (required by DPXsave)
+    # These elements are the ones that we may have to mung.
+    # They MUST appear in this position and in this order,
+    # as dpx_save() depends on this correspondence.
 
     ('height', 776, 4, 'I'),
     ('width', 772, 4, 'I'),
 
-    # Other entries can come in any order
+    # Other elements that we reference, but do not alter.
 
     ('magic', 0, 4, 'magic'),
     ('offset', 4, 4, 'I'),
@@ -346,16 +350,19 @@ def DPXsave(f, image):
     f.write(dpx_header)
 
     # Now we have to get a little clever. If the image size does not match the size
-    # recorded in our cached dpx header, we need to tweak those values. This may
+    # recorded in our cached dpx header, we need to tweak those values. This will
     # happen if we are reading 720x480 or 720x486 images in predict.py, but are
     # generating 1920x1080.
-    #
-    # This depends on height, width being the first two entries in the property map!
 
     shape = np.shape(image)
-    for i in [0, 1]:
-        p = simple_propertymap[i]
-        if shape[i] != dpx_meta[p[0]]:
+
+    if shape[0] != dpx_meta['height'] or shape[1] != dpx_meta['width']:
+
+        # Write updated header records. We take advantage of the correspondence
+        # between the values in shape and the entries in simple_propertymap.
+
+        for i in [0, 1]:
+            p = simple_propertymap[i]
             f.seek(p[1])
             bytes = struct.pack(dpx_endian + p[3], shape[i])
             f.write(bytes)
