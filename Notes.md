@@ -8,6 +8,12 @@ JES Deinterlacer seems to work around this issue: https://jeschot.home.xs4all.nl
 output files that are 720x480 or 486 with square pixels, which is what we want to avoid scaling to 640x480 in
 Final Cut and Compressor.
 
+- On Input tab, Choose... file to deinterlace, check Top Field first
+- On Project tab, select Inverse telecine, check Detect cadence breaks, Output frame rate 23.976
+- On Output tab, use Export -> Quicktime Movie and select encoding. Set Size to the specific
+size you want, which should match the import size.
+- You can also output DPX. I haven't tested it.
+
 Old Analog transfers are often going to have edge sharpening artifacts. Need to investigate how to remove these before
 upconversion.
 
