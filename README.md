@@ -29,7 +29,7 @@ Data
     models/                 .h5 and _state.json files for trained models.
 ```
 
-Alex : *<a href=https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0&preview=Data.zip>Data.zip</a>*
+Alex : *<a href="https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0&preview=Data.zip">Data.zip</a>*
 ## Usage
 
 ```
