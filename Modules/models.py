@@ -240,7 +240,6 @@ class BaseSRCNNModel(object):
 
         return result
 
-    """
     # Evaluate the model on self.evaluation_path
 
     def evaluate(self):
@@ -249,8 +248,9 @@ class BaseSRCNNModel(object):
 
         results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
                                                 steps=self.io.eval_images_count() // self.io.batch_size)
-        print(self.name, results)
+        print("Loss = %.2f, PeekSignalToNoiseRation = %.2f" % results)
 
+    """
     # Run predictions on images in self.io.predict_path
 
     def predict(self, verbose=True):
