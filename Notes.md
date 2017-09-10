@@ -14,8 +14,7 @@ Final Cut and Compressor.
 size you want, which should match the import size.
 - You can also output DPX. I haven't tested it.
 
+Older version of Compressor (3.5.3) seems to do a better job of Quicktime to DPX conversion than the current Compressor 4.
+
 Old Analog transfers are often going to have edge sharpening artifacts. Need to investigate how to remove these before
 upconversion.
-
-Output of Predict when using 720x486 input is pretty shitty. Need to test and get the scaling working flawlessly.
-Also, probably some extra values in DPX header that need to be tweaked to make the output files 100% valid (row width?).
