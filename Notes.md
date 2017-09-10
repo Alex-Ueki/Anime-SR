@@ -15,6 +15,8 @@ size you want, which should match the import size.
 - You can also output DPX. I haven't tested it.
 
 Older version of Compressor (3.5.3) seems to do a better job of Quicktime to DPX conversion than the current Compressor 4.
+However, unless you set the output size to match the original input size and pixel aspect ratio (say, 720x486, DV),
+it will scale the output DPX images to square pixels (640x486), which is obviously not what you want.
 
 Old Analog transfers are often going to have edge sharpening artifacts. Need to investigate how to remove these before
 upconversion.
