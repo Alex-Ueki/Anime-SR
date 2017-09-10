@@ -248,7 +248,7 @@ class BaseSRCNNModel(object):
 
         results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
                                                 steps=self.io.eval_images_count() // self.io.batch_size)
-        print("Loss = %.2f, PeekSignalToNoiseRation = %.2f" % results)
+        print("Loss = %.2f, PeekSignalToNoiseRatio = %.2f" % (results[0], results[1]))
 
     """
     # Run predictions on images in self.io.predict_path
@@ -404,7 +404,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
         m2 = Add()([c1, c1_2])
 
         decoded = Conv2D(self.io.channels, (5, 5), activation='linear',
-                         border_mode='same')(m2)
+                         padding='same')(m2)
 
         model = Model(init, decoded)
 

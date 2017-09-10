@@ -75,6 +75,7 @@ Usage: evaluate.py [option(s)] ...
 
 Options are:
 
+    type=model          model type, default is BasicSR
     data=path           path to the main data folder, default = Data
     images=path         path to images folder, default = {Data}/eval_images
     model=filename|path model filename or absolute path. If just a filename, then the
@@ -105,12 +106,28 @@ if __name__ == '__main__':
 
         opvalue = option.split('=', maxsplit=1)
 
+        # op, value = [s.lower() for s in opvalue]
+        # _, valuecase = opvalue
+        #
+        # # convert boolean arguments to integer
+
+        # value = '1' if 'true'.startswith(value) else value
+        # value = '0' if 'false'.startswith(value) else value
+        #
+        # # convert value to integer and float with default -1
+        #
+        # try:
+        #     fnum = float(value)
+        # except ValueError:
+        #     fnum = -1.0
+        # vnum = int(fnum)
+        #
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
         else:
             op, value = opvalue
 
-            opmatch = [s for s in ['data', 'images', 'model'] if s.startswith(op)]
+            opmatch = [s for s in ['type', 'data', 'images', 'model'] if s.startswith(op)]
 
             if len(opmatch) == 0:
                 errors = oops(errors, True, 'Unknown option ({})', op)
@@ -118,7 +135,11 @@ if __name__ == '__main__':
                 errors = oops(errors, True, 'Ambiguous option ({})', op)
             else:
                 op = opmatch[0]
-                paths[op] = value
+                if op == 'type':
+                    errors = oops(errors, value != 'all' and value not in models.models,
+                                  'Unknown model type ({})', value)
+                else:
+                    paths[op] = value
 
     terminate(errors)
 

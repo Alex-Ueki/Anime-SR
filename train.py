@@ -29,7 +29,7 @@ Options are:
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
     model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
-    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.txt
+    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
@@ -85,7 +85,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=9999
+    epochs=nnn          epoch size, default=100
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
@@ -112,11 +112,12 @@ if __name__ == '__main__':
     # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
 
     model_type = 'BasicSR'
-    tile_width, tile_height, tile_border, epochs = 60, 60, 2, 9999
+    tile_width, tile_height, tile_border, epochs = 60, 60, 2, 100
+    #GPU: Changed default epoc to 100 from 9999, default should be naturally usable
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level = -1.0
     jitter, shuffle, skip = 1, 1, 1
-    initial_lr = 0.0
+    initial_lr = 0.001 # why is this 0.0?
     paths = {}
 
     # Parse options
