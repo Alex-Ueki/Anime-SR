@@ -6,7 +6,7 @@ for base code, *https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc* for DP
 
 ## Setup
 
-Run Tools/setup.py in project directory to create Data directory as follows:
+Data directory should be as follows:
 
 ```
 Data
@@ -29,6 +29,7 @@ Data
     models/                 .h5 and _state.json files for trained models.
 ```
 
+Alex : *<a href=https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0&preview=Data.zip>Data.zip</a>*
 ## Usage
 
 ```
