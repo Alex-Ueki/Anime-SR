@@ -15,7 +15,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=9999
+    epochs=nnn          max epoch count, default=100. This is the total number of epochs the model will train over multiple runs.
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
@@ -85,7 +85,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=100
+    epochs=nnn          max epoch count, default=100. This is the total number of epochs the model will train over multiple runs.
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
@@ -114,10 +114,11 @@ if __name__ == '__main__':
     model_type = 'BasicSR'
     tile_width, tile_height, tile_border, epochs = 60, 60, 2, 100
     #GPU: Changed default epoc to 100 from 9999, default should be naturally usable
+    #PU: OK see what you mean. I documented it more clearly.
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level = -1.0
     jitter, shuffle, skip = 1, 1, 1
-    initial_lr = 0.001 # why is this 0.0?
+    initial_lr = -1.0 # PU: if no learning rate manually specified, model default will be used
     paths = {}
 
     # Parse options
@@ -419,11 +420,17 @@ if __name__ == '__main__':
 
         sr = models.models[model](io)
 
-        if initial_lr >= 0.0:
+        # If no initial_lr is specified, the default of 0.0 means that the
+        # model's default learning rate will be used
+
+        if initial_lr > 0.0:
+            print('Learning Rate reset to {}'.format(initial_lr))
             sr.set_lr(initial_lr)
 
         config = sr.get_config()
-        print('Initial model config: {}'.format(config))
+        print('Model configuration:')
+        for key in config:
+            print('{:>18s} : {}'.format(key,config[key]))
 
         sr.fit(epochs=epochs)
 

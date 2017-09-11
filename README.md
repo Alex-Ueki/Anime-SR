@@ -48,7 +48,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch size, default=9999
+    epochs=nnn          max epoch count, default=100. This is the total number of epochs the model will train over multiple runs.
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
