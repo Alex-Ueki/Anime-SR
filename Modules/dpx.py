@@ -153,12 +153,15 @@ propertymap = [
 
 simple_propertymap = [
 
-    # These elements are the ones that we may have to mung.
+    # These elements are the ones that we have to mung.
     # They MUST appear in this position and in this order,
     # as dpx_save() depends on this correspondence.
 
     ('height', 776, 4, 'I'),
     ('width', 772, 4, 'I'),
+    ('y_originalsize', 1428, 4, 'I'),
+    ('x_originalsize', 1424, 4, 'I'),
+    ('file_size', 16, 4, 'I'),
 
     # Other elements that we reference, but do not alter.
 
@@ -358,13 +361,13 @@ def DPXsave(f, image):
 
     if shape[0] != dpx_meta['height'] or shape[1] != dpx_meta['width']:
 
-        # Write updated header records. We take advantage of the correspondence
-        # between the values in shape and the entries in simple_propertymap.
+        # Write updated header records. Depends on fields in simple_propertymap
+        # being in the correct order.
 
-        for i in [0, 1]:
+        for i,v in enumerate([shape[0], shape[1], shape[0], shape[1], dpx_meta['offset'] + (shape[0] * shape[1] * 4)]):
             p = simple_propertymap[i]
             f.seek(p[1])
-            bytes = struct.pack(dpx_endian + p[3], shape[i])
+            bytes = struct.pack(dpx_endian + p[3], v)
             f.write(bytes)
 
     # Write the image data
