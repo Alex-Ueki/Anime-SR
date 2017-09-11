@@ -214,7 +214,9 @@ class BaseSRCNNModel(object):
               (self.__class__.__name__))
 
         for key in ['loss', self.lf]:
-            if key in model_state['best_values']:
+            # GPU : TypeError: 'ModelState' object is not subscriptable
+            # Changed from model_state to model_state.state
+            if key in model_state.state['best_values']:
                 print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
                     key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
                 vkey = 'val_' + key
@@ -248,7 +250,7 @@ class BaseSRCNNModel(object):
 
         results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
                                                 steps=self.io.eval_images_count() // self.io.batch_size)
-        print("Loss = %.2f, PeekSignalToNoiseRatio = %.2f" % (results[0], results[1]))
+        print("Loss = %.5f, PeekSignalToNoiseRatio = %.5f" % (results[0], results[1]))
 
     """
     # Run predictions on images in self.io.predict_path

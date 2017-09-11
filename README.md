@@ -66,6 +66,29 @@ Options are:
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
+  Usage: evaluate.py [option(s)] ...
+
+      Evaluate models. The available models are:
+
+          BasicSR
+          ExpansionSR
+          DeepDenoiseSR
+          VDSR
+
+    Options are:
+
+        data=path           path to the main data folder, default = Data
+        images=path         path to images folder, default = {Data}/eval_images
+        model=filename|path model filename or absolute path. If just a filename, then the
+                            path will be {Data}/models/{model}. The .h5 extension may be omitted.
+                            Default = BasicSR-60-60-2-dpx.h5
+
+        Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
+
+        Expects that there will be a matching _state.json file for the model
+        (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
+
+
 predict.py [option(s)] ...
 
     Predicts images by applying model. The available models are:

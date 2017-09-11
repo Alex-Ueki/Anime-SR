@@ -75,7 +75,6 @@ Usage: evaluate.py [option(s)] ...
 
 Options are:
 
-    type=model          model type, default is BasicSR
     data=path           path to the main data folder, default = Data
     images=path         path to images folder, default = {Data}/eval_images
     model=filename|path model filename or absolute path. If just a filename, then the
@@ -265,9 +264,6 @@ if __name__ == '__main__':
     batches_per_image = (tiles_per_img + (io.batch_size - 1)) // io.batch_size
     tile_width = io.base_tile_width + 2 * io.border
     tile_height = io.base_tile_height + 2 * io.border
-
-    print('tiles per image',tiles_per_img)
-    print('batches per image',batches_per_image)
 
     if K.image_dim_ordering() == 'th':
         image_shape = (
