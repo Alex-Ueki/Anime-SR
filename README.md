@@ -6,7 +6,7 @@ for base code, *https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc* for DP
 
 ## Setup
 
-Run Tools/setup.py in project directory to create Data directory as follows:
+Data directory should be as follows:
 
 ```
 Data
@@ -29,6 +29,7 @@ Data
     models/                 .h5 and _state.json files for trained models.
 ```
 
+Alex : *<a href="https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0&preview=Data.zip">Data.zip</a>*
 ## Usage
 
 ```
@@ -64,6 +65,29 @@ Options are:
     state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.txt
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
+
+  Usage: evaluate.py [option(s)] ...
+
+      Evaluate models. The available models are:
+
+          BasicSR
+          ExpansionSR
+          DeepDenoiseSR
+          VDSR
+
+    Options are:
+
+        data=path           path to the main data folder, default = Data
+        images=path         path to images folder, default = {Data}/eval_images
+        model=filename|path model filename or absolute path. If just a filename, then the
+                            path will be {Data}/models/{model}. The .h5 extension may be omitted.
+                            Default = BasicSR-60-60-2-dpx.h5
+
+        Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
+
+        Expects that there will be a matching _state.json file for the model
+        (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
+
 
 predict.py [option(s)] ...
 

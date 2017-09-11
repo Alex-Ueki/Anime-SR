@@ -30,6 +30,7 @@ THE SOFTWARE.
 
 import struct
 import numpy as np
+import sys
 
 # Cache of DPX header information that we set when we read a file;
 # used to write a file in the same format.
@@ -328,7 +329,22 @@ def DPXread(f):
     f.seek(dpx_meta['offset'])
     raw = np.fromfile(f, dtype=np.dtype(np.int32),
                       count=width * height, sep='')
+
     raw = raw.reshape((height, width))
+    #GPU : Some of the .zip images didn't transfer correctly
+    #I put this try-block to catch these bad images and warn me if I lost one
+    #If you get an error like the following, uncomment this
+    #    raw = raw.reshape((height, width))
+    #    ValueError: cannot reshape array of size 0 into shape (1080,1920)
+    """
+    try:
+        raw = raw.reshape((height, width))
+    except:
+        [_, img_name, _] = str.split(str(f), "'")
+        print("Reshaping image failed for %s" % img_name)
+        print("You may want to check this file's size")
+        sys.exit(1)
+    """
 
     if dpx_endian == 'be':
         raw = raw.byteswap()

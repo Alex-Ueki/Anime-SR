@@ -214,7 +214,9 @@ class BaseSRCNNModel(object):
               (self.__class__.__name__))
 
         for key in ['loss', self.lf]:
-            if key in model_state['best_values']:
+            # GPU : TypeError: 'ModelState' object is not subscriptable
+            # Changed from model_state to model_state.state
+            if key in model_state.state['best_values']:
                 print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
                     key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
                 vkey = 'val_' + key
@@ -240,7 +242,6 @@ class BaseSRCNNModel(object):
 
         return result
 
-    """
     # Evaluate the model on self.evaluation_path
 
     def evaluate(self):
@@ -249,8 +250,9 @@ class BaseSRCNNModel(object):
 
         results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
                                                 steps=self.io.eval_images_count() // self.io.batch_size)
-        print(self.name, results)
+        print("Loss = %.5f, PeekSignalToNoiseRatio = %.5f" % (results[0], results[1]))
 
+    """
     # Run predictions on images in self.io.predict_path
 
     def predict(self, verbose=True):
@@ -404,7 +406,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
         m2 = Add()([c1, c1_2])
 
         decoded = Conv2D(self.io.channels, (5, 5), activation='linear',
-                         border_mode='same')(m2)
+                         padding='same')(m2)
 
         model = Model(init, decoded)
 

@@ -73,6 +73,29 @@ def image_files(folder_path, deep=False):
 
     return file_lists
 
+# Clears all image files in a folder. Used in imgdistribute
+def clear_image_files(folder_path, deep=False):
+    file_paths = []
+    file_lists = []
+
+    for (root, dirs, files) in os.walk(folder_path):
+        file_paths.extend([os.path.join(root, f) for f in files])
+        if not deep:
+            break
+
+    if len(file_paths) == 0:
+        return
+
+    for ext in IMAGETYPES:
+        ext_list = [f for f in file_paths if os.path.splitext(f)[1] == ext]
+        for ext_file in ext_list:
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(e)
+
+    assert len(image_files(folder_path, deep)) == 0, "clear_image_files failed"
 
 # Read an image file and return numpy array of pixel values. Extends scipy.misc.imread
 # with support for 10-bit DPX files. Always returns RGB images, with pixel values
@@ -304,7 +327,7 @@ def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
                         (trimmed_height, trimmed_width, 3),
                          order=1,
                          mode='constant')
-                         
+
         if resize_warning:
             print('Uprezzed to {}'.format(np.shape(img)))
             print('(This warning will not repeat)')
