@@ -30,6 +30,11 @@ Data
 ```
 
 Alex : *<a href="https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0&preview=Data.zip">Data.zip</a>*
+
+*<a href="https://www.imagemagick.org/script/index.php">ImageMagick</a>* is an indispensible tool for manipulating bitmap images.
+
+See *Notes.md* for useful tips / tricks / comments
+
 ## Usage
 
 ```
@@ -136,6 +141,7 @@ Tools/dpxderez.py {source folder} {destination folder}
     - Test current models
     - Pythonate sdcopy.sh
     - Improve Documentation
+    - DPX->PNG automation
 
 - Gene-Perpetuation Unit
     - Clean up contents of Scripts folder
