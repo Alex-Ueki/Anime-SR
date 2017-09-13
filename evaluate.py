@@ -213,6 +213,7 @@ if __name__ == '__main__':
                  base_tile_height=iostate['base_tile_height'],
                  channels=iostate['channels'],
                  border=iostate['border'],
+                 border_mode=iostate['border_mode'],
                  batch_size=iostate['batch_size'],
                  black_level=iostate['black_level'],
                  trim_top=iostate['trim_top'],
@@ -222,6 +223,7 @@ if __name__ == '__main__':
                  jitter=False,
                  shuffle=False,
                  skip=False,
+                 quality=1.0,
                  img_suffix=iostate['img_suffix'],
                  paths={})
 

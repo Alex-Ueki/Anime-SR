@@ -191,6 +191,7 @@ if __name__ == '__main__':
                  base_tile_height=iostate['base_tile_height'],
                  channels=iostate['channels'],
                  border=iostate['border'],
+                 border_mode=iostate['border_mode'],
                  batch_size=iostate['batch_size'],
                  black_level=iostate['black_level'],
                  trim_top=iostate['trim_top'],
@@ -200,6 +201,7 @@ if __name__ == '__main__':
                  jitter=False,
                  shuffle=False,
                  skip=False,
+                 quality=1.0,
                  img_suffix=iostate['img_suffix'],
                  paths={})
 
@@ -239,8 +241,9 @@ if __name__ == '__main__':
         img_filename = os.path.basename(img_path)
         print('Predicting',img_filename)
 
-        # Generate the tiles for the image
-        # Note that tiles is a generator
+        # Generate the tiles for the image. Note that tiles is a generator
+        # Also, we must specify quality=1.0 to make sure we get all
+        # the tiles in the default order.
 
         tiles = frameops.tesselate(file_paths=img_path,
                                    tile_width=io.base_tile_width,
@@ -253,7 +256,8 @@ if __name__ == '__main__':
                                    trim_right=io.trim_right,
                                    shuffle=False,
                                    jitter=False,
-                                   skip=False)
+                                   skip=False,
+                                   quality=1.0)
 
         # Create a batch with all the tiles
 

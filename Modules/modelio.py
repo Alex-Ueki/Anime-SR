@@ -26,22 +26,25 @@ class ModelIO():
                  border=2,
                  batch_size=16,
                  black_level=0.0,
+                 border_mode='constant',
                  trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
                  jitter=True,
                  shuffle=True,
                  skip=True,
+                 quality=1.0,
                  img_suffix='',
                  paths={}):
 
         self.model_type=model_type
         self.image_width, self.image_height = image_width, image_height
         self.base_tile_width, self.base_tile_height = base_tile_width, base_tile_height
-        self.border = border
+        self.border, self.border_mode = border, border_mode
         self.trim_left, self.trim_right = trim_left, trim_right
         self.trim_top, self.trim_bottom = trim_top, trim_bottom
         self.channels, self.black_level = channels, black_level
         self.batch_size, self.img_suffix = batch_size, img_suffix
         self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
+        self.quality = quality
         self.paths = paths
 
         # The actual internal tile size includes the overlap borders
@@ -67,6 +70,7 @@ class ModelIO():
         print(' base_tile_width : {}'.format(self.base_tile_width))
         print('base_tile_height : {}'.format(self.base_tile_height))
         print('          border : {}'.format(self.border))
+        print('     border mode : {}'.format(self.border_mode))
         print('        channels : {}'.format(self.channels))
         print('      batch_size : {}'.format(self.batch_size))
         print('     black_level : {}'.format(self.black_level))
@@ -77,6 +81,7 @@ class ModelIO():
         print('          jitter : {}'.format(jitter == 1))
         print('         shuffle : {}'.format(shuffle == 1))
         print('            skip : {}'.format(skip == 1))
+        print('         quality : {}'.format(quality))
         print('    path entries : {}'.format(self.paths.keys()))
         """
 
@@ -152,22 +157,24 @@ class ModelIO():
     # Data generators
 
     def training_data_generator(self):
-        return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip)
+        return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip, self.quality)
 
+    # Validation generator uses all the tiles, not just the best ones.
+    
     def validation_data_generator(self):
-        return self._image_generator_frameops(self.validation_path, self.jitter, self.shuffle, self.skip)
+        return self._image_generator_frameops(self.validation_path, self.jitter, self.shuffle, self.skip, 1.0)
 
-    # Evaluation and Prediction generators will never shuffle, jitter or skip.
+    # Evaluation and Prediction generators will never shuffle, jitter, skip or use just the best tiles.
 
     def evaluation_data_generator(self):
-        return self._image_generator_frameops(self.evaluation_path, False, False, False)
+        return self._image_generator_frameops(self.evaluation_path, False, False, False, 1.0)
 
     def prediction_data_generator(self):
-        return self._predict_image_generator_frameops(self.predict_path, False, False, False)
+        return self._predict_image_generator_frameops(self.predict_path, False, False, False, 1.0)
 
     # Frameops versions of image generators
 
-    def _image_generator_frameops(self, directory, shuffle, jitter, skip):
+    def _image_generator_frameops(self, directory, shuffle, jitter, skip, quality):
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
@@ -188,9 +195,10 @@ class ModelIO():
                     alpha_paths, beta_paths,
                     self.base_tile_width, self.base_tile_height, self.border,
                     black_level=self.black_level,
+                    border_mode=self.border_mode,
                     trim_left=self.trim_left, trim_right=self.trim_right,
                     trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                    shuffle=shuffle, jitter=jitter, skip=skip):
+                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality):
                 if K.image_dim_ordering() == 'th':
                     alpha_tile = alpha_tile.transpose((2, 0, 1))
                     beta_tile = beta_tile.transpose((2, 0, 1))
@@ -215,9 +223,10 @@ class ModelIO():
             for alpha_tile in frameops.tesselate(
                     alpha_paths,
                     self.base_tile_width, self.base_tile_height, self.border,
+                    black_level=self.black_level, border_mode=self.border_mode,
                     trim_left=self.trim_left, trim_right=self.trim_right,
                     trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                    shuffle=shuffle, jitter=jitter, skip=skip):
+                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality):
                 if K.image_dim_ordering() == 'th':
                     alpha_tile = alpha_tile.transpose((2, 0, 1))
 

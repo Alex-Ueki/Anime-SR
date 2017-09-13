@@ -24,6 +24,7 @@ IMAGETYPES = ['.jpg', '.png', '.dpx']
 # through the same images, we use a FINO (First-In-Never-Out) cache.
 
 cached_tiles = {}
+cached_quality = {}
 caching = True
 MINFREEMEMORY = 1000 * 1000 * 1000
 
@@ -33,9 +34,11 @@ MINFREEMEMORY = 1000 * 1000 * 1000
 def reset_cache(enabled=True):
 
     global cached_images
+    global cached_quality
     global caching
 
     cached_images = {}
+    cached_quality = {}
     caching = enabled
 
 """
@@ -153,7 +156,7 @@ def imsave(file_path, img, meta=None):
         misc.imsave(file_path, img)
 
 # Generator for image tiles. Trims each image file (useful for handling 4:3 images in 16:9 HD files),
-# then adds a border of zeros before generating the tiles. Each tile will be of shape
+# then adds a border before generating the tiles. Each tile will be of shape
 # (tile_height+border*2, tile_width+border*2, 3)
 #
 #   file_paths      list of image files to tesselate
@@ -161,17 +164,23 @@ def imsave(file_path, img, meta=None):
 #   tile_height     height of tile in image files
 #   border          number of pixels to add to tile borders
 #   black_level     black color to use when adding borders
+#   border_mode     border fill mode ('constant' or 'edge')
 #   trim_...        pixels to trim from images before tesselating
 #   shuffle         Do a random permutation of files
 #   jitter          Jitter the tile position randomly
 #   skip            Randomly skip 0 to 4 tiles between returned tiles
 #   expected_       Expected width and height, default is HD
+#   quality         Quality threshold for tiles. The fraction of tiles in
+#                   an image that are returned, sorted by amount of detail
+#                   in the tile. Default = 1.0 (use all tiles)
+#
+# Warning: reset the cache between uses of tesselate() and tesselate_pair(), or if quality changes!
 
-
-def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
+def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0, border_mode='constant',
               trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
               shuffle=True, jitter=False, skip=False,
-              expected_width=1920, expected_height=1080):
+              expected_width=1920, expected_height=1080,
+              quality=1.0):
 
     # Convert non-list to list
 
@@ -192,11 +201,19 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
         if f in cached_tiles:
             tiles = cached_tiles[f]
         else:
-            tiles = extract_tiles(f, tile_width, tile_height, border, black_level,
+            tiles = extract_tiles(f, tile_width, tile_height, border, black_level, border_mode,
                                   trim_top, trim_bottom, trim_left, trim_right, jitter,
-                                  expected_width, expected_height)
+                                  expected_width, expected_height, quality)
 
         if tiles != []:
+
+            # If we are doing quality selection, then we need to fix the cache the first time
+            # through.
+
+            if quality < 1.0:
+                if f not in cached_quality:
+                    tiles, _ = update_cache_quality(f,tiles)
+
             # Shuffle tiles
 
             tiles_list = list(range(len(tiles)))
@@ -217,9 +234,9 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0,
 # This version tesellates matched pairs of images, with identical shuffling behavior. Used for model training
 
 
-def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, black_level=0.0,
+def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, black_level=0.0, border_mode='constant',
                    trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False, skip=False,
-                   expected_width=1920, expected_height=1080):
+                   expected_width=1920, expected_height=1080, quality=1.0):
 
     # Convert non-lists to lists
     alpha_paths = alpha_paths if type(alpha_paths) in (
@@ -238,19 +255,23 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
 
     for alpha_path, beta_path in all_paths:
 
-        # Extract the tiles from paired image files
+        # Extract the tiles from paired image files. One gotcha to keep in mind - there will be a
+        # great disturbance in the force if the alpha tiles get cached but the beta tiles don't,
+        # AND we happen to be messing with the tiles because of quality < 1.0. So we make sure
+        # that only the read of the beta tiles can turn off the cache (which happens after a
+        # cache store)
 
         if alpha_path in cached_tiles:
             alpha_tiles = cached_tiles[alpha_path]
         else:
-            alpha_tiles = extract_tiles(alpha_path, tile_width, tile_height, border, black_level,
+            alpha_tiles = extract_tiles(alpha_path, tile_width, tile_height, border, black_level, border_mode,
                                         trim_top, trim_bottom, trim_left, trim_right, jitter,
-                                        expected_width, expected_height)
+                                        expected_width, expected_height, must_cache=caching)
 
         if beta_path in cached_tiles:
             beta_tiles = cached_tiles[beta_path]
         else:
-            beta_tiles = extract_tiles(beta_path, tile_width, tile_height, border, black_level,
+            beta_tiles = extract_tiles(beta_path, tile_width, tile_height, border, black_level, border_mode,
                                        trim_top, trim_bottom, trim_left, trim_right, jitter,
                                        expected_width, expected_height)
 
@@ -258,6 +279,16 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
             print('Tesselation error: file pairs {} and {} have different numbers of tiles {} and {}'.format(
                 alpha_path, beta_path, len(alpha_tiles), len(beta_tiles)))
         elif len(alpha_tiles) > 0:
+            # If we are doing quality selection, then we need to fix the cache the first time
+            # through. The trick, however, is that we need to use the quality ratings for
+            # the beta tiles to determine the order of the alpha tiles, so things remain
+            # properly paired.
+
+            if quality < 1.0:
+                if beta_path not in cached_quality:
+                    beta_tiles, beta_indexes = update_cache_quality(beta_path, beta_tiles, quality)
+                    alpha_tiles, _ = update_cache_quality(alpha_path, alpha_tiles, quality, beta_indexes)
+
             # Shuffle tiles
 
             tiles_list = list(range(len(alpha_tiles)))
@@ -275,14 +306,43 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
                 else:
                     skip_count -= 1
 
+# Handle adjusting the tile cache when we are doing quality determinations. Returns the
+# new tiles and the sort indexes. Our quality value is the negated sum of the pixel
+# value differences of adjacent pixels.
+
+def update_cache_quality(path, tiles, quality, indexes=None):
+
+    global cached_tiles
+    global cached_quality
+
+    # Compute the sorting indexes.
+
+    if indexes == None:
+        indexes = [(idx,-np.sum(np.absolute(tile[:, 1:, :] - tile[:, :-1, :]))) for idx, tile in enumerate(tiles)]
+        indexes.sort(key = lambda x: x[1])
+        indexes = indexes[:max(1,int(len(indexes) * quality))]
+        indexes = [index[0] for index in indexes]
+
+    # Reshuffle the tiles (also reduces them to the correct number)
+
+    tiles = [tiles[i] for i in indexes]
+
+    # Update the cache if the tiles are in there
+
+    if path in cached_tiles:
+        cached_tiles[path] = tiles
+        cached_quality[path] = True
+
+    return (tiles, indexes)
+
 # Helper function that reads in a file, extracts the tiles, and caches them if possible. Handles
 # size conversion if needed.
 
 resize_warning = True
 
-def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
+def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0, border_mode='constant',
                   trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, jitter=False,
-                  expected_width=1920, expected_height=1080):
+                  expected_width=1920, expected_height=1080, must_cache=True):
 
     # global last_meta
     global cached_tiles
@@ -355,10 +415,18 @@ def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
             file_path, str(shape)))
         tiles = []
     else:
-        # Pad the image - the pixels added have value (black_level, black_level, black_level)
+        # Pad the image - if border_mode is 'constant', the pixels added have
+        # value (black_level, black_level, black_level). If the mode is 'edge',
+        # they copy the edge values.
 
-        img = np.pad(img, ((border, border), (border, border),
-                           (0, 0)), mode='constant', constant_values=black_level)
+        if border_mode == 'constant':
+            img = np.pad(img,
+                         ((border, border), (border, border), (0, 0)),
+                         mode=border_mode, constant_values=black_level)
+        else:
+            img = np.pad(img,
+                         ((border, border), (border, border), (0, 0)),
+                         mode=border_mode)
 
         # Actual tile width and height
 
@@ -384,12 +452,13 @@ def extract_tiles(file_path, tile_width, tile_height, border, black_level=0.0,
         tiles = [img[rpos:rpos + down, cpos:cpos + across, :]
                  for (rpos, cpos) in offsets]
 
-        # Cache the tiles if possible
+        # Cache the tiles if possible. We can make sure the cache doesn't turn off by
+        # setting must_cache. This lets us ensure that pairs of tiles are both cached.
 
         if caching:
             cached_tiles[file_path] = tiles
             mem = psutil.virtual_memory()
-            if caching and mem.free < MINFREEMEMORY:
+            if caching and (not must_cache) and mem.free < MINFREEMEMORY:
                 caching = False
                 print('')
                 print('')

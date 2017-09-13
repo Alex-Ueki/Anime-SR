@@ -17,6 +17,7 @@ Options are:
     epochs=nnn          max epoch count, default=100. See below for more details
     epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
+    quality=.nnn        fraction of the "best" tiles used in training. Default is 1.0 (use all tiles)
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -87,7 +88,7 @@ if __name__ == '__main__':
     model_type = 'BasicSR'
     tile_width, tile_height, tile_border, epochs, run_epochs = 60, 60, 2, 100, -1
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
-    black_level = -1.0
+    black_level, quality = -1.0, 1.0
     jitter, shuffle, skip = 1, 1, 1
     initial_lr = -1.0 # PU: if no learning rate manually specified, model default will be used
     paths = {}
@@ -124,7 +125,7 @@ if __name__ == '__main__':
 
             options = sorted(['type', 'width', 'height', 'border', 'training',
                               'validation', 'model', 'data', 'state', 'black',
-                              'jitter', 'shuffle', 'skip', 'lr',
+                              'jitter', 'shuffle', 'skip', 'lr', 'quality',
                               'trimleft', 'trimright', 'trimtop', 'trimbottom',
                               'epochs', 'epochs+'])
             opmatch = [s for s in options if s.startswith(op)]
@@ -160,7 +161,11 @@ if __name__ == '__main__':
                 elif op == 'lr':
                         initial_lr = fnum
                         errors = oops(errors, initial_lr <= 0.0 or initial_lr > 0.01,
-                                      'Learning rate out of range ({})', option)
+                                      'Learning rate should be 0 > lr <= 0.01 ({})', option)
+                elif op == 'quality':
+                        quality = fnum
+                        errors = oops(errors, quality <= 0.0 or quality > 1.0,
+                                      'Quality should be 0 > q <= 1.0 ({})', option)
                 elif op == 'epochs':
                     epochs = vnum
                     errors = oops(errors, vnum <= 0,
@@ -365,6 +370,7 @@ if __name__ == '__main__':
     print('            Jitter : {}'.format(jitter == 1))
     print('           Shuffle : {}'.format(shuffle == 1))
     print('              Skip : {}'.format(skip == 1))
+    print('           Quality : {}'.format(quality))
     print('')
 
     # Train the model
@@ -390,11 +396,13 @@ if __name__ == '__main__':
                      base_tile_width=tile_width, base_tile_height=tile_height,
                      channels=3,
                      border=tile_border,
+                     border_mode='edge',
                      batch_size=16,
                      black_level=black_level,
                      trim_top=trim_top, trim_bottom=trim_bottom,
                      trim_left=trim_left, trim_right=trim_left,
                      jitter=jitter, shuffle=shuffle, skip=skip,
+                     quality=quality,
                      img_suffix=img_suffix,
                      paths=paths)
 
