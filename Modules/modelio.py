@@ -160,7 +160,7 @@ class ModelIO():
         return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip, self.quality)
 
     # Validation generator uses all the tiles, not just the best ones.
-    
+
     def validation_data_generator(self):
         return self._image_generator_frameops(self.validation_path, self.jitter, self.shuffle, self.skip, 1.0)
 
@@ -246,6 +246,7 @@ class ModelIO():
                 'base_tile_height': self.base_tile_height,
                 'channels': self.channels,
                 'border': self.border,
+                'border_mode': self.border_mode,
                 'batch_size': self.batch_size,
                 'black_level': self.black_level,
                 'trim_top': self.trim_top,
@@ -255,6 +256,7 @@ class ModelIO():
                 'jitter': self.jitter,
                 'shuffle': self.shuffle,
                 'skip': self.skip,
+                'quality': self.quality,
                 'img_suffix': self.img_suffix,
                 'data_path': self.data_path,
                 'training_path': self.training_path,
