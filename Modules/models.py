@@ -42,7 +42,7 @@ class ModelState(callbacks.Callback):
 
             self.state['io'] = io.asdict()
         else:
-            self.state = { 'epoch_count': 0,
+            self.state = { 'epoch_count': -1,
                            'best_values': {},
                            'best_epoch': {},
                            'io': io.asdict()
@@ -61,11 +61,12 @@ class ModelState(callbacks.Callback):
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
 
+        self.state['epoch_count'] += 1
+
         with open(self.io.state_path, 'w') as f:
             json.dump(self.state, f, indent=4)
         print('Completed epoch', self.state['epoch_count'])
 
-        self.state['epoch_count'] += 1
 
 
 def PSNRLoss(y_true, y_pred):
@@ -152,7 +153,7 @@ class BaseSRCNNModel(object):
     # Uses images in self.io.training_path for Training
     # Uses images in self.io.validation_path for Validation
 
-    def fit(self, epochs=255, save_history=True):
+    def fit(self, max_epochs=255, run_epochs=0, save_history=True):
 
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
@@ -193,12 +194,12 @@ class BaseSRCNNModel(object):
 
         print('Training model : %s' % (self.__class__.__name__))
 
-        # Offset epoch counts if we are resuming training
+        # Offset epoch counts if we are resuming training. If this is the first
+        # run, epoch_count will be initialized to -1
 
-        initial_epoch = model_state.state['epoch_count']
-        if initial_epoch > 0:
-            initial_epoch += 1
-            epochs += initial_epoch
+        initial_epoch = model_state.state['epoch_count'] + 1
+
+        epochs = max_epochs + 1 if run_epochs <= 0 else initial_epoch + run_epochs
 
         self.model.fit_generator(self.io.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,

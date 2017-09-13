@@ -1,8 +1,16 @@
 # Anime Image Super Resolution using in Keras 2+ (TensorFlow Backend)
 
-Credit to
+Tools for investigating techniques for improved upconversion of
+SD video to HD.
+
+## Credits
+
 *<a href="https://github.com/titu1994/Image-Super-Resolution">Image-Super-Resolution</a>*
-for base code, *https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc* for DPX file io.
+for base code.
+
+*https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc* for DPX file io.
+
+**PU: More credits here**
 
 ## Setup
 
@@ -38,7 +46,7 @@ See *Notes.md* for useful tips / tricks / comments
 ## Usage
 
 ```
-train.py [option(s)] ...
+**train.py [option(s)] ...**
 
     Trains a model. The available models are:
 
@@ -53,8 +61,9 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          max epoch count, default=100. This is the total number of epochs the model will train over multiple runs.
-    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
+    epochs=nnn          max epoch count, default=100. See below for more details
+    epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
+    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -67,11 +76,18 @@ Options are:
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
     model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
-    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.txt
+    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
 
-    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
+    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
-  Usage: evaluate.py [option(s)] ...
+    You can terminate a training session with ^C, and then resume training by reissuing the same command. The model's state
+    is completely stored in the .h5 file, and the training state is in the _state.json file.
+
+    The epochs value is the maximum number of epochs that will be trained **over multiple sessions**. So if you have
+    previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,
+    you could specify epochs+=25 to limit the current training run to 25 epochs.
+
+**evaluate.py [option(s)] ...**
 
       Evaluate models. The available models are:
 
@@ -93,8 +109,7 @@ Options are:
         Expects that there will be a matching _state.json file for the model
         (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
 
-
-predict.py [option(s)] ...
+**predict.py [option(s)] ...**
 
     Predicts images by applying model. The available models are:
 

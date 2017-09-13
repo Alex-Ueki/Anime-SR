@@ -1,5 +1,4 @@
 """
-
 Usage: train.py [option(s)] ...
 
     Trains a model. The available models are:
@@ -15,8 +14,9 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          max epoch count, default=100. This is the total number of epochs the model will train over multiple runs.
-    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
+    epochs=nnn          max epoch count, default=100. See below for more details
+    epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
+    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -31,8 +31,14 @@ Options are:
     model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
     state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
 
-    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
+    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
+    You can terminate a training session with ^C, and then resume training by reissuing the same command. The model's state
+    is completely stored in the .h5 file, and the training state is in the _state.json file.
+
+    The epochs value is the maximum number of epochs that will be trained **over multiple sessions**. So if you have
+    previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,
+    you could specify epochs+=25 to limit the current training run to 25 epochs.
 """
 
 from Modules.modelio import ModelIO
@@ -69,40 +75,7 @@ def oops(error_state, is_error, msg, value=0, end_run=False):
 def terminate(sarah_connor, verbose=True):
     if sarah_connor:
         if verbose:
-            print("""
-Usage: train.py [option(s)] ...
-
-    Trains a model. The available models are:
-
-        BasicSR
-        ExpansionSR
-        DeepDenoiseSR
-        VDSR
-
-Options are:
-
-    type=model          model type, default is BasicSR
-    width=nnn           tile width, default=60
-    height=nnn          tile height, default=60
-    border=nnn          border size, default=2
-    epochs=nnn          max epoch count, default=100. This is the total number of epochs the model will train over multiple runs.
-    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less.
-    black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
-    trimleft=nnn        pixels to trim on image left edge, default = 240
-    trimright=nnn       pixels to trim on image right edge, default = 240
-    trimtop=nnn         pixels to trim on image top edge, default = 0
-    trimbottom=nnn      pixels to trim on image bottom edge, default = 0
-    jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=True
-    skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
-    shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
-    data=path           path to the main data folder, default = Data
-    training=path       path to training folder, default = {Data}/train_images/training
-    validation=path     path to validation folder, default = {Data}/train_images/validation
-    model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
-    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.txt
-
-    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
-""")
+            print(__doc__)
         sys.exit(1)
 
 
@@ -112,9 +85,7 @@ if __name__ == '__main__':
     # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
 
     model_type = 'BasicSR'
-    tile_width, tile_height, tile_border, epochs = 60, 60, 2, 100
-    #GPU: Changed default epoc to 100 from 9999, default should be naturally usable
-    #PU: OK see what you mean. I documented it more clearly.
+    tile_width, tile_height, tile_border, epochs, run_epochs = 60, 60, 2, 100, -1
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level = -1.0
     jitter, shuffle, skip = 1, 1, 1
@@ -148,22 +119,28 @@ if __name__ == '__main__':
                 fnum = -1.0
             vnum = int(fnum)
 
-            opmatch = [s for s in ['type', 'width', 'height', 'border', 'epochs', 'training',
-                                   'validation', 'model', 'data', 'state', 'black',
-                                   'jitter', 'shuffle', 'skip', 'lr',
-                                   'trimleft', 'trimright', 'trimtop', 'trimbottom'] if s.startswith(op)]
+            # Order of options in the list is important if one option is a substring
+            # of the other; the smaller one must come first.
+
+            options = sorted(['type', 'width', 'height', 'border', 'training',
+                              'validation', 'model', 'data', 'state', 'black',
+                              'jitter', 'shuffle', 'skip', 'lr',
+                              'trimleft', 'trimright', 'trimtop', 'trimbottom',
+                              'epochs', 'epochs+'])
+            opmatch = [s for s in options if s.startswith(op)]
 
             if len(opmatch) == 0:
                 errors = oops(errors, True, 'Unknown option ({})', op)
-            elif len(opmatch) > 1:
+            elif len(opmatch) > 1 and op not in opmatch:
                 errors = oops(errors, True, 'Ambiguous option ({})', op)
             else:
+                # PU : REFACTOR : Group options with identical semantics?
                 op = opmatch[0]
                 if op == 'type':
                     model_type = valuecase
                     errors = oops(errors, value != 'all' and valuecase not in models.models,
                                   'Unknown model type ({})', valuecase)
-                if op == 'width':
+                elif op == 'width':
                     tile_width = vnum
                     errors = oops(errors, vnum <= 0,
                                   'Tile width invalid ({})', option)
@@ -187,7 +164,11 @@ if __name__ == '__main__':
                 elif op == 'epochs':
                     epochs = vnum
                     errors = oops(errors, vnum <= 0,
-                                  'Epochs invalid ({})', option)
+                                  'Max epoch count invalid ({})', option)
+                elif op == 'epochs+':
+                    run_epochs = vnum
+                    errors = oops(errors, vnum <= 0,
+                                  'Run epoch count invalid ({})', option)
                 elif op == 'trimleft':
                     trim_left = vnum
                     errors = oops(errors, vnum <= 0,
@@ -250,7 +231,8 @@ if __name__ == '__main__':
     print('        Tile Width : {}'.format(tile_width))
     print('       Tile Height : {}'.format(tile_height))
     print('       Tile Border : {}'.format(tile_border))
-    print('            Epochs : {}'.format(epochs))
+    print('        Max Epochs : {}'.format(epochs))
+    print('        Run Epochs : {}'.format(run_epochs))
     print('    Data root path : {}'.format(paths['data']))
     print('   Training Images : {}'.format(paths['training']))
     print(' Validation Images : {}'.format(paths['validation']))
@@ -432,7 +414,11 @@ if __name__ == '__main__':
         for key in config:
             print('{:>18s} : {}'.format(key,config[key]))
 
-        sr.fit(epochs=epochs)
+        # PU: Cannot adjust ending epoch number until we load the model state,
+        # which does not happen until we fit(). So we have to pass both
+        # the max epoch and the run # of epochs.
+
+        sr.fit(max_epochs=epochs, run_epochs=run_epochs)
 
     print('')
     print('Training completed...')

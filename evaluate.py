@@ -20,7 +20,6 @@ Options are:
 
     Expects that there will be a matching _state.json file for the model
     (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
-
 """
 
 from Modules.modelio import ModelIO
@@ -63,30 +62,7 @@ def oops(error_state, is_error, msg, value=0, end_run=False):
 def terminate(sarah_connor, verbose=True):
     if sarah_connor:
         if verbose:
-            print("""
-Usage: evaluate.py [option(s)] ...
-
-    Evaluate models. The available models are:
-
-        BasicSR
-        ExpansionSR
-        DeepDenoiseSR
-        VDSR
-
-Options are:
-
-    data=path           path to the main data folder, default = Data
-    images=path         path to images folder, default = {Data}/eval_images
-    model=filename|path model filename or absolute path. If just a filename, then the
-                        path will be {Data}/models/{model}. The .h5 extension may be omitted.
-                        Default = BasicSR-60-60-2-dpx.h5
-
-    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
-
-    Expects that there will be a matching _state.json file for the model
-    (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
-
-""")
+            print(__doc__)
         sys.exit(1)
 
 
@@ -126,11 +102,12 @@ if __name__ == '__main__':
         else:
             op, value = opvalue
 
-            opmatch = [s for s in ['type', 'data', 'images', 'model'] if s.startswith(op)]
+            options = sorted(['type', 'data', 'images', 'model'])
+            opmatch = [s for s in options if s.startswith(op)]
 
             if len(opmatch) == 0:
                 errors = oops(errors, True, 'Unknown option ({})', op)
-            elif len(opmatch) > 1:
+            elif len(opmatch) > 1 and op not in opmatch:
                 errors = oops(errors, True, 'Ambiguous option ({})', op)
             else:
                 op = opmatch[0]
