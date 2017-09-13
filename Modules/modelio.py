@@ -128,8 +128,10 @@ class ModelIO():
             os.path.join(self.training_path, self.alpha))
 
         # files will (hopefully) be a single element list containing a list of all the filenames.
+        # Adjust count by quality fraction; we only apply quality to training images, not to
+        # other image types.
 
-        return self.tiles_per_image * len(files[0])
+        return int(self.tiles_per_image * len(files[0]) * self.quality)
 
     def val_images_count(self):
 
