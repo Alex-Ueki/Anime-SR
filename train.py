@@ -54,20 +54,33 @@ import os
 # return updated error_state
 
 
-def oops(error_state, is_error, msg, value=0, end_run=False):
+def oops(error_state, is_error, msg, error_value=0, end_run=False):
 
     if is_error:
         # Have to handle the single/multiple argument case.
         # if we pass format a simple string using *value it
         # gets treated as a list of individual characters.
-        if type(value) in (list, tuple):
-            print('Error: ' + msg.format(*value))
+        if type(error_value) in (list, tuple):
+            print('Error: ' + msg.format(*error_value))
         else:
-            print('Error: ' + msg.format(value))
+            print('Error: ' + msg.format(error_value))
         if end_run:
             terminate(True)
 
     return error_state or is_error
+
+# Sanitize input, return a new_value, error tuple
+
+def sanitize(old_value, error_state, new_value, is_error, msg, error_value=None, end_run=False):
+
+    if is_error:
+        if error_value == None:
+            error_value = new_value
+        error_state = oops(error_state, is_error, msg, error_value, end_run)
+        return (old_value, error_state)
+    else:
+        return (new_value, error_state)
+
 
 # Terminate run if oops errors have been encountered.
 # I have already done penance for this pun.
@@ -135,16 +148,24 @@ if __name__ == '__main__':
             elif len(opmatch) > 1 and op not in opmatch:
                 errors = oops(errors, True, 'Ambiguous option ({})', op)
             else:
-                # PU : REFACTOR : Group options with identical semantics?
+                # GPU: we can refactor this check chain by folding the setter and the
+                # error checker into a single function call (as done in the first few
+                # examples below). But I don't think there's a clean way to fold
+                # identical checks into a single handler without storing all the
+                # values in a dictionary, which will complicate the code that actually
+                # uses the values. But we could extract from dict at end of checking.
+                # Thoughts? See this link for some ideas:
+                #
+                # https://stackoverflow.com/questions/11156739/divide-a-dictionary-into-variables
+
                 op = opmatch[0]
                 if op == 'type':
-                    model_type = valuecase
-                    errors = oops(errors, value != 'all' and valuecase not in models.models,
-                                  'Unknown model type ({})', valuecase)
+                    model_type, errors = sanitize(model_type, errors, valuecase,
+                                                  value != 'all' and valuecase not in models.models,
+                                                  'Unknown model type ({})', valuecase)
                 elif op == 'width':
-                    tile_width = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Tile width invalid ({})', option)
+                    tile_width, errors = sanitize(tile_width, errors, vnum,
+                                                  vnum <= 0, 'Tile width invalid ({})', option)
                 elif op == 'height':
                     tile_height = vnum
                     errors = oops(errors, vnum <= 0,
@@ -202,16 +223,8 @@ if __name__ == '__main__':
                     jitter = vnum
                     errors = oops(errors, vnum != 0 and vnum != 1,
                                   'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op == 'data':
-                    paths['data'] = os.path.abspath(value)
-                elif op == 'training':
-                    paths['training'] = os.path.abspath(value)
-                elif op == 'validation':
-                    paths['validation'] = os.path.abspath(value)
-                elif op == 'model':
-                    paths['model'] = os.path.abspath(value)
-                elif op == 'state':
-                    paths['state'] = os.path.abspath(value)
+                elif op in ['data', 'training', 'validation', 'model', 'state']:
+                    paths[op] = os.path.abspath(value)
 
     terminate(errors)
 
@@ -293,12 +306,15 @@ if __name__ == '__main__':
     img_suffix = os.path.splitext(image_info[0][0][0][0])[1][1:]
 
     # Check Alpha tiles vs. Alpha and Beta vs. Beta, but allow Alpha and Beta to
-    # be different sizes
+    # be different sizes. If so, Alpha images will be scaled before tiling.
 
     for f in [0, 1]:
         s1, s2 = np.shape(test_images[0][f]), np.shape(test_images[1][f])
         errors = oops(errors, s1 != s2, '{} and {} images do not have identical size ({} vs {})',
                       (sub_folders[0], sub_folders[1], s1, s2))
+        s1, s2 = np.shape(test_images[f][0]), np.shape(test_images[f][1])
+        if s1 != s2:
+            print('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(image_paths[f].title(),s1,s2))
 
     terminate(errors, False)
 
