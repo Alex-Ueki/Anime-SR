@@ -8,6 +8,7 @@ Misc test scratchpad
 from Modules.modelio import ModelIO
 import Modules.models as models
 import Modules.frameops as frameops
+import Modules.dpx as dpx
 from keras import backend as K
 
 import numpy as np
@@ -137,13 +138,31 @@ if __name__ == '__main__':
     # Read in the image and save it into temp folder as a reference
 
     img = frameops.imread(image_path)
-    frameops.imsave(os.path.join('Temp','PNG','Image.png'),img)
+    print(dpx.dpx_meta)
+
+    frameops.imsave(os.path.join('Temp','PNG','Image-Beta.png'),img)
 
     # OK, read in image tiles
 
     tiles = frameops.extract_tiles(image_path, tile_width=60, tile_height=60, border=2, black_level=0.0, border_mode='edge',
                                     trim_top=0, trim_bottom=0, trim_left=240, trim_right=240, jitter=False,
                                     expected_width=1920, expected_height=1080)
+
+    img = frameops.grout(tiles, border=2, row_width=24, black_level=0.0, pad_top=0, pad_bottom=0, pad_left=240, pad_right=240)
+    frameops.imsave(os.path.join('Temp','PNG','Image-Beta-Grouted.png'),img)
+
+    img2 = frameops.imread(alpha_path)
+    print(dpx.dpx_meta)
+    frameops.imsave(os.path.join('Temp','PNG','Image-Alpha.png'),img2)
+
+    # OK, read in image tiles
+
+    tiles2 = frameops.extract_tiles(alpha_path, tile_width=60, tile_height=60, border=2, black_level=0.0, border_mode='edge',
+                                    trim_top=0, trim_bottom=0, trim_left=240, trim_right=240, jitter=False,
+                                    expected_width=1920, expected_height=1080)
+
+    img2 = frameops.grout(tiles2, border=2, row_width=24, black_level=0.0, pad_top=0, pad_bottom=0, pad_left=240, pad_right=240)
+    frameops.imsave(os.path.join('Temp','PNG','Image-Alpha-Grouted.png'),img2)
 
     print(len(tiles))
     frameops.reset_cache()

@@ -305,13 +305,15 @@ if __name__ == '__main__':
 
     img_suffix = os.path.splitext(image_info[0][0][0][0])[1][1:]
 
-    # Check Alpha tiles vs. Alpha and Beta vs. Beta, but allow Alpha and Beta to
-    # be different sizes. If so, Alpha images will be scaled before tiling.
+    # Check that the Beta tiles are the same size.
 
+    s1, s2 = np.shape(test_images[0][1]), np.shape(test_images[1][1])
+    errors = oops(errors, s1 != s2, 'Beta training and evaluation images do not have identical size ({} vs {})',
+                  (s1, s2))
+
+    # Warn if we do have some differences between Alpha and Beta sizes
+    
     for f in [0, 1]:
-        s1, s2 = np.shape(test_images[0][f]), np.shape(test_images[1][f])
-        errors = oops(errors, s1 != s2, '{} and {} images do not have identical size ({} vs {})',
-                      (sub_folders[0], sub_folders[1], s1, s2))
         s1, s2 = np.shape(test_images[f][0]), np.shape(test_images[f][1])
         if s1 != s2:
             print('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(image_paths[f].title(),s1,s2))

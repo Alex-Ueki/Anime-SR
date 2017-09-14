@@ -32,12 +32,11 @@ import struct
 import numpy as np
 import sys
 
-# Cache of DPX header information that we set when we read a file;
+# Cache of DPX header information that we set whenever we read a file;
 # used to write a file in the same format.
 
-dpx_header = None
-dpx_endian = None
 dpx_meta = None
+dpx_header = None
 
 """
 orientations = {
@@ -166,7 +165,7 @@ simple_propertymap = [
 
     # Other elements that we reference, but do not alter.
 
-    ('magic', 0, 4, 'magic'),
+#    ('magic', 0, 4, 'magic'),
     ('offset', 4, 4, 'I'),
 
     ('descriptor', 800, 1, 'B'),
@@ -257,68 +256,50 @@ def writeDPX(f, image, meta):
     raw.tofile(f, sep='')
 """
 
-# Clear the cache of DPX meta information
-
-def DPXreset():
-
-    global dpx_header
-
-    dpx_header = None
-
 # Read a DPX file and return an img. Stash the header and meta information in a
-# gobal for use when writing. Assumes that all the images being read and written
-# have identical format and that they are 10-bit/channel images
+# gobal for use when writing.
 
 def DPXread(f):
 
-    global dpx_header
     global dpx_meta
-    global dpx_endian
+    global dpx_header
 
-    # If we do not have header information, read and save a copy in the globals
+    # Figure out the byte order of the file
 
-    if dpx_header == None:
+    f.seek(0)
+    magic = f.read(4)
+    magic = magic.decode(encoding='UTF-8')
+    if magic != 'SDPX' and magic != 'XPDS':
+        return None
+    dpx_endian = '>' if magic == 'SDPX' else '<'
 
-        # Figure out the byte order of the file
+    # Read the header values we need
 
-        f.seek(0)
-        magic = f.read(4)
-        magic = magic.decode(encoding='UTF-8')
-        if magic != 'SDPX' and magic != 'XPDS':
-            return None
-        dpx_endian = '>' if magic == 'SDPX' else '<'
+    dpx_meta = { 'endianness': dpx_endian }
 
-        # Read the header values we need
+    for p in simple_propertymap:
+        f.seek(p[1])
+        bytes = f.read(p[2])
+        if p[3] == 'utf8':
+            dpx_meta[p[0]] = bytes.decode(encoding='UTF-8')
+        elif p[3] == 'B':
+            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'B', bytes)[0]
+        elif p[3] == 'H':
+            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'H', bytes)[0]
+        elif p[3] == 'I':
+            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'I', bytes)[0]
+        elif p[3] == 'f':
+            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'f', bytes)[0]
 
-        dpx_meta = {}
+    # Grab a copy of the whole header
 
-        for p in simple_propertymap:
-            f.seek(p[1])
-            bytes = f.read(p[2])
-            if p[3] == 'magic':
-                dpx_meta[p[0]] = bytes.decode(encoding='UTF-8')
-                dpx_meta['endianness'] = 'be' if magic == 'SDPX' else 'le'
-            elif p[3] == 'utf8':
-                dpx_meta[p[0]] = bytes.decode(encoding='UTF-8')
-            elif p[3] == 'B':
-                dpx_meta[p[0]] = struct.unpack(dpx_endian + 'B', bytes)[0]
-            elif p[3] == 'H':
-                dpx_meta[p[0]] = struct.unpack(dpx_endian + 'H', bytes)[0]
-            elif p[3] == 'I':
-                dpx_meta[p[0]] = struct.unpack(dpx_endian + 'I', bytes)[0]
-            elif p[3] == 'f':
-                dpx_meta[p[0]] = struct.unpack(dpx_endian + 'f', bytes)[0]
+    f.seek(0)
+    dpx_header = f.read(dpx_meta['offset'])
 
-        # Grab a copy of the whole header
+    # If the format is not what we expect, don't proceed
 
-        f.seek(0)
-        dpx_header = f.read(dpx_meta['offset'])
-
-        # If the format is not what we expect, don't proceed
-
-        if dpx_meta['depth'] != 10 or dpx_meta['packing'] != 1 or dpx_meta['encoding'] != 0 or dpx_meta['descriptor'] != 50:
-            DPXreset()
-            return None
+    if dpx_meta['depth'] != 10 or dpx_meta['packing'] != 1 or dpx_meta['encoding'] != 0 or dpx_meta['descriptor'] != 50:
+        return None
 
     # Read and decode the image
 
@@ -346,7 +327,7 @@ def DPXread(f):
         sys.exit(1)
     """
 
-    if dpx_endian == 'be':
+    if dpx_endian == '>':
         raw = raw.byteswap()
 
     # extract and normalize color channel values to 0..1 inclusive.
@@ -357,16 +338,22 @@ def DPXread(f):
 
     return image
 
-def DPXsave(f, image):
+# Use cached header and meta information if not explicitly specified. While we can
+# rewrite the header to handle image size changes, there may be situations where
+# cloning the header/meta information may be more appropriate.
+
+def DPXsave(f, image, meta=None, header=None):
 
     global dpx_header
     global dpx_meta
-    global dpx_endian
+
+    header = dpx_header if header == None else header
+    meta = dpx_meta if meta == None else meta
 
     # Write the cached header
 
     f.seek(0)
-    f.write(dpx_header)
+    f.write(header)
 
     # Now we have to get a little clever. If the image size does not match the size
     # recorded in our cached dpx header, we need to tweak those values. This will
@@ -374,13 +361,14 @@ def DPXsave(f, image):
     # generating 1920x1080.
 
     shape = np.shape(image)
+    dpx_endian = meta['endianness']
 
-    if shape[0] != dpx_meta['height'] or shape[1] != dpx_meta['width']:
+    if shape[0] != meta['height'] or shape[1] != meta['width']:
 
         # Write updated header records. Depends on fields in simple_propertymap
         # being in the correct order.
 
-        for i,v in enumerate([shape[0], shape[1], shape[0], shape[1], dpx_meta['offset'] + (shape[0] * shape[1] * 4)]):
+        for i,v in enumerate([shape[0], shape[1], shape[0], shape[1], meta['offset'] + (shape[0] * shape[1] * 4)]):
             p = simple_propertymap[i]
             f.seek(p[1])
             bytes = struct.pack(dpx_endian + p[3], v)
@@ -393,8 +381,8 @@ def DPXsave(f, image):
            | (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
            )
 
-    if dpx_endian == 'be':
+    if dpx_endian == '>':
         raw = raw.byteswap()
 
-    f.seek(dpx_meta['offset'])
+    f.seek(meta['offset'])
     raw.tofile(f, sep='')
