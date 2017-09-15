@@ -19,10 +19,10 @@ Options are:
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
     quality=.nnn        fraction of the "best" tiles used in training. Default is 1.0 (use all tiles)
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
-    trimleft=nnn        pixels to trim on image left edge, default = 240
-    trimright=nnn       pixels to trim on image right edge, default = 240
-    trimtop=nnn         pixels to trim on image top edge, default = 0
-    trimbottom=nnn      pixels to trim on image bottom edge, default = 0
+    trimleft=nnn        pixels to trim on image left edge, default = 240; can also use left=nnn
+    trimright=nnn       pixels to trim on image right edge, default = 240; can also use right=nnn
+    trimtop=nnn         pixels to trim on image top edge, default = 0; can also use top=nnn
+    trimbottom=nnn      pixels to trim on image bottom edge, default = 0; can also use bottom=nnn
     jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=True
     skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
     shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
@@ -51,7 +51,8 @@ import sys
 import os
 
 # If is_error is true, display message and optionally end the run.
-# return updated error_state
+# return updated error_state. error_value may be a tuple of
+# arguments for format().
 
 
 def oops(error_state, is_error, msg, error_value=0, end_run=False):
@@ -60,30 +61,39 @@ def oops(error_state, is_error, msg, error_value=0, end_run=False):
         # Have to handle the single/multiple argument case.
         # if we pass format a simple string using *value it
         # gets treated as a list of individual characters.
-        if type(error_value) in (list, tuple):
-            print('Error: ' + msg.format(*error_value))
-        else:
-            print('Error: ' + msg.format(error_value))
+
+        print('Error: ' + msg.format(*error_value) if type(error_value) in (list, tuple) else
+                          msg.format(error_value))
+
         if end_run:
             terminate(True)
 
     return error_state or is_error
 
-# Sanitize input, return a new_value, error tuple
+# Validate input, return a new_value, error tuple. Since we will never use the
+# new_value if error_state ever becomes True, it's ok to blindly return it.
+#
+# error_state   Current validation error state
+# new_value     The new value of the current option
+# is_error      Is the new_value of the current option bad?
+# msg           Error message format() string
+# error_value   Value to display in error message; may be tuple.
+#               (if None, use the new_value)
+# end_run       Immediately terminate if we get an error?
 
-def sanitize(old_value, error_state, new_value, is_error, msg, error_value=None, end_run=False):
+
+def validate(error_state, new_value, is_error, msg, error_value=None, end_run=False):
 
     if is_error:
         if error_value == None:
             error_value = new_value
         error_state = oops(error_state, is_error, msg, error_value, end_run)
-        return (old_value, error_state)
-    else:
-        return (new_value, error_state)
+
+    return (new_value, error_state)
 
 
-# Terminate run if oops errors have been encountered.
-# I have already done penance for this pun.
+# Terminate run if errors have been encountered.
+# Parental Unit has already done penance for this pun.
 
 
 def terminate(sarah_connor, verbose=True):
@@ -103,7 +113,7 @@ if __name__ == '__main__':
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level, quality = -1.0, 1.0
     jitter, shuffle, skip = 1, 1, 1
-    initial_lr = -1.0 # PU: if no learning rate manually specified, model default will be used
+    initial_lr = -1.0  # PU: if no learning rate manually specified, model default will be used
     paths = {}
 
     # Parse options
@@ -116,115 +126,105 @@ if __name__ == '__main__':
 
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
-        else:
-            op, value = [s.lower() for s in opvalue]
-            _, valuecase = opvalue
+            continue
 
-            # convert boolean arguments to integer
+        op, value = [s.lower() for s in opvalue]
+        _, valuecase = opvalue
 
-            value = '1' if 'true'.startswith(value) else value
-            value = '0' if 'false'.startswith(value) else value
+        # convert boolean arguments to integer
 
-            # convert value to integer and float with default -1
+        value = '1' if 'true'.startswith(value) else value
+        value = '0' if 'false'.startswith(value) else value
 
-            try:
-                fnum = float(value)
-            except ValueError:
-                fnum = -1.0
-            vnum = int(fnum)
+        # convert value to integer and float with default -1
 
-            # Order of options in the list is important if one option is a substring
-            # of the other; the smaller one must come first.
+        try:
+            fnum = float(value)
+        except ValueError:
+            fnum = -1.0
+        vnum = int(fnum)
 
-            options = sorted(['type', 'width', 'height', 'border', 'training',
-                              'validation', 'model', 'data', 'state', 'black',
-                              'jitter', 'shuffle', 'skip', 'lr', 'quality',
-                              'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                              'epochs', 'epochs+'])
-            opmatch = [s for s in options if s.startswith(op)]
+        # Order of options in the list is important if one option is a substring
+        # of the other; the smaller one must come first.
 
-            if len(opmatch) == 0:
-                errors = oops(errors, True, 'Unknown option ({})', op)
-            elif len(opmatch) > 1 and op not in opmatch:
-                errors = oops(errors, True, 'Ambiguous option ({})', op)
-            else:
-                # GPU: we can refactor this check chain by folding the setter and the
-                # error checker into a single function call (as done in the first few
-                # examples below). But I don't think there's a clean way to fold
-                # identical checks into a single handler without storing all the
-                # values in a dictionary, which will complicate the code that actually
-                # uses the values. But we could extract from dict at end of checking.
-                # Thoughts? See this link for some ideas:
-                #
-                # https://stackoverflow.com/questions/11156739/divide-a-dictionary-into-variables
+        options = sorted(['type', 'width', 'height', 'border', 'training',
+                          'validation', 'model', 'data', 'state', 'black',
+                          'jitter', 'shuffle', 'skip', 'lr', 'quality',
+                          'trimleft', 'trimright', 'trimtop', 'trimbottom',
+                          'left', 'right', 'top', 'bottom',
+                          'epochs', 'epochs+'])
 
-                op = opmatch[0]
-                if op == 'type':
-                    model_type, errors = sanitize(model_type, errors, valuecase,
-                                                  value != 'all' and valuecase not in models.models,
-                                                  'Unknown model type ({})', valuecase)
-                elif op == 'width':
-                    tile_width, errors = sanitize(tile_width, errors, vnum,
-                                                  vnum <= 0, 'Tile width invalid ({})', option)
-                elif op == 'height':
-                    tile_height = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Tile height invalid ({})', option)
-                elif op == 'border':
-                    tile_border = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Tile border invalid ({})', option)
-                elif op == 'black':
-                    if value != 'auto':
-                        black_level = fnum
-                        errors = oops(errors, fnum <= 0,
-                                      'Black level invalid ({})', option)
-                elif op == 'lr':
-                        initial_lr = fnum
-                        errors = oops(errors, initial_lr <= 0.0 or initial_lr > 0.01,
-                                      'Learning rate should be 0 > lr <= 0.01 ({})', option)
-                elif op == 'quality':
-                        quality = fnum
-                        errors = oops(errors, quality <= 0.0 or quality > 1.0,
-                                      'Quality should be 0 > q <= 1.0 ({})', option)
-                elif op == 'epochs':
-                    epochs = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Max epoch count invalid ({})', option)
-                elif op == 'epochs+':
-                    run_epochs = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Run epoch count invalid ({})', option)
-                elif op == 'trimleft':
-                    trim_left = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Left trim value invalid ({})', option)
-                elif op == 'trimright':
-                    trim_right = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Right trim value invalid ({})', option)
-                elif op == 'trimtop':
-                    trim_top = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Top trim value invalid ({})', option)
-                elif op == 'trimbottom':
-                    trim_bottom = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Bottom trim value invalid ({})', option)
-                elif op == 'jitter':
-                    jitter = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Jitter value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op == 'skip':
-                    jitter = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Skip value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op == 'shuffle':
-                    jitter = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op in ['data', 'training', 'validation', 'model', 'state']:
-                    paths[op] = os.path.abspath(value)
+        # Match option, make sure it isn't ambiguous.
+
+        opmatch = [s for s in options if s.startswith(op)]
+
+        if len(opmatch) != 1:
+            errors = oops(errors, True, '{} option ({})',
+                          ('Unknown' if len(opmatch) == 0 else 'Ambiguous', op))
+            continue
+
+        # PU: refactored more simply. Used continues (above) to reduce nesting depth, then a
+        # validation passthrough routine to collapse contents of each if block to a single
+        # statement.
+
+        op = opmatch[0]
+
+        if op == 'type':
+            model_type, errors = validate(
+                errors, valuecase, value != 'all' and valuecase not in models.models,
+                'Unknown model type ({})', valuecase)
+        elif op == 'width':
+            tile_width, errors = validate(
+                errors, vnum, vnum <= 0, 'Tile width invalid ({})', option)
+        elif op == 'height':
+            tile_height, errors = validate(
+                errors, vnum, vnum <= 0, 'Tile height invalid ({})', option)
+        elif op == 'border':
+            tile_border, errors = validate(
+                errors, vnum, vnum <= 0, 'Tile border invalid ({})', option)
+        elif op == 'black' and value != 'auto':
+            black_level, errors = validate(
+                errors, fnum, fnum <= 0, 'Black level invalid ({})', option)
+        elif op == 'lr':
+            initial_lr, errors = validate(
+                errors, fnum, errors, initial_lr <= 0.0 or initial_lr > 0.01,
+                'Learning rate should be 0 > lr <= 0.01 ({})', option)
+        elif op == 'quality':
+            quality, errors = validate(
+                errors, fnum, errors, quality <= 0.0 or quality > 1.0,
+                'Quality should be 0 > q <= 1.0 ({})', option)
+        elif op == 'epochs':
+            epochs, errors = validate(
+                errors, vnum, vnum <= 0, 'Max epoch count invalid ({})', option)
+        elif op == 'epochs+':
+            run_epochs, errors = validate(
+                errors, vnum, vnum <= 0, 'Run epoch count invalid ({})', option)
+        elif op == 'trimleft' or op == 'left':
+            trim_left, errors = validate(
+                errors, vnum, vnum <= 0, 'Left trim value invalid ({})', option)
+        elif op == 'trimright' or op == 'right':
+            trim_right, errors = validate(
+                errors, vnum, vnum <= 0, 'Right trim value invalid ({})', option)
+        elif op == 'trimtop' or op == 'top':
+            trim_top, errors = validate(
+                errors, vnum, vnum <= 0, 'Top trim value invalid ({})', option)
+        elif op == 'trimbottom' or op == 'bottom':
+            trim_bottom, errors = validate(
+                errors, vnum, vnum <= 0, 'Bottom trim value invalid ({})', option)
+        elif op == 'jitter':
+            jitter, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Jitter value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op == 'skip':
+            skip, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Skip value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op == 'shuffle':
+            shuffle, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op in ['data', 'training', 'validation', 'model', 'state']:
+            paths[op] = os.path.abspath(value)
 
     terminate(errors)
 
@@ -312,11 +312,12 @@ if __name__ == '__main__':
                   (s1, s2))
 
     # Warn if we do have some differences between Alpha and Beta sizes
-    
+
     for f in [0, 1]:
         s1, s2 = np.shape(test_images[f][0]), np.shape(test_images[f][1])
         if s1 != s2:
-            print('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(image_paths[f].title(),s1,s2))
+            print('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(
+                image_paths[f].title(), s1, s2))
 
     terminate(errors, False)
 
@@ -438,7 +439,7 @@ if __name__ == '__main__':
         config = sr.get_config()
         print('Model configuration:')
         for key in config:
-            print('{:>18s} : {}'.format(key,config[key]))
+            print('{:>18s} : {}'.format(key, config[key]))
 
         # PU: Cannot adjust ending epoch number until we load the model state,
         # which does not happen until we fit(). So we have to pass both
