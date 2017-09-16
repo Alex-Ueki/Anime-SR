@@ -4,7 +4,9 @@ Frames/
 Temp/
 Local/
 
+# PU local files
 scratchpad.txt
+ghostbusters.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
