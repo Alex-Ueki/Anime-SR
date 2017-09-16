@@ -456,11 +456,74 @@ class VDSR(BaseSRCNNModel):
         self.model = model
         return model
 
+# Parental Unit Pathetic Super-Resolution Model
+
+class PUPSR(BaseSRCNNModel):
+
+    def __init__(self, io):
+
+        super(PUPSR, self).__init__('PUPSR', io)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+        model = Sequential()
+
+        model.add(Conv2D(64, (9, 9), activation='relu',
+                         padding='same', input_shape=self.io.image_shape))
+        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
+        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
+        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
+
+        adam = optimizers.Adam(lr=.001)
+
+        model.compile(optimizer=adam, loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.io.model_path)
+
+        self.model = model
+        return model
+
+# Gene-Perpetuation Unit Super-Resolution Model
+
+class GPUSR(BaseSRCNNModel):
+
+    def __init__(self, io):
+
+        super(GPUSR, self).__init__('GPUSR', io)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+        model = Sequential()
+
+        model.add(Conv2D(64, (9, 9), activation='relu',
+                         padding='same', input_shape=self.io.image_shape))
+        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
+        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
+        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
+
+        adam = optimizers.Adam(lr=.001)
+
+        model.compile(optimizer=adam, loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.io.model_path)
+
+        self.model = model
+        return model
+
+
 # Dictionary of all the model classes
 
 
 models = {'BasicSR': BasicSR,
           'VDSR': VDSR,
           'DeepDenoiseSR': DeepDenoiseSR,
-          'ExpansionSR': ExpansionSR
+          'ExpansionSR': ExpansionSR,
+          'PUPSR': PUPSR,
+          'GPUSR': GPUSR
           }

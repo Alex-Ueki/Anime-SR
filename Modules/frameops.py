@@ -26,7 +26,7 @@ IMAGETYPES = ['.jpg', '.png', '.dpx']
 cached_tiles = {}
 cached_quality = {}
 caching = True
-MINFREEMEMORY = 1000 * 1000 * 1000
+MINFREEMEMORY = 300 * 1000 * 1000
 
 # In case we ever need to reset or disable the cache
 

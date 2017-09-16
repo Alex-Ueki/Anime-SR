@@ -381,10 +381,12 @@ if __name__ == '__main__':
 
     print('        Model File : {}'.format(paths['model']))
     print('  Model State File : {}'.format(paths['state']))
-    print('  Image dimensions : {} x {}'.format(s1[1], s1[0]))
+    print('  Input Image Size : {} x {}'.format(s1[1], s1[0]))
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(
         trim_top, trim_bottom, trim_left, trim_right))
-    print('Trimmed dimensions : {} x {}'.format(trimmed_width, trimmed_height))
+    print(' Output Image Size : {} x {}'.format(trimmed_width, trimmed_height))
+    print(' Training Set Size : {}'.format(len(image_info[0][0][0])))
+    print('   Valid. Set Size : {}'.format(len(image_info[1][0][0])))
     print('       Black level : {}'.format(black_level))
     print('            Jitter : {}'.format(jitter == 1))
     print('           Shuffle : {}'.format(shuffle == 1))
