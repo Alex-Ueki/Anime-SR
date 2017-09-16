@@ -17,13 +17,13 @@ Options are:
     epochs=nnn          max epoch count, default=100. See below for more details
     epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
-    quality=.nnn        fraction of the "best" tiles used in training. Default is 1.0 (use all tiles)
+    quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240; can also use left=nnn
     trimright=nnn       pixels to trim on image right edge, default = 240; can also use right=nnn
     trimtop=nnn         pixels to trim on image top edge, default = 0; can also use top=nnn
     trimbottom=nnn      pixels to trim on image bottom edge, default = 0; can also use bottom=nnn
-    jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=True
+    jitter=1|0|T|F      include tiles offset by half a tile across&down when training (but not validation); default=True
     skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
     shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
     data=path           path to the main data folder, default = Data

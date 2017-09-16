@@ -1,5 +1,31 @@
 We do a lot of our video work on Macs so much of this is Mac-centric.
 
+# Thrashing the GPU
+
+If your training or validation set is too large, you can start thrashing the GPU. Things slow down because
+stuff has to be constantly moved in and out of GPU memory. One symptom of this is that the rest of your
+system becomes very sluggish (Atom, for example, becomes unusable for editing). The solution is to reduce
+the size of your training or validation set.
+
+# The quality setting
+
+The quality option of train.py uses a simple heuristic to rank the tiles in an image by how much detail
+they have in them. This helps models train faster because you're not giving them tiles that don't have
+much feature information (especially useful with Anime since there are large areas of single-color paint).
+
+Note however that the quality setting (and jitter as well) are not applied to validation images, since
+you most definitely do want to know how the model performs on "uninteresting" tiles. Also, you need to
+keep this in mind when choosing the number of images in your training and validation sets; if you have
+4 times the number of images in your training set but are using quality=0.5, then your real ratio is
+2:1 (not counting the extra tiles you may be creating through jittering)
+
+# Jittering
+
+In addition to simply tiling the image, train.py also generates intermediate tiles that are offset
+1/2 tile horizontally and vertically, in the hopes of creating additional tiles with interesting
+detail. So an NxM tile image, when jittered, will create an additional (N-1)x(M-1) tiles. Jittering
+is the default.
+
 # Converting video from interlaced to progressive
 
 Apple Compressor (both old and current versions) have significant issues with reverse telecine on older anime,
@@ -49,3 +75,5 @@ Useful for generating training and validation Alpha images when you have HD beta
 Old Analog transfers are often going to have edge sharpening artifacts. Need to investigate how to remove these before
 upconversion.
 
+What are the best settings for recurrent networks? I am thinking no jitter, shuffle or skip? Should these be the default
+for all runs? Or perhaps some way for the model to over-ride?

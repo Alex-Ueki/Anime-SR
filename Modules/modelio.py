@@ -164,7 +164,7 @@ class ModelIO():
     # Validation generator uses all the tiles, not just the best ones.
 
     def validation_data_generator(self):
-        return self._image_generator_frameops(self.validation_path, self.jitter, self.shuffle, self.skip, 1.0)
+        return self._image_generator_frameops(self.validation_path, False, self.shuffle, self.skip, 1.0)
 
     # Evaluation and Prediction generators will never shuffle, jitter, skip or use just the best tiles.
 
