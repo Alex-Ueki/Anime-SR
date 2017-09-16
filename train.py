@@ -116,6 +116,16 @@ if __name__ == '__main__':
     initial_lr = -1.0  # PU: if no learning rate manually specified, model default will be used
     paths = {}
 
+    # Order of options in this list can be important; if one option is a substring
+    # of the other, the smaller one must come first.
+
+    options = sorted(['type', 'width', 'height', 'border', 'training',
+                      'validation', 'model', 'data', 'state', 'black',
+                      'jitter', 'shuffle', 'skip', 'lr', 'quality',
+                      'trimleft', 'trimright', 'trimtop', 'trimbottom',
+                      'left', 'right', 'top', 'bottom',
+                      'epochs', 'epochs+'])
+
     # Parse options
 
     errors = False
@@ -143,16 +153,6 @@ if __name__ == '__main__':
         except ValueError:
             fnum = -1.0
         vnum = int(fnum)
-
-        # Order of options in the list is important if one option is a substring
-        # of the other; the smaller one must come first.
-
-        options = sorted(['type', 'width', 'height', 'border', 'training',
-                          'validation', 'model', 'data', 'state', 'black',
-                          'jitter', 'shuffle', 'skip', 'lr', 'quality',
-                          'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                          'left', 'right', 'top', 'bottom',
-                          'epochs', 'epochs+'])
 
         # Match option, make sure it isn't ambiguous.
 
