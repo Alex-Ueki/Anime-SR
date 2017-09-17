@@ -7,6 +7,12 @@ stuff has to be constantly moved in and out of GPU memory. One symptom of this i
 system becomes very sluggish (Atom, for example, becomes unusable for editing). The solution is to reduce
 the size of your training or validation set.
 
+# Theano
+
+This project has only been tested with Keras/Tensorflow. It may work with Theano (there is some code to
+transpose images into Theano ordering) but there may be cases that haven't been handled. If you try and
+use Theano and things don't work, search in frameops.py and modelio.py for 'theano'.
+
 # The quality setting
 
 The quality option of train.py uses a simple heuristic to rank the tiles in an image by how much detail

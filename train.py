@@ -42,66 +42,11 @@ Options are:
     you could specify epochs+=25 to limit the current training run to 25 epochs.
 """
 
-from Modules.modelio import ModelIO
-import Modules.models as models
-import Modules.frameops as frameops
+from Modules.misc import oops, validate, terminate
 
 import numpy as np
 import sys
 import os
-
-# If is_error is true, display message and optionally end the run.
-# return updated error_state. error_value may be a tuple of
-# arguments for format().
-
-
-def oops(error_state, is_error, msg, error_value=0, end_run=False):
-
-    if is_error:
-        # Have to handle the single/multiple argument case.
-        # if we pass format a simple string using *value it
-        # gets treated as a list of individual characters.
-
-        print('Error: ' + msg.format(*error_value) if type(error_value) in (list, tuple) else
-                          msg.format(error_value))
-
-        if end_run:
-            terminate(True)
-
-    return error_state or is_error
-
-# Validate input, return a new_value, error tuple. Since we will never use the
-# new_value if error_state ever becomes True, it's ok to blindly return it.
-#
-# error_state   Current validation error state
-# new_value     The new value of the current option
-# is_error      Is the new_value of the current option bad?
-# msg           Error message format() string
-# error_value   Value to display in error message; may be tuple.
-#               (if None, use the new_value)
-# end_run       Immediately terminate if we get an error?
-
-
-def validate(error_state, new_value, is_error, msg, error_value=None, end_run=False):
-
-    if is_error:
-        if error_value == None:
-            error_value = new_value
-        error_state = oops(error_state, is_error, msg, error_value, end_run)
-
-    return (new_value, error_state)
-
-
-# Terminate run if errors have been encountered.
-# Parental Unit has already done penance for this pun.
-
-
-def terminate(sarah_connor, verbose=True):
-    if sarah_connor:
-        if verbose:
-            print(__doc__)
-        sys.exit(1)
-
 
 if __name__ == '__main__':
 
@@ -170,9 +115,7 @@ if __name__ == '__main__':
         op = opmatch[0]
 
         if op == 'type':
-            model_type, errors = validate(
-                errors, valuecase, value != 'all' and valuecase not in models.models,
-                'Unknown model type ({})', valuecase)
+            model_type = valuecase
         elif op == 'width':
             tile_width, errors = validate(
                 errors, vnum, vnum <= 0, 'Tile width invalid ({})', option)
@@ -224,7 +167,7 @@ if __name__ == '__main__':
                 errors, vnum, vnum != 0 and vnum != 1,
                 'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
         elif op in ['data', 'training', 'validation', 'model', 'state']:
-            paths[op] = os.path.abspath(value)
+            paths[op] = value
 
     terminate(errors)
 
@@ -236,12 +179,10 @@ if __name__ == '__main__':
     dpath = paths['data']
 
     if 'training' not in paths:
-        paths['training'] = os.path.abspath(
-            os.path.join(dpath, 'train_images', 'training'))
+        paths['training'] = os.path.join(dpath, 'train_images', 'training')
 
     if 'validation' not in paths:
-        paths['validation'] = os.path.abspath(
-            os.path.join(dpath, 'train_images', 'validation'))
+        paths['validation'] = os.path.join(dpath, 'train_images', 'validation')
 
     # Remind user what we're about to do.
 
@@ -256,6 +197,8 @@ if __name__ == '__main__':
     print(' Validation Images : {}'.format(paths['validation']))
 
     # Validation and error checking
+
+    import Modules.frameops as frameops
 
     image_paths = ['training', 'validation']
     sub_folders = ['Alpha', 'Beta']
@@ -362,12 +305,12 @@ if __name__ == '__main__':
     # Only at this point can we set default model and state filenames because that depends on image type
 
     if 'model' not in paths:
-        paths['model'] = os.path.abspath(os.path.join(
-            dpath, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
+        paths['model'] = os.path.join(
+            dpath, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
 
     if 'state' not in paths:
-        paths['state'] = os.path.abspath(os.path.join(
-            dpath, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
+        paths['state'] = os.path.join(
+            dpath, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
 
     tpath = os.path.dirname(paths['state'])
     errors = oops(errors, not os.path.exists(tpath),
@@ -379,8 +322,6 @@ if __name__ == '__main__':
 
     terminate(errors, False)
 
-    print('        Model File : {}'.format(paths['model']))
-    print('  Model State File : {}'.format(paths['state']))
     print('  Input Image Size : {} x {}'.format(s1[1], s1[0]))
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(
         trim_top, trim_bottom, trim_left, trim_right))
@@ -395,6 +336,14 @@ if __name__ == '__main__':
     print('')
 
     # Train the model
+
+    from Modules.modelio import ModelIO
+    import Modules.models as models
+
+    errors = oops(errors, model_type != 'all' and model_type not in models.models,
+        'Unknown model type ({})')
+
+    terminate(errors, False)
 
     model_list = models.models if model_type.lower() == 'all' else [model_type]
     for model in model_list:

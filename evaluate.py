@@ -22,10 +22,7 @@ Options are:
     (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
 """
 
-from Modules.modelio import ModelIO
-import Modules.models as models
-import Modules.frameops as frameops
-from keras import backend as K
+from Modules.misc import oops, validate, terminate
 
 import numpy as np
 import sys
@@ -35,35 +32,6 @@ import json
 # Turn debug code on and off
 
 DEBUG = False
-
-# If is_error is true, display message and optionally end the run.
-# return updated error_state
-
-
-def oops(error_state, is_error, msg, value=0, end_run=False):
-
-    if is_error:
-        # Have to handle the single/multiple argument case.
-        # if we pass format a simple string using *value it
-        # gets treated as a list of individual characters.
-        if type(value) in (list, tuple):
-            print('Error: ' + msg.format(*value))
-        else:
-            print('Error: ' + msg.format(value))
-        if end_run:
-            terminate(True)
-
-    return error_state or is_error
-
-# Terminate run if oops errors have been encountered.
-# I have already done penance for this pun.
-
-
-def terminate(sarah_connor, verbose=True):
-    if sarah_connor:
-        if verbose:
-            print(__doc__)
-        sys.exit(1)
 
 
 if __name__ == '__main__':
@@ -77,45 +45,27 @@ if __name__ == '__main__':
 
     errors = False
 
+    options = sorted(['type', 'data', 'images', 'model'])
+
     for option in sys.argv[1:]:
 
         opvalue = option.split('=', maxsplit=1)
 
-        # op, value = [s.lower() for s in opvalue]
-        # _, valuecase = opvalue
-        #
-        # # convert boolean arguments to integer
-
-        # value = '1' if 'true'.startswith(value) else value
-        # value = '0' if 'false'.startswith(value) else value
-        #
-        # # convert value to integer and float with default -1
-        #
-        # try:
-        #     fnum = float(value)
-        # except ValueError:
-        #     fnum = -1.0
-        # vnum = int(fnum)
-        #
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
-        else:
-            op, value = opvalue
+            continue
 
-            options = sorted(['type', 'data', 'images', 'model'])
-            opmatch = [s for s in options if s.startswith(op)]
+        op, value = opvalue
 
-            if len(opmatch) == 0:
-                errors = oops(errors, True, 'Unknown option ({})', op)
-            elif len(opmatch) > 1 and op not in opmatch:
-                errors = oops(errors, True, 'Ambiguous option ({})', op)
-            else:
-                op = opmatch[0]
-                if op == 'type':
-                    errors = oops(errors, value != 'all' and value not in models.models,
-                                  'Unknown model type ({})', value)
-                else:
-                    paths[op] = value
+        opmatch = [s for s in options if s.startswith(op)]
+
+        if len(opmatch) != 1:
+            errors = oops(errors, True, '{} option ({})',
+                          ('Unknown' if len(opmatch) == 0 else 'Ambiguous', op))
+            continue
+
+        op = opmatch[0]
+        paths[op] = value
 
     terminate(errors)
 
@@ -159,8 +109,6 @@ if __name__ == '__main__':
 
     # Validation and error checking
 
-    error = oops(errors,model_type not in models.models,'Unknown model type ({})'.format(model_type))
-
     for p in paths:
         errors = oops(errors, not os.path.exists(paths[p]),'Path to {} is not valid ({})'.format(p.title(),paths[p]))
 
@@ -177,6 +125,8 @@ if __name__ == '__main__':
 
     # Check image files -- we do not explore subfolders. Note we have already checked
     # path validity above
+
+    import Modules.frameops as frameops
 
     image_info = frameops.image_files(paths['Alpha'], False)
 
@@ -200,11 +150,14 @@ if __name__ == '__main__':
 
     terminate(errors,False)
 
-    # There is no point in caching tiles
-
-    frameops.reset_cache(enabled=False)
-
     # Configure model IO
+
+    from Modules.modelio import ModelIO
+    import Modules.models as models
+
+    error = oops(errors,model_type not in models.models,'Unknown model type ({})'.format(model_type))
+
+    terminate(errors,False)
 
     io = ModelIO(model_type=model_type,
                  image_width=iostate['image_width'],
@@ -244,12 +197,9 @@ if __name__ == '__main__':
     tile_width = io.base_tile_width + 2 * io.border
     tile_height = io.base_tile_height + 2 * io.border
 
-    if K.image_dim_ordering() == 'th':
-        image_shape = (
-            io.channels, tile_width, tile_height)
-    else:
-        image_shape = (
-            tile_width, tile_height, io.channels)
+    # There is no point in caching tiles
+
+    frameops.reset_cache(enabled=False)
 
     # Process the images
 

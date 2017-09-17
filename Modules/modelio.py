@@ -1,22 +1,24 @@
-from __future__ import print_function, division, absolute_import
-import __main__
-
-import numpy as np
-from scipy.misc import imsave, imread, imresize
-from keras import backend as K
-import Modules.frameops as frameops
-import os
-
 """
     ModelIO class
     Handles all model IO (data generators, etc)
     Uses default paths in Data directory if a path is not specified
 """
 
+#from __future__ import print_function, division, absolute_import
+
+import __main__
+import Modules.frameops as frameops
+
+import numpy as np
+from scipy.misc import imsave, imread, imresize
+import os
+
+
 # Model parameter class
 
 
 class ModelIO():
+
 
     def __init__(self,
                  model_type='BasicSR',
@@ -35,7 +37,8 @@ class ModelIO():
                  img_suffix='',
                  paths={}):
 
-        self.model_type=model_type
+
+        self.model_type = model_type
         self.image_width, self.image_height = image_width, image_height
         self.base_tile_width, self.base_tile_height = base_tile_width, base_tile_height
         self.border, self.border_mode = border, border_mode
@@ -46,6 +49,9 @@ class ModelIO():
         self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
         self.quality = quality
         self.paths = paths
+
+        from keras import backend as K
+        self.theano = K.image_dim_ordering() == 'th'
 
         # The actual internal tile size includes the overlap borders
 
@@ -62,32 +68,9 @@ class ModelIO():
         if jitter == 1:
             self.tiles_per_image += (tiles_across - 1) * (tiles_down - 1)
 
-        # Passed Parameter Paranoia
-
-        """
-        print('')
-        print('ModelIO Initialization...')
-        print(' base_tile_width : {}'.format(self.base_tile_width))
-        print('base_tile_height : {}'.format(self.base_tile_height))
-        print('          border : {}'.format(self.border))
-        print('     border mode : {}'.format(self.border_mode))
-        print('        channels : {}'.format(self.channels))
-        print('      batch_size : {}'.format(self.batch_size))
-        print('     black_level : {}'.format(self.black_level))
-        print('       trim tblr : {} {} {} {}'.format(self.trim_top,
-                                                      self.trim_bottom, self.trim_left, self.trim_right))
-        print(' tiles_per_image : {}'.format(self.tiles_per_image))
-
-        print('          jitter : {}'.format(jitter == 1))
-        print('         shuffle : {}'.format(shuffle == 1))
-        print('            skip : {}'.format(skip == 1))
-        print('         quality : {}'.format(quality))
-        print('    path entries : {}'.format(self.paths.keys()))
-        """
-
         # Set image shape
 
-        if K.image_dim_ordering() == 'th':
+        if self.theano:
             self.image_shape = (
                 self.channels, self.tile_width, self.tile_height)
         else:
@@ -97,8 +80,8 @@ class ModelIO():
         # Set paths
 
         self.data_path = paths['data'] if 'data' in paths else 'Data'
-        self.base_dataset_dir = os.path.join(os.path.dirname(
-            os.path.abspath(__main__.__file__)), self.data_path)
+        self.base_dataset_dir = os.path.join(
+            os.path.dirname(__main__.__file__), self.data_path)
 
         self.input_path = paths['input'] if 'input' in paths else os.path.join(
             self.base_dataset_dir, 'input_images')
@@ -111,9 +94,11 @@ class ModelIO():
         self.predict_path = paths['predict'] if 'predict' in paths else os.path.join(
             self.base_dataset_dir, 'predict_images')
         self.model_path = paths['model'] if 'model' in paths else os.path.join(
-            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, base_tile_width, base_tile_height, border, img_suffix))
+            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}.h5'.format(
+                model_type, base_tile_width, base_tile_height, border, img_suffix))
         self.state_path = paths['state'] if 'state' in paths else os.path.join(
-            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, base_tile_width, base_tile_height, border, img_suffix))
+            self.base_dataset_dir, 'models', '{}-{}-{}-{}-{}_state.json'.format(
+                model_type, base_tile_width, base_tile_height, border, img_suffix))
 
         self.alpha = 'Alpha'
         self.beta = 'Beta'
@@ -200,10 +185,8 @@ class ModelIO():
                     border_mode=self.border_mode,
                     trim_left=self.trim_left, trim_right=self.trim_right,
                     trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality):
-                if K.image_dim_ordering() == 'th':
-                    alpha_tile = alpha_tile.transpose((2, 0, 1))
-                    beta_tile = beta_tile.transpose((2, 0, 1))
+                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality,
+                    theano=self.theano):
                 alpha_tiles[batch_index] = alpha_tile
                 beta_tiles[batch_index] = beta_tile
                 batch_index += 1
@@ -228,9 +211,8 @@ class ModelIO():
                     black_level=self.black_level, border_mode=self.border_mode,
                     trim_left=self.trim_left, trim_right=self.trim_right,
                     trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality):
-                if K.image_dim_ordering() == 'th':
-                    alpha_tile = alpha_tile.transpose((2, 0, 1))
+                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality,
+                    theano=self.theano):
 
                 alpha_tiles[batch_index] = alpha_tile
                 batch_index += 1
@@ -270,4 +252,4 @@ class ModelIO():
                 'model_type': self.model_type,
                 'alpha': self.alpha,
                 'beta': self.beta
-              }
+                }

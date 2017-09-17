@@ -22,10 +22,7 @@ Options are:
     (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
 """
 
-from Modules.modelio import ModelIO
-import Modules.models as models
-import Modules.frameops as frameops
-from keras import backend as K
+from Modules.misc import oops, validate, terminate
 
 import numpy as np
 import sys
@@ -35,35 +32,6 @@ import json
 # Turn debug code on and off
 
 DEBUG = False
-
-# If is_error is true, display message and optionally end the run.
-# return updated error_state
-
-
-def oops(error_state, is_error, msg, value=0, end_run=False):
-
-    if is_error:
-        # Have to handle the single/multiple argument case.
-        # if we pass format a simple string using *value it
-        # gets treated as a list of individual characters.
-        if type(value) in (list, tuple):
-            print('Error: ' + msg.format(*value))
-        else:
-            print('Error: ' + msg.format(value))
-        if end_run:
-            terminate(True)
-
-    return error_state or is_error
-
-# Terminate run if oops errors have been encountered.
-# I have already done penance for this pun.
-
-
-def terminate(sarah_connor, verbose=True):
-    if sarah_connor:
-        if verbose:
-            print(__doc__)
-        sys.exit(1)
 
 
 if __name__ == '__main__':
@@ -76,6 +44,7 @@ if __name__ == '__main__':
     # Parse options
 
     errors = False
+    options = sorted(['type', 'data', 'images', 'model'])
 
     for option in sys.argv[1:]:
 
@@ -83,19 +52,19 @@ if __name__ == '__main__':
 
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
-        else:
-            op, value = opvalue
+            continue
 
-            options = sorted(['type', 'data', 'images', 'model'])
-            opmatch = [s for s in options if s.startswith(op)]
+        op, value = opvalue
 
-            if len(opmatch) == 0:
-                errors = oops(errors, True, 'Unknown option ({})', op)
-            elif len(opmatch) > 1 and op not in opmatch:
-                errors = oops(errors, True, 'Ambiguous option ({})', op)
-            else:
-                op = opmatch[0]
-                paths[op] = value
+        opmatch = [s for s in options if s.startswith(op)]
+
+        if len(opmatch) != 1:
+            errors = oops(errors, True, '{} option ({})',
+                          ('Unknown' if len(opmatch) == 0 else 'Ambiguous', op))
+            continue
+
+        op = opmatch[0]
+        paths[op] = value
 
     terminate(errors)
 
@@ -113,7 +82,8 @@ if __name__ == '__main__':
         paths['output'] = os.path.join(dpath, 'predict_images', 'Beta')
 
     if 'model' not in paths:
-        paths['model'] = os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5')
+        paths['model'] = os.path.join(
+            dpath, 'models', 'BasicSR-60-60-2-dpx.h5')
     else:
         model_split = os.path.splitext(paths['model'])
         if model_split[1] == '':
@@ -136,13 +106,11 @@ if __name__ == '__main__':
     print('       Model Type : {}'.format(model_type))
     print('')
 
-
     # Validation and error checking
 
-    error = oops(errors,model_type not in models.models,'Unknown model type ({})'.format(model_type))
-
     for p in paths:
-        errors = oops(errors, not os.path.exists(paths[p]),'Path to {} is not valid ({})'.format(p.title(),paths[p]))
+        errors = oops(errors, not os.path.exists(
+            paths[p]), 'Path to {} is not valid ({})'.format(p.title(), paths[p]))
 
     terminate(errors, False)
 
@@ -158,12 +126,14 @@ if __name__ == '__main__':
     # Check image files -- we do not explore subfolders. Note we have already checked
     # path validity above
 
+    import Modules.frameops as frameops
+
     image_info = frameops.image_files(paths['input'], False)
 
-    errors = oops(errors, len(
-        image_info) == 0, 'Input folder does not contain any images')
-    errors = oops(errors, len(
-        image_info) > 1, 'Images folder contains more than one type of image')
+    errors = oops(errors, len(image_info) == 0,
+                  'Input folder does not contain any images')
+    errors = oops(errors, len(image_info) > 1,
+                  'Images folder contains more than one type of image')
 
     terminate(errors, False)
 
@@ -174,15 +144,19 @@ if __name__ == '__main__':
     image_ext = os.path.splitext(image_info[0])[1][1:].lower()
 
     errors = oops(errors, image_ext != iostate['img_suffix'].lower(),
-        'Image files are of type [{}] but model was trained on [{}]'.format(image_ext,iostate['img_suffix'].lower()))
+                  'Image files are of type [{}] but model was trained on [{}]'.format(image_ext, iostate['img_suffix'].lower()))
 
-    terminate(errors,False)
-
-    # There is no point in caching tiles
-
-    frameops.reset_cache(enabled=False)
+    terminate(errors, False)
 
     # Configure model IO
+
+    from Modules.modelio import ModelIO
+    import Modules.models as models
+
+    error = oops(errors, model_type not in models.models,
+                 'Unknown model type ({})'.format(model_type))
+
+    terminate(errors, False)
 
     io = ModelIO(model_type=model_type,
                  image_width=iostate['image_width'],
@@ -210,36 +184,34 @@ if __name__ == '__main__':
     # make to the definition of the models in models.py, old model files will still
     # work.
 
-    sr = models.BaseSRCNNModel(name=model_type,
-                               io=io)
+    sr = models.BaseSRCNNModel(name=model_type, io=io)
 
     # Compute some handy information
 
-    row_width = (io.image_width - io.trim_left - io.trim_right) // io.base_tile_width
-    row_height = (io.image_height - io.trim_top - io.trim_bottom) // io.base_tile_height
+    row_width = (io.image_width - io.trim_left -
+                 io.trim_right) // io.base_tile_width
+    row_height = (io.image_height - io.trim_top -
+                  io.trim_bottom) // io.base_tile_height
     tiles_per_img = row_width * row_height
     batches_per_image = (tiles_per_img + (io.batch_size - 1)) // io.batch_size
     tile_width = io.base_tile_width + 2 * io.border
     tile_height = io.base_tile_height + 2 * io.border
 
-    print('tiles per image',tiles_per_img)
-    print('batches per image',batches_per_image)
-
-    if K.image_dim_ordering() == 'th':
-        image_shape = (
-            io.channels, tile_width, tile_height)
-    else:
-        image_shape = (
-            tile_width, tile_height, io.channels)
+    print('tiles per image', tiles_per_img)
+    print('batches per image', batches_per_image)
 
     # Process the images
 
     if DEBUG:
         first_path = image_info[0]
 
+    # There is no point in caching tiles since we never revisit them.
+
+    frameops.reset_cache(enabled=False)
+
     for img_path in image_info:
         img_filename = os.path.basename(img_path)
-        print('Predicting',img_filename)
+        print('Predicting', img_filename)
 
         # Generate the tiles for the image. Note that tiles is a generator
         # Also, we must specify quality=1.0 to make sure we get all
@@ -257,23 +229,23 @@ if __name__ == '__main__':
                                    shuffle=False,
                                    jitter=False,
                                    skip=False,
-                                   quality=1.0)
+                                   quality=1.0,
+                                   theano=io.theano)
 
         # Create a batch with all the tiles
 
-        tile_batch = np.empty((tiles_per_img, ) + image_shape)
-        for i,tile in enumerate(tiles):
-            if K.image_dim_ordering() == 'th':
-                tile = tile.transpose((2, 0, 1))
+        tile_batch = np.empty((tiles_per_img, ) + io.image_shape)
+        for i, tile in enumerate(tiles):
             tile_batch[i] = tile
 
         # Debug code to confirm what we are doing
 
         if DEBUG and img_path == first_path:
             fname = os.path.basename(img_path)
-            for i in range(0,tiles_per_img):
-                ipath = os.path.join('Temp', 'PNG', 'IN', fname[0:-4] + '-' + str(i) + '.png')
-                frameops.imsave(ipath,tile_batch[i])
+            for i in range(0, tiles_per_img):
+                ipath = os.path.join('Temp', 'PNG', 'IN',
+                                     fname[0:-4] + '-' + str(i) + '.png')
+                frameops.imsave(ipath, tile_batch[i])
 
         # predicted_tiles = sr.predict_tiles(tile_generator=tile_batches, batches=batches_per_image)
 
@@ -283,9 +255,10 @@ if __name__ == '__main__':
 
         if DEBUG and img_path == first_path:
             fname = os.path.basename(img_path)
-            for i in range(0,tiles_per_img):
-                ipath = os.path.join('Temp', 'PNG', 'OUT', fname[0:-4] + '-' + str(i) + '.png')
-                frameops.imsave(ipath,predicted_tiles[i])
+            for i in range(0, tiles_per_img):
+                ipath = os.path.join('Temp', 'PNG', 'OUT',
+                                     fname[0:-4] + '-' + str(i) + '.png')
+                frameops.imsave(ipath, predicted_tiles[i])
 
         # Merge the tiles back into a single image
 
@@ -296,11 +269,13 @@ if __name__ == '__main__':
                                          pad_top=io.trim_top,
                                          pad_bottom=io.trim_bottom,
                                          pad_left=io.trim_left,
-                                         pad_right=io.trim_right)
+                                         pad_right=io.trim_right,
+                                         theano=io.theano)
 
         # Save the image
 
-        frameops.imsave(os.path.join(paths['output'],img_filename), predicted_image)
+        frameops.imsave(os.path.join(
+            paths['output'], img_filename), predicted_image)
 
     print('')
     print('Predictions completed...')
