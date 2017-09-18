@@ -65,7 +65,7 @@ class ModelState(callbacks.Callback):
 
         with open(self.io.state_path, 'w') as f:
             json.dump(self.state, f, indent=4)
-        print('Completed epoch', self.state['epoch_count'])
+        # print('Completed epoch', self.state['epoch_count'])
 
 
 
@@ -205,7 +205,7 @@ class BaseSRCNNModel(object):
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=epochs,
                                  callbacks=callback_list,
-                                 verbose=0,
+                                 #verbose=0,
                                  validation_data=self.io.validation_data_generator(),
                                  validation_steps=val_count // self.io.batch_size,
                                  initial_epoch=initial_epoch)
@@ -487,6 +487,10 @@ class PUPSR(BaseSRCNNModel):
         return model
 
 # Gene-Perpetuation Unit Super-Resolution Model
+# Using VDSR with Exponential Linear Unit (elu)
+# WHich allows negative values
+# I think the issue with VDSR is the ReLu creating "dead" neurons
+# Will use residuals TODO
 
 class GPUSR(BaseSRCNNModel):
 
@@ -497,14 +501,15 @@ class GPUSR(BaseSRCNNModel):
     # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
+
         model = Sequential()
 
-        model.add(Conv2D(64, (9, 9), activation='relu',
+        model.add(Conv2D(64, (3, 3), activation='elu',
                          padding='same', input_shape=self.io.image_shape))
-        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
+        for i in range(19):
+            model.add(Conv2D(32, (3, 3), activation='elu', padding='same'))
 
+        model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
         adam = optimizers.Adam(lr=.001)
 
         model.compile(optimizer=adam, loss='mse',
@@ -515,7 +520,6 @@ class GPUSR(BaseSRCNNModel):
 
         self.model = model
         return model
-
 
 # Dictionary of all the model classes
 

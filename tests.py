@@ -1,4 +1,6 @@
-
+"""
+    DEPRECIATED
+"""
 import Modules.srcnn as srcnn
 import Modules.setup as setup
 

@@ -33,6 +33,7 @@ class ModelIO():
                  jitter=True,
                  shuffle=True,
                  skip=True,
+                 residual=False,
                  quality=1.0,
                  img_suffix='',
                  paths={}):
@@ -47,6 +48,7 @@ class ModelIO():
         self.channels, self.black_level = channels, black_level
         self.batch_size, self.img_suffix = batch_size, img_suffix
         self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
+        self.residual = residual
         self.quality = quality
         self.paths = paths
 
@@ -144,24 +146,24 @@ class ModelIO():
     # Data generators
 
     def training_data_generator(self):
-        return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip, self.quality)
+        return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip, self.quality, self.residual)
 
     # Validation generator uses all the tiles, not just the best ones.
 
     def validation_data_generator(self):
-        return self._image_generator_frameops(self.validation_path, False, self.shuffle, self.skip, 1.0)
+        return self._image_generator_frameops(self.validation_path, False, self.shuffle, self.skip, 1.0, self.residual)
 
     # Evaluation and Prediction generators will never shuffle, jitter, skip or use just the best tiles.
 
     def evaluation_data_generator(self):
-        return self._image_generator_frameops(self.evaluation_path, False, False, False, 1.0)
+        return self._image_generator_frameops(self.evaluation_path, False, False, False, 1.0, self.residual)
 
     def prediction_data_generator(self):
-        return self._predict_image_generator_frameops(self.predict_path, False, False, False, 1.0)
+        return self._predict_image_generator_frameops(self.predict_path, False, False, False, 1.0, self.residual)
 
     # Frameops versions of image generators
 
-    def _image_generator_frameops(self, directory, shuffle, jitter, skip, quality):
+    def _image_generator_frameops(self, directory, shuffle, jitter, skip, quality, residual):
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
