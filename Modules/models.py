@@ -67,6 +67,28 @@ class ModelState(callbacks.Callback):
             json.dump(self.state, f, indent=4)
         # print('Completed epoch', self.state['epoch_count'])
 
+# GPU : Untested, but may be needed for VDSR
+class AdjustableGradient(callbacks.Callback):
+
+    def __init__(self, optimizer, theta = 1.0):
+
+        self.optimizer = optimizer
+        self.lr = optimizer.lr.get_value()
+        self.theta = theta
+
+    def on_train_begin(self, logs={}):
+
+        print('Starting Gradient Clipping Value: %f' % (self.theta/self.lr))
+        self.optimizer.clipvalue.set_value(self.theta/self.lr)
+
+    def on_epoch_end(self, batch, logs={}):
+
+        # Get current LR
+        if (self.lr != optimizer.lr.get_value()):
+            self.lr = optimizer.lr.get_value()
+            self.optimizer.clipvalue.set_value(self.theta/self.lr)
+            print('Changed Gradient Clipping Value: %f' % (self.theta/self.lr))
+
 
 
 def PSNRLoss(y_true, y_pred):
@@ -205,7 +227,7 @@ class BaseSRCNNModel(object):
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=epochs,
                                  callbacks=callback_list,
-                                 #verbose=0,
+                                 verbose=0,
                                  validation_data=self.io.validation_data_generator(),
                                  validation_steps=val_count // self.io.batch_size,
                                  initial_epoch=initial_epoch)
@@ -487,10 +509,11 @@ class PUPSR(BaseSRCNNModel):
         return model
 
 # Gene-Perpetuation Unit Super-Resolution Model
-# Using VDSR with Exponential Linear Unit (elu)
-# WHich allows negative values
+# Tackles two problems with VDSR, Gradients and 'dead' neurons
+# Using VDSR with Exponential Linear Unit (elu), which allows negative values
 # I think the issue with VDSR is the ReLu creating "dead" neurons
-# Will use residuals TODO
+# Also added gradient clipping and an epsilon
+# TODO Residuals
 
 class GPUSR(BaseSRCNNModel):
 
@@ -510,7 +533,7 @@ class GPUSR(BaseSRCNNModel):
             model.add(Conv2D(32, (3, 3), activation='elu', padding='same'))
 
         model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
-        adam = optimizers.Adam(lr=.001)
+        adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
