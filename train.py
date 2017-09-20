@@ -7,8 +7,9 @@ Usage: train.py [option(s)] ...
         ExpansionSR
         DeepDenoiseSR
         VDSR
-        PUPSR (Testing)
-        GPUSR (Testing)
+        PUPSR
+        GPUSR
+        TestModels : Currently ELU versions of all models
 
 Options are:
 
@@ -163,7 +164,8 @@ if __name__ == '__main__':
                 op = opmatch[0]
                 if op == 'type':
                     model_type, errors = sanitize(model_type, errors, valuecase,
-                                                  value != 'all' and valuecase not in models.models,
+                                                  value != 'all' and value != 'test'
+                                                  and valuecase not in models.models,
                                                   'Unknown model type ({})', valuecase)
                 elif op == 'width':
                     tile_width, errors = sanitize(tile_width, errors, vnum,
@@ -395,7 +397,14 @@ if __name__ == '__main__':
 
     # Train the model
 
-    model_list = models.models if model_type.lower() == 'all' else [model_type]
+
+    if model_type.lower() == 'all':
+        model_list = models.models
+    elif model_type.lower() == 'test':
+        model_list = models.testmodels
+    else:
+        model_list = [model_type]
+
     for model in model_list:
 
         # Put proper model name in the model and state paths
