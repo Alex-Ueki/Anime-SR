@@ -29,10 +29,10 @@ from Modules.modelio import ModelIO
 
 class ModelState(callbacks.Callback):
 
-    def __init__(self, io):
+    def __init__(self, io, verbose=False):
 
         self.io = io
-
+        self.verbose = verbose
         if os.path.isfile(io.state_path):
             print('Loading existing .json state')
             with open(io.state_path, 'r') as f:
@@ -50,7 +50,7 @@ class ModelState(callbacks.Callback):
 
     def on_train_begin(self, logs={}):
 
-        print('Training commences...')
+        if self.verbose: print('Training commences...')
 
     def on_epoch_end(self, batch, logs={}):
 
@@ -65,7 +65,7 @@ class ModelState(callbacks.Callback):
 
         with open(self.io.state_path, 'w') as f:
             json.dump(self.state, f, indent=4)
-        # print('Completed epoch', self.state['epoch_count'])
+        if self.verbose: print('Completed epoch', self.state['epoch_count'])
 
 # GPU : Untested, but may be needed for VDSR
 class AdjustableGradient(callbacks.Callback):
@@ -199,7 +199,7 @@ class BaseSRCNNModel(object):
 
         # Set up the model state, reading in prior results info if available
 
-        model_state = ModelState(self.io)
+        model_state = ModelState(self.io. verbose=False)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
@@ -227,7 +227,7 @@ class BaseSRCNNModel(object):
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=epochs,
                                  callbacks=callback_list,
-                                 verbose=0,
+                                #  verbose=0,
                                  validation_data=self.io.validation_data_generator(),
                                  validation_steps=val_count // self.io.batch_size,
                                  initial_epoch=initial_epoch)
@@ -237,8 +237,6 @@ class BaseSRCNNModel(object):
               (self.__class__.__name__))
 
         for key in ['loss', self.lf]:
-            # GPU : TypeError: 'ModelState' object is not subscriptable
-            # Changed from model_state to model_state.state
             if key in model_state.state['best_values']:
                 print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
                     key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
@@ -479,6 +477,7 @@ class VDSR(BaseSRCNNModel):
         return model
 
 # Parental Unit Pathetic Super-Resolution Model
+# Over-taken by GPU to test elu on BasicSR
 
 class PUPSR(BaseSRCNNModel):
 
@@ -491,10 +490,9 @@ class PUPSR(BaseSRCNNModel):
     def create_model(self, load_weights):
         model = Sequential()
 
-        model.add(Conv2D(64, (9, 9), activation='relu',
+        model.add(Conv2D(64, (9, 9), activation='elu',
                          padding='same', input_shape=self.io.image_shape))
-        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
+        model.add(Conv2D(32, (1, 1), activation='elu', padding='same'))
         model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
 
         adam = optimizers.Adam(lr=.001)

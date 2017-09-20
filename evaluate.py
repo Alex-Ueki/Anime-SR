@@ -7,6 +7,8 @@ Usage: evaluate.py [option(s)] ...
         ExpansionSR
         DeepDenoiseSR
         VDSR
+        PUPSR (Testing)
+        GPUSR (Testing)
 
 Options are:
 
