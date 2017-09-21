@@ -373,11 +373,6 @@ if __name__ == '__main__':
                  lr=lr
                 )
 
-    # Kill the autocreated model_path and state_path
-
-    io.model_path = ''
-    io.state_path = ''
-    
     # Remind user what we're about to do.
 
     print('          Genepool : {}'.format(paths['genepool']))
@@ -420,6 +415,15 @@ if __name__ == '__main__':
 
         for i,organism in enumerate(population):
             if type(organism) is not list:
+                # Delete the model and state files (if any) so we start with
+                # a fresh slate
+                if os.path.isfile(io.model_path):
+                    os.remove(io.model_path)
+                if os.path.isfile(io.state_path):
+                    os.remove(io.state_path)
+
+                # Build a model for the organism, train the model, and record the results
+
                 population[i] = [organism, genomics.fitness(organism, io)]
                 checkpoint(poolpath, population, graveyard, io)
 
