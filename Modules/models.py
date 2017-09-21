@@ -241,8 +241,7 @@ class BaseSRCNNModel(object):
         if verbose:
             if bargraph:
                 print('')
-            print('          Training results for : %s' %
-                  (self.__class__.__name__))
+            print('          Training results for : {}'.format(self.name))
 
             for key in ['loss', self.lf]:
                 if key in model_state.state['best_values']:

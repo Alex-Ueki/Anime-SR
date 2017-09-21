@@ -24,12 +24,14 @@ Options are:
     (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
 """
 
-from Modules.misc import oops, validate, terminate
+from Modules.misc import oops, validate, terminate, set_docstring
 
 import numpy as np
 import sys
 import os
 import json
+
+set_docstring(__doc__)
 
 # Turn debug code on and off
 

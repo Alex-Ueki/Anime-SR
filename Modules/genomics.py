@@ -110,9 +110,13 @@ mutable_codons = [convolutions, convolutions, combinations, introns]
 # A list of codons names is a genome. An expressed genome is one where the
 # codon name is replaced by the values in the codon (the function and connections),
 # and the relative connections have been replaced by absolute connection indexes.
-# Also, a dummy input layer has been spliced on.
+# Also, a dummy input layer is spliced on. Expects a list but will convert a string
+# if provided.
 
 def expressed(sequence):
+
+    if type(sequence) is not list:
+        sequence = sequence.split('-')
 
     # Get the wiring hookups for the sequence
 
@@ -130,8 +134,20 @@ def expressed(sequence):
 
 # Build and compile a keras model from an expressed sequence of codons.
 # Returns the model or None if the compile failed in some way
+#
+# genome    list of codon names (if string, will be converted)
+# layers    expressed(genome). Will be computed if not provided, but caller usually has it
+# shape     shape of model input
+# lr        initial learning rate
+# metrics   callbacks
 
-def build_model(layers, shape=(64,64,3), lr=0.001, metrics=[]):
+def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
+
+    if type(genome) is not list:
+        genome = genome.split('-')
+
+    if layers == None:
+        layers = expressed(genome)
 
     # Wire the layers. As we generate each layer, we update the layers[] list
     # with the constructed layer, so that subsequent layers can be created that
@@ -153,9 +169,10 @@ def build_model(layers, shape=(64,64,3), lr=0.001, metrics=[]):
                 layer_function = deepcopy(layer[0])
 
                 # Also, we can't have two layers with the same name, so make them
-                # unique.
+                # unique. Use the genome code to make it more clear (keep in mind
+                # it does not have a dummy input layer, so -1 offset)
 
-                layer_function.name = layer_function.name + '_' + str(i)
+                layer_function.name = genome[i-1] + '_' + str(i)
 
                 # Our inputs are either a single layer or a list of layers
 
@@ -181,7 +198,7 @@ def build_model(layers, shape=(64,64,3), lr=0.001, metrics=[]):
         raise
 
     except:
-        print('Non-viable model; compilation failed with {}'.format(sys.exc_info()))
+        print('Cannot compile: {}'.format(sys.exc_info()[1]))
         return None
 
 # Determine if a genome is viable (in other words, that the model makes some
@@ -190,7 +207,10 @@ def build_model(layers, shape=(64,64,3), lr=0.001, metrics=[]):
 
 def basic_viability(genome):
 
-    print('Checking viability of ', genome)
+    if type(genome) is not list:
+        genome = genome.split('-')
+
+    print('Checking viability of {}'.format('-'.join(genome)))
 
     expression = expressed(genome)
 
@@ -216,7 +236,7 @@ def basic_viability(genome):
     # Finally, just try and build the model and if it fails, we know we
     # had a problem.
 
-    return build_model(expression) != None
+    return build_model(genome, expression) != None
 
 # Choose a random codon. If items is None, select a random codon. Otherwise
 # Items must be a dict or a list of dicts.
@@ -238,7 +258,7 @@ def random_codon(items=None):
 # between two models, addition of a codon, deletion of a codon, or mutation of
 # a codon. Parameters are:
 #
-# mother    parental genome (list of codons)
+# mother    parental genome (list of codons; if string will be converted)
 # father    parental genome (only used for transposition)
 # min_len   minimum length of the resulting genome
 # max_len   maximum length of the resulting genome
@@ -246,6 +266,12 @@ def random_codon(items=None):
 # viable    viability function; takes a codon list, returns true if it is acceptable
 
 def mutate(mother, father, min_len=3, max_len=30, odds=[3,5,5,8], viable=basic_viability):
+
+    if type(mother) is not list:
+        mother = mother.split('-')
+
+    if type(father) is not list:
+        father = father.split('-')
 
     mother_len = len(mother)
     child = None
@@ -305,8 +331,19 @@ def mutate(mother, father, min_len=3, max_len=30, odds=[3,5,5,8], viable=basic_v
 import types
 
 # Determine the fitness of an organism by creating its model and running it.
+#
+# organism      string or list with genetic code to be tested
+# io            ModelIO parameter record
+# fail_first    fail after first epoch if fitness greater than this value.
+# fail_halfway  fail after midpoint in training if fitness greater than this value.
+#               (None == don't check)
 
-def fitness(organism, io):
+def fitness(genome, io, fail_first=None, fail_halfway=None):
+
+    if type(genome) is not list:
+        genome = genome.split('-')
+
+    organism = '-'.join(genome)
 
     print('Testing fitness of {}'.format(organism))
 
@@ -314,9 +351,7 @@ def fitness(organism, io):
 
     m = BaseSRCNNModel(organism, io)
 
-    layers = expressed(organism.split('-'))
-
-    model = build_model(layers, shape=io.image_shape, lr=io.lr, metrics=[m.evaluation_function])
+    model = build_model(genome, shape=io.image_shape, lr=io.lr, metrics=[m.evaluation_function])
 
     if model == None:
         return 999999.0
@@ -328,6 +363,18 @@ def fitness(organism, io):
 
     try:
 
+        results = m.fit(max_epochs=1, verbose=True, bargraph=False)
+
+        if fail_first != None and results > fail_first:
+            print('Fail_first triggered!')
+            return results
+
+        results = m.fit(max_epochs=io.epochs // 2, verbose=True, bargraph=False)
+
+        if fail_halfway != None and results > fail_halfway:
+            print('Fail_halfway triggered!')
+            return results
+
         results = m.fit(max_epochs=io.epochs, verbose=True, bargraph=False)
 
     except KeyboardInterrupt:
@@ -335,7 +382,7 @@ def fitness(organism, io):
         raise
 
     except:
-        print('Unfittable model; failed with {}'.format(sys.exc_info()))
+        print('Cannot fit: {}'.format(sys.exc_info()[1]))
         results = 999999.0
 
     print('Fitness: ', results)

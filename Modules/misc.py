@@ -6,6 +6,15 @@ import platform
 import os
 import sys
 
+# Will be set by module that imports us
+
+owner_docstring = ''
+
+def set_docstring(docstring):
+
+    global owner_docstring
+    owner_docstring = docstring
+
 # Clear the screen
 
 
@@ -70,6 +79,6 @@ def validate(error_state, new_value, is_error, msg, error_value=None, end_run=Fa
 def terminate(sarah_connor, verbose=True):
     if sarah_connor:
         if verbose:
-            print(__doc__)
+            print(owner_docstring)
         print('')
         sys.exit(1)

@@ -40,13 +40,6 @@ def reset_cache(enabled=True):
     cached_quality = {}
     caching = enabled
 
-"""
-# Keep a copy of the last DPX meta information read
-
-
-last_meta = None
-"""
-
 # Look in folder_path for all the files that are of one of the IMAGETYPES,
 # and return a sorted list of lists containing the absolute paths to those files. So if
 # there are only png files, the result will be a list containing a single list, but if

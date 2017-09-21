@@ -47,32 +47,13 @@ Options are:
     you could specify epochs+=25 to limit the current training run to 25 epochs.
 """
 
-from Modules.modelio import ModelIO
-import Modules.models as models
-import Modules.frameops as frameops
+from Modules.misc import oops, validate, terminate, set_docstring
 
 import numpy as np
 import sys
 import os
 
-# If is_error is true, display message and optionally end the run.
-# return updated error_state
-
-
-def oops(error_state, is_error, msg, error_value=0, end_run=False):
-
-    if is_error:
-        # Have to handle the single/multiple argument case.
-        # if we pass format a simple string using *value it
-        # gets treated as a list of individual characters.
-        if type(error_value) in (list, tuple):
-            print('Error: ' + msg.format(*error_value))
-        else:
-            print('Error: ' + msg.format(error_value))
-        if end_run:
-            terminate(True)
-
-    return error_state or is_error
+set_docstring(__doc__)
 
 # Sanitize input, return a new_value, error tuple
 
@@ -85,17 +66,6 @@ def sanitize(old_value, error_state, new_value, is_error, msg, error_value=None,
         return (old_value, error_state)
     else:
         return (new_value, error_state)
-
-
-# Terminate run if oops errors have been encountered.
-# I have already done penance for this pun.
-
-
-def terminate(sarah_connor, verbose=True):
-    if sarah_connor:
-        if verbose:
-            print(__doc__)
-        sys.exit(1)
 
 
 if __name__ == '__main__':
@@ -112,7 +82,14 @@ if __name__ == '__main__':
     verbose, bargraph = True, True
     paths = {}
 
-    # Parse options
+    # Parse options. Order of options in the list is important if one option is a substring
+    # of the other; the smaller one must come first.
+
+    options = sorted(['type', 'width', 'height', 'border', 'training',
+                      'validation', 'model', 'data', 'state', 'black',
+                      'jitter', 'shuffle', 'skip', 'lr', 'quality',
+                      'trimleft', 'trimright', 'trimtop', 'trimbottom',
+                      'epochs', 'epochs+', 'verbose', 'bargraph'])
 
     errors = False
 
@@ -122,124 +99,98 @@ if __name__ == '__main__':
 
         if len(opvalue) == 1:
             errors = oops(errors, True, 'Invalid option ({})', option)
-        else:
-            op, value = [s.lower() for s in opvalue]
-            _, valuecase = opvalue
+            continue
 
-            # convert boolean arguments to integer
+        op, value = [s.lower() for s in opvalue]
+        _, valuecase = opvalue
 
-            value = '1' if 'true'.startswith(value) else value
-            value = '0' if 'false'.startswith(value) else value
+        # convert boolean arguments to integer
 
-            # convert value to integer and float with default -1
+        value = '1' if 'true'.startswith(value) else value
+        value = '0' if 'false'.startswith(value) else value
 
-            try:
-                fnum = float(value)
-            except ValueError:
-                fnum = -1.0
-            vnum = int(fnum)
+        # convert value to integer and float with default -1
 
-            # Order of options in the list is important if one option is a substring
-            # of the other; the smaller one must come first.
+        try:
+            fnum = float(value)
+        except ValueError:
+            fnum = -1.0
+        vnum = int(fnum)
 
-            options = sorted(['type', 'width', 'height', 'border', 'training',
-                              'validation', 'model', 'data', 'state', 'black',
-                              'jitter', 'shuffle', 'skip', 'lr', 'quality',
-                              'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                              'epochs', 'epochs+', 'verbose', 'bargraph'])
-            opmatch = [s for s in options if s.startswith(op)]
+        # Match option, make sure it isn't ambiguous.
 
-            if len(opmatch) == 0:
-                errors = oops(errors, True, 'Unknown option ({})', op)
-            elif len(opmatch) > 1 and op not in opmatch:
-                errors = oops(errors, True, 'Ambiguous option ({})', op)
-            else:
-                # GPU: we can refactor this check chain by folding the setter and the
-                # error checker into a single function call (as done in the first few
-                # examples below). But I don't think there's a clean way to fold
-                # identical checks into a single handler without storing all the
-                # values in a dictionary, which will complicate the code that actually
-                # uses the values. But we could extract from dict at end of checking.
-                # Thoughts? See this link for some ideas:
-                #
-                # https://stackoverflow.com/questions/11156739/divide-a-dictionary-into-variables
+        opmatch = [s for s in options if s.startswith(op)]
 
-                op = opmatch[0]
-                if op == 'type':
-                    model_type, errors = sanitize(model_type, errors, valuecase,
-                                                  value != 'all' and value != 'test'
-                                                  and valuecase not in models.models,
-                                                  'Unknown model type ({})', valuecase)
-                elif op == 'width':
-                    tile_width, errors = sanitize(tile_width, errors, vnum,
-                                                  vnum <= 0, 'Tile width invalid ({})', option)
-                elif op == 'height':
-                    tile_height = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Tile height invalid ({})', option)
-                elif op == 'border':
-                    tile_border = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Tile border invalid ({})', option)
-                elif op == 'black':
-                    if value != 'auto':
-                        black_level = fnum
-                        errors = oops(errors, fnum <= 0,
-                                      'Black level invalid ({})', option)
-                elif op == 'lr':
-                        initial_lr = fnum
-                        errors = oops(errors, initial_lr <= 0.0 or initial_lr > 0.01,
-                                      'Learning rate should be 0 > lr <= 0.01 ({})', option)
-                elif op == 'quality':
-                        quality = fnum
-                        errors = oops(errors, quality <= 0.0 or quality > 1.0,
-                                      'Quality should be 0 > q <= 1.0 ({})', option)
-                elif op == 'epochs':
-                    epochs = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Max epoch count invalid ({})', option)
-                elif op == 'epochs+':
-                    run_epochs = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Run epoch count invalid ({})', option)
-                elif op == 'trimleft':
-                    trim_left = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Left trim value invalid ({})', option)
-                elif op == 'trimright':
-                    trim_right = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Right trim value invalid ({})', option)
-                elif op == 'trimtop':
-                    trim_top = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Top trim value invalid ({})', option)
-                elif op == 'trimbottom':
-                    trim_bottom = vnum
-                    errors = oops(errors, vnum <= 0,
-                                  'Bottom trim value invalid ({})', option)
-                elif op == 'jitter':
-                    jitter = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Jitter value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op == 'skip':
-                    jitter = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Skip value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op == 'shuffle':
-                    jitter = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op == 'verbose':
-                    verbose = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Verbose value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op == 'bargraph':
-                    bargraph = vnum
-                    errors = oops(errors, vnum != 0 and vnum != 1,
-                                  'Bargraph value invalid ({}). Must be 0, 1, T, F.', option)
-                elif op in ['data', 'training', 'validation', 'model', 'state']:
-                    paths[op] = os.path.abspath(value)
+        if len(opmatch) ==0 or len(opmatch) > 1 and opmatch[0] != op:
+            errors = oops(errors, True, '{} option ({})',
+                          ('Unknown' if len(opmatch) == 0 else 'Ambiguous', op))
+            continue
+
+        op = opmatch[0]
+
+        if op == 'type':
+            model_type = valuecase
+        elif op == 'width':
+            tile_width, errors = validate(
+                errors, vnum, vnum <= 0, 'Tile width invalid ({})', option)
+        elif op == 'height':
+            tile_height, errors = validate(
+                errors, vnum, vnum <= 0, 'Tile height invalid ({})', option)
+        elif op == 'border':
+            tile_border, errors = validate(
+                errors, vnum, vnum <= 0, 'Tile border invalid ({})', option)
+        elif op == 'black' and value != 'auto':
+            black_level, errors = validate(
+                errors, fnum, fnum <= 0, 'Black level invalid ({})', option)
+        elif op == 'lr':
+            initial_lr, errors = validate(
+                errors, fnum, errors, initial_lr <= 0.0 or initial_lr > 0.01,
+                'Learning rate should be 0 > lr <= 0.01 ({})', option)
+        elif op == 'quality':
+            quality, errors = validate(
+                errors, fnum, errors, quality <= 0.0 or quality > 1.0,
+                'Quality should be 0 > q <= 1.0 ({})', option)
+        elif op == 'epochs':
+            epochs, errors = validate(
+                errors, vnum, vnum <= 0, 'Max epoch count invalid ({})', option)
+        elif op == 'epochs+':
+            run_epochs, errors = validate(
+                errors, vnum, vnum <= 0, 'Run epoch count invalid ({})', option)
+        elif op == 'trimleft' or op == 'left':
+            trim_left, errors = validate(
+                errors, vnum, vnum <= 0, 'Left trim value invalid ({})', option)
+        elif op == 'trimright' or op == 'right':
+            trim_right, errors = validate(
+                errors, vnum, vnum <= 0, 'Right trim value invalid ({})', option)
+        elif op == 'trimtop' or op == 'top':
+            trim_top, errors = validate(
+                errors, vnum, vnum <= 0, 'Top trim value invalid ({})', option)
+        elif op == 'trimbottom' or op == 'bottom':
+            trim_bottom, errors = validate(
+                errors, vnum, vnum <= 0, 'Bottom trim value invalid ({})', option)
+        elif op == 'jitter':
+            jitter, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Jitter value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op == 'skip':
+            skip, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Skip value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op == 'shuffle':
+            shuffle, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op == 'verbose':
+            verbose = vnum
+            errors = oops(errors, vnum != 0 and vnum != 1,
+                          'Verbose value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op == 'bargraph':
+            bargraph = vnum
+            errors = oops(errors, vnum != 0 and vnum != 1,
+                          'Bargraph value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op in ['data', 'training', 'validation', 'model', 'state']:
+            paths[op] = value
+
 
     terminate(errors)
 
@@ -271,6 +222,8 @@ if __name__ == '__main__':
     print(' Validation Images : {}'.format(paths['validation']))
 
     # Validation and error checking
+
+    import Modules.frameops as frameops
 
     image_paths = ['training', 'validation']
     sub_folders = ['Alpha', 'Beta']
@@ -408,6 +361,8 @@ if __name__ == '__main__':
 
     # Train the model
 
+    from Modules.modelio import ModelIO
+    import Modules.models as models
 
     if model_type.lower() == 'all':
         model_list = models.models

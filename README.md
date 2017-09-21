@@ -135,6 +135,44 @@ Options are:
     Expects that there will be a matching _state.json file for the model
     (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
 
+Usage: evolve.py [option(s)] ...
+
+    Evolves (hopefully) improved models. In each generation, the 5 best models
+    are retained, and then 15 new models are evolved from them.
+
+Options are:
+
+    genepool=path       path to genepool file, default is {Data}/genepool.json
+    width=nnn           tile width, default=60
+    height=nnn          tile height, default=60
+    border=nnn          border size, default=2
+    lr=.nnn             set initial learning rate. Should be 0.001 or less. Default = 0.001
+    quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
+    black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
+    trimleft=nnn        pixels to trim on image left edge, default = 240; can also use left=nnn
+    trimright=nnn       pixels to trim on image right edge, default = 240; can also use right=nnn
+    trimtop=nnn         pixels to trim on image top edge, default = 0; can also use top=nnn
+    trimbottom=nnn      pixels to trim on image bottom edge, default = 0; can also use bottom=nnn
+    jitter=1|0|T|F      include tiles offset by half a tile across&down when training (but not validation); default=True
+    skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
+    shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
+    data=path           path to the main data folder, default = Data
+    training=path       path to training folder, default = {Data}/train_images/training
+    validation=path     path to validation folder, default = {Data}/train_images/validation
+
+    Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
+
+    Options are overridden by the contents of genepool.json, if any. Thus they are typically only specified on
+    the first run. If t genepool.json file does not exist, it will be created with an initial population similar
+    to some of the models in models.py
+
+    Notes:
+
+        Creates a "Darwinian-{options}-h5" temp file in {Data}/models. It is deleted before every model fit
+        but then automatically created again by Keras.
+
+        There are some hard-coded parameters at present, defined as constants at the start of evolve.py
+
 ```
 
 ## Useful Tools

@@ -1,7 +1,8 @@
 """
 Usage: evolve.py [option(s)] ...
 
-    Evolves (hopefully) improved models
+    Evolves (hopefully) improved models. In each generation, the 5 best models
+    are retained, and then 15 new models are evolved from them.
 
 Options are:
 
@@ -9,8 +10,7 @@ Options are:
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          epoch count, default=10.
-    lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
+    lr=.nnn             set initial learning rate. Should be 0.001 or less. Default = 0.001
     quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240; can also use left=nnn
@@ -27,20 +27,37 @@ Options are:
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
     Options are overridden by the contents of genepool.json, if any. Thus they are typically only specified on
-    the first run.
+    the first run. If t genepool.json file does not exist, it will be created with an initial population similar
+    to some of the models in models.py
 
-    Note: creates a "Darwinian-{options}-h5" temp file in {Data}/models. It is deleted before every model fit
-    but then automatically created again by Keras.
+    Notes:
+
+        Creates a "Darwinian-{options}-h5" temp file in {Data}/models. It is deleted before every model fit
+        but then automatically created again by Keras.
+
+        There are some hard-coded parameters at present, defined as constants at the start of evolve.py
 
 """
 
-from Modules.misc import oops, validate, terminate
+from Modules.misc import oops, validate, terminate, set_docstring
 
 import numpy as np
 import sys
 import os
 import json
 import random
+
+set_docstring(__doc__)
+
+# Evolutionary constants (not saved in the JSON file)
+
+MAX_POPULATION = 20         # Maximum size of population
+MIN_POPULATION = 5          # Minimum size of population
+
+EPOCHS = 10                 # Number of epochs to train
+FAIL_FIRST = -33.0          # Models must attain fitness < this after first epoch
+FAIL_HALFWAY = -39.0        # Modles must attain fitness < this after EPOCHS // 2 epochs
+
 
 # Checkpoint state to genepool.json file
 
@@ -73,7 +90,7 @@ if __name__ == '__main__':
                       'validation', 'data', 'black',
                       'jitter', 'shuffle', 'skip', 'lr', 'quality',
                       'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                      'left', 'right', 'top', 'bottom', 'epochs'])
+                      'left', 'right', 'top', 'bottom'])
 
     # Parse options
 
@@ -132,15 +149,12 @@ if __name__ == '__main__':
                 errors, fnum, fnum <= 0, 'Black level invalid ({})', option)
         elif op == 'lr':
             lr, errors = validate(
-                errors, fnum, errors, lr <= 0.0 or lr > 0.01,
-                'Learning rate should be 0 > lr <= 0.01 ({})', option)
+                errors, fnum, errors, fnum <= 0.0 or fnum > 0.01,
+                'Learning rate should be 0 > and <= 0.01 ({})', option)
         elif op == 'quality':
             quality, errors = validate(
-                errors, fnum, errors, quality <= 0.0 or quality > 1.0,
-                'Quality should be 0 > q <= 1.0 ({})', option)
-        elif op == 'epochs':
-            epochs, errors = validate(
-                errors, vnum, vnum <= 0, 'Max epoch count invalid ({})', option)
+                errors, fnum, errors, fnum <= 0.0 or fnum > 1.0,
+                'Quality should be 0 > and <= 1.0 ({})', option)
         elif op == 'trimleft' or op == 'left':
             trim_left, errors = validate(
                 errors, vnum, vnum <= 0, 'Left trim value invalid ({})', option)
@@ -370,7 +384,7 @@ if __name__ == '__main__':
                  quality=quality,
                  img_suffix=img_suffix,
                  paths=paths,
-                 epochs=epochs,
+                 epochs=EPOCHS,
                  lr=lr
                 )
 
@@ -380,7 +394,11 @@ if __name__ == '__main__':
     print('        Tile Width : {}'.format(tile_width))
     print('       Tile Height : {}'.format(tile_height))
     print('       Tile Border : {}'.format(tile_border))
-    print('        Max Epochs : {}'.format(epochs))
+    print('    Min Population : {}'.format(MIN_POPULATION))
+    print('    Max Population : {}'.format(MAX_POPULATION))
+    print('   Epochs to train : {}'.format(EPOCHS))
+    print('        Fail First > {}'.format(FAIL_FIRST))
+    print('      Fail Halfway > {}'.format(FAIL_HALFWAY))
     print('    Data root path : {}'.format(paths['data']))
     print('   Training Images : {}'.format(paths['training']))
     print(' Validation Images : {}'.format(paths['validation']))
@@ -404,18 +422,13 @@ if __name__ == '__main__':
     import Modules.models as models
     import Modules.genomics as genomics
 
-    # these will later be option parameters
-
-    max_population = 20
-    min_population = 5
-
     # Repeat until program terminated.
 
     while True:
         # Ensure we have fitness values for all the organisms in the population
 
-        for i,organism in enumerate(population):
-            if type(organism) is not list:
+        for i,genome in enumerate(population):
+            if type(genome) is not list:
                 # Delete the model and state files (if any) so we start with
                 # a fresh slate
                 if os.path.isfile(io.model_path):
@@ -425,17 +438,16 @@ if __name__ == '__main__':
 
                 # Build a model for the organism, train the model, and record the results
 
-                population[i] = [organism, genomics.fitness(organism, io)]
+                population[i] = [genome, genomics.fitness(genome, io, fail_first=FAIL_FIRST, fail_halfway=FAIL_HALFWAY)]
                 checkpoint(poolpath, population, graveyard, io)
 
-        # If our population has expanded to the maximum size, kill the least
-        # fit organisms.
+        # If our population has expanded to the maximum size, kill the least fit organisms.
 
-        if len(population) >= max_population:
-            print('Trimming population to {}...'.format(min_population))
+        if len(population) >= MAX_POPULATION:
+            print('Trimming population to {}...'.format(MIN_POPULATION))
             population.sort(key=lambda org: org[1])
-            graveyard.extend(population[min_population:])
-            population = population[:min_population]
+            graveyard.extend(population[MIN_POPULATION:])
+            population = population[:MIN_POPULATION]
             checkpoint(poolpath, population, graveyard, io)
 
         # Expand the population to the maximum size.
@@ -445,7 +457,7 @@ if __name__ == '__main__':
 
         print('Creating new children')
 
-        while len(children) < (max_population - len(parents)):
+        while len(children) < (MAX_POPULATION - len(parents)):
             mother, father = [p.split('-') for p in random.sample(parents,2)]
             child = '-'.join(genomics.mutate(mother, father))
             if child not in parents and child not in children and child not in graveyard:
