@@ -34,6 +34,8 @@ Options are:
     validation=path     path to validation folder, default = {Data}/train_images/validation
     model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
     state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
+    verbose=1|0|T|F     display verbose training output, default = True
+    bargraph=1|0|T|F    display bargraph of training progress, default = True
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
@@ -107,6 +109,7 @@ if __name__ == '__main__':
     black_level, quality = -1.0, 1.0
     jitter, shuffle, skip = 1, 1, 1
     initial_lr = -1.0 # PU: if no learning rate manually specified, model default will be used
+    verbose, bargraph = True, True
     paths = {}
 
     # Parse options
@@ -143,7 +146,7 @@ if __name__ == '__main__':
                               'validation', 'model', 'data', 'state', 'black',
                               'jitter', 'shuffle', 'skip', 'lr', 'quality',
                               'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                              'epochs', 'epochs+'])
+                              'epochs', 'epochs+', 'verbose', 'bargraph'])
             opmatch = [s for s in options if s.startswith(op)]
 
             if len(opmatch) == 0:
@@ -227,6 +230,14 @@ if __name__ == '__main__':
                     jitter = vnum
                     errors = oops(errors, vnum != 0 and vnum != 1,
                                   'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
+                elif op == 'verbose':
+                    verbose = vnum
+                    errors = oops(errors, vnum != 0 and vnum != 1,
+                                  'Verbose value invalid ({}). Must be 0, 1, T, F.', option)
+                elif op == 'bargraph':
+                    bargraph = vnum
+                    errors = oops(errors, vnum != 0 and vnum != 1,
+                                  'Bargraph value invalid ({}). Must be 0, 1, T, F.', option)
                 elif op in ['data', 'training', 'validation', 'model', 'state']:
                     paths[op] = os.path.abspath(value)
 
@@ -455,7 +466,7 @@ if __name__ == '__main__':
         # which does not happen until we fit(). So we have to pass both
         # the max epoch and the run # of epochs.
 
-        sr.fit(max_epochs=epochs, run_epochs=run_epochs)
+        sr.fit(max_epochs=epochs, run_epochs=run_epochs, verbose=verbose, bargraph=bargraph)
 
     print('')
     print('Training completed...')

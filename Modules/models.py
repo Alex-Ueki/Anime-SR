@@ -43,7 +43,7 @@ class ModelState(callbacks.Callback):
 
             self.state['io'] = io.asdict()
         else:
-            self.state = { 'epoch_count': -1,
+            self.state = { 'epoch_count': 0,
                            'best_values': {},
                            'best_epoch': {},
                            'io': io.asdict()
@@ -51,18 +51,19 @@ class ModelState(callbacks.Callback):
 
     def on_train_begin(self, logs={}):
 
-        if self.verbose: print('Training commences...')
+        if self.verbose:
+            print('Training commences...')
 
     def on_epoch_end(self, batch, logs={}):
 
-        # Currently, for everything we track, lower is better
+        self.state['epoch_count'] += 1
+
+        # Currently, for everything we track, lower is better.
 
         for k in logs:
             if k not in self.state['best_values'] or logs[k] < self.state['best_values'][k]:
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
-
-        self.state['epoch_count'] += 1
 
         with open(self.io.state_path, 'w') as f:
             json.dump(self.state, f, indent=4)
@@ -178,7 +179,7 @@ class BaseSRCNNModel(object):
     # Uses images in self.io.training_path for Training
     # Uses images in self.io.validation_path for Validation
 
-    def fit(self, max_epochs=255, run_epochs=0):
+    def fit(self, max_epochs=255, run_epochs=0, verbose=True, bargraph=True):
 
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
@@ -188,7 +189,7 @@ class BaseSRCNNModel(object):
                                                     factor=0.9,
                                                     min_lr=0.0002,
                                                     patience=10,
-                                                    verbose=1)
+                                                    verbose=verbose)
 
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
@@ -196,13 +197,13 @@ class BaseSRCNNModel(object):
         model_checkpoint = callbacks.ModelCheckpoint(self.io.model_path,
                                                      monitor=self.val_lf,
                                                      save_best_only=True,
-                                                     verbose=1,
+                                                     verbose=verbose,
                                                      mode='min',
                                                      save_weights_only=False)
 
         # Set up the model state. Can potentially load saved state.
 
-        model_state = ModelState(self.io, verbose=False)
+        model_state = ModelState(self.io, verbose=verbose)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
@@ -217,36 +218,40 @@ class BaseSRCNNModel(object):
                          learning_rate,
                          model_state]
 
-        print('Training model : {}'.format(self.io.name))
+        print('Training model : {}'.format(self.io.model_type))
 
-        # Offset epoch counts if we are resuming training. If this is the first
-        # run, epoch_count will be initialized to -1
+        # Offset epoch counts if we are resuming training.
 
-        initial_epoch = model_state.state['epoch_count'] + 1
+        initial_epoch = model_state.state['epoch_count']
 
-        epochs = max_epochs + 1 if run_epochs <= 0 else initial_epoch + run_epochs
+        epochs = max_epochs if run_epochs <= 0 else initial_epoch + run_epochs
+
+        # PU: There is an inconsistency when Keras prints that it has saved an improved
+        # model. It reports that it happened in the previous epoch.
 
         self.model.fit_generator(self.io.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=epochs,
                                  callbacks=callback_list,
-                                #  verbose=0,
+                                 verbose=bargraph,
                                  validation_data=self.io.validation_data_generator(),
                                  validation_steps=val_count // self.io.batch_size,
                                  initial_epoch=initial_epoch)
 
-        print('')
-        print('          Training results for : %s' %
-              (self.__class__.__name__))
+        if verbose:
+            if bargraph:
+                print('')
+            print('          Training results for : %s' %
+                  (self.__class__.__name__))
 
-        for key in ['loss', self.lf]:
-            if key in model_state.state['best_values']:
-                print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
-                    key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
-                vkey = 'val_' + key
-                print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
-                    vkey, model_state.state['best_values'][vkey], model_state.state['best_epoch'][vkey]))
-        print('')
+            for key in ['loss', self.lf]:
+                if key in model_state.state['best_values']:
+                    print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
+                        key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
+                    vkey = 'val_' + key
+                    print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
+                        vkey, model_state.state['best_values'][vkey], model_state.state['best_epoch'][vkey]))
+            print('')
 
         # PU: Changed to return the best validation results
 
@@ -499,12 +504,6 @@ class PUPSR(BaseSRCNNModel):
         c = Conv2D(32, (1, 1), activation='elu', padding='same')(b)
         d = Conv2D(self.io.channels, (5, 5), padding='same')(c)
         model = Model(a, d)
-
-        print(a)
-        print(b)
-        print(c)
-        print(d)
-        print(model)
 
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 

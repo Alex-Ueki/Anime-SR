@@ -47,7 +47,7 @@ See *Notes.md* for useful tips / tricks / comments
 ## Usage
 
 ```
-**train.py [option(s)] ...**
+train.py [option(s)] ...
 
     Trains a model. The available models are:
 
@@ -79,6 +79,8 @@ Options are:
     validation=path     path to validation folder, default = {Data}/train_images/validation
     model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
     state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
+    verbose=1|0|T|F     display verbose training output, default = True
+    bargraph=1|0|T|F    display bargraph of training progress, default = True
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
@@ -89,7 +91,7 @@ Options are:
     previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,
     you could specify epochs+=25 to limit the current training run to 25 epochs.
 
-**evaluate.py [option(s)] ...**
+evaluate.py [option(s)] ...
 
       Evaluate models. The available models are:
 
@@ -111,7 +113,7 @@ Options are:
         Expects that there will be a matching _state.json file for the model
         (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
 
-**predict.py [option(s)] ...**
+predict.py [option(s)] ...
 
     Predicts images by applying model. The available models are:
 
