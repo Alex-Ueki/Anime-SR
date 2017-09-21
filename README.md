@@ -1,7 +1,8 @@
 # Anime Image Super Resolution using in Keras 2+ (TensorFlow Backend)
 
-Tools for investigating techniques for improved upconversion of
-SD video to HD.
+Tools for investigating techniques for improved upconversion of SD video to HD.
+
+Training dataset (remove this link before publishing repo): https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0
 
 ## Credits
 

@@ -7,6 +7,8 @@ Usage: evaluate.py [option(s)] ...
         ExpansionSR
         DeepDenoiseSR
         VDSR
+        PUPSR (Testing)
+        GPUSR (Testing)
 
 Options are:
 
@@ -33,6 +35,7 @@ import json
 
 DEBUG = False
 
+# TODO Implement ALL functionality for evaluation
 
 if __name__ == '__main__':
 

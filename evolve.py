@@ -373,6 +373,11 @@ if __name__ == '__main__':
                  lr=lr
                 )
 
+    # Kill the autocreated model_path and state_path
+
+    io.model_path = ''
+    io.state_path = ''
+    
     # Remind user what we're about to do.
 
     print('          Genepool : {}'.format(paths['genepool']))
@@ -442,5 +447,5 @@ if __name__ == '__main__':
                 children.append(child)
 
         population.extend(children)
-        
+
         checkpoint(poolpath, population, graveyard, io)

@@ -31,9 +31,11 @@ from Modules.modelio import ModelIO
 class ModelState(callbacks.Callback):
 
     def __init__(self, io, load_state=True, save_state=True):
+    def __init__(self, io, verbose=False, load_state=True, save_state=True):
 
         self.io = io
         self.save_state = save_state
+        self.verbose = verbose
 
         if load_state and os.path.isfile(io.state_path):
             print('Loading existing .json state')
@@ -52,7 +54,7 @@ class ModelState(callbacks.Callback):
 
     def on_train_begin(self, logs={}):
 
-        print('Training commences...')
+        if self.verbose: print('Training commences...')
 
     def on_epoch_end(self, batch, logs={}):
 
@@ -68,6 +70,8 @@ class ModelState(callbacks.Callback):
         if self.save_state:
             with open(self.io.state_path, 'w') as f:
                 json.dump(self.state, f, indent=4)
+
+        if self.verbose: print('Completed epoch', self.state['epoch_count'])
 
 # GPU : Untested, but may be needed for VDSR
 class AdjustableGradient(callbacks.Callback):
@@ -201,7 +205,7 @@ class BaseSRCNNModel(object):
 
         # Set up the model state. Can potentially load saved state.
 
-        model_state = ModelState(self.io, load_state=load_state, save_state=save_state)
+        model_state = ModelState(self.io, verbose=False, load_state=load_state, save_state=save_state)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
@@ -229,7 +233,7 @@ class BaseSRCNNModel(object):
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=epochs,
                                  callbacks=callback_list,
-                                 verbose=0,
+                                #  verbose=0,
                                  validation_data=self.io.validation_data_generator(),
                                  validation_steps=val_count // self.io.batch_size,
                                  initial_epoch=initial_epoch)
@@ -239,8 +243,6 @@ class BaseSRCNNModel(object):
               (self.__class__.__name__))
 
         for key in ['loss', self.lf]:
-            # GPU : TypeError: 'ModelState' object is not subscriptable
-            # Changed from model_state to model_state.state
             if key in model_state.state['best_values']:
                 print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
                     key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
@@ -460,6 +462,7 @@ class VDSR(BaseSRCNNModel):
     def create_model(self, load_weights):
 
         init = Input(shape=self.io.image_shape)
+
         x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
 
         for i in range(0, 19):
@@ -553,8 +556,6 @@ class GPUSR(BaseSRCNNModel):
         self.model = model
         return model
 
-# Dictionary of all the model classes
-
 
 models = {'BasicSR': BasicSR,
           'VDSR': VDSR,
@@ -563,3 +564,165 @@ models = {'BasicSR': BasicSR,
           'PUPSR': PUPSR,
           'GPUSR': GPUSR
           }
+
+"""
+    TestModels section
+     Define all experimental models
+     train.py can train this models using type=test
+"""
+
+class ELUBasicSR(BaseSRCNNModel):
+
+    def __init__(self, io):
+
+        super(ELUBasicSR, self).__init__('BasicSR', io)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+        model = Sequential()
+
+        model.add(Conv2D(64, (9, 9), activation='elu',
+                         padding='same', input_shape=self.io.image_shape))
+        model.add(Conv2D(32, (1, 1), activation='elu', padding='same'))
+        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
+
+        adam = optimizers.Adam(lr=.001)
+
+        model.compile(optimizer=adam, loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.io.model_path)
+
+        self.model = model
+        return model
+
+class ELUExpansionSR(BaseSRCNNModel):
+
+    def __init__(self, io):
+
+        super(ELUExpansionSR, self).__init__('ExpansionSR', io)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+
+        init = Input(shape=self.io.image_shape)
+        x = Conv2D(64, (9, 9), activation='elu',
+                   padding='same', name='level1')(init)
+
+        x1 = Conv2D(32, (1, 1), activation='elu',
+                    padding='same', name='level1_1')(x)
+        x2 = Conv2D(32, (3, 3), activation='elu',
+                    padding='same', name='level1_2')(x)
+        x3 = Conv2D(32, (5, 5), activation='elu',
+                    padding='same', name='level1_3')(x)
+
+        x = Average()([x1, x2, x3])
+
+        out = Conv2D(self.io.channels, (5, 5), activation='elu',
+                     padding='same', name='output')(x)
+
+        model = Model(init, out)
+
+        adam = optimizers.Adam(lr=.001)
+
+        model.compile(optimizer=adam, loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.io.model_path)
+
+        self.model = model
+        return model
+
+
+class ELUDeepDenoiseSR(BaseSRCNNModel):
+
+    def __init__(self, io):
+
+        super(ELUDeepDenoiseSR, self).__init__('DeepDenoiseSR', io)
+
+    def create_model(self, load_weights):
+
+        init = Input(shape=self.io.image_shape)
+        c1 = Conv2D(64, (3, 3), activation='elu', padding='same')(init)
+        c1 = Conv2D(64, (3, 3), activation='elu', padding='same')(c1)
+
+        x = MaxPooling2D((2, 2))(c1)
+
+        c2 = Conv2D(128, (3, 3), activation='elu', padding='same')(x)
+        c2 = Conv2D(128, (3, 3), activation='elu', padding='same')(c2)
+
+        x = MaxPooling2D((2, 2))(c2)
+
+        c3 = Conv2D(256, (3, 3), activation='elu', padding='same')(x)
+
+        x = UpSampling2D()(c3)
+
+        c2_2 = Conv2D(128, (3, 3), activation='elu', padding='same')(x)
+        c2_2 = Conv2D(128, (3, 3), activation='elu', padding='same')(c2_2)
+
+        m1 = Add()([c2, c2_2])
+        m1 = UpSampling2D()(m1)
+
+        c1_2 = Conv2D(64, (3, 3), activation='elu', padding='same')(m1)
+        c1_2 = Conv2D(64, (3, 3), activation='elu', padding='same')(c1_2)
+
+        m2 = Add()([c1, c1_2])
+
+        decoded = Conv2D(self.io.channels, (5, 5), activation='linear',
+                         padding='same')(m2)
+
+        model = Model(init, decoded)
+
+        adam = optimizers.Adam(lr=.001)
+
+        model.compile(optimizer=adam, loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.io.model_path)
+
+        self.model = model
+        return model
+
+class ELUVDSR(BaseSRCNNModel):
+
+    def __init__(self, io):
+
+        super(ELUVDSR, self).__init__('VDSR', io)
+
+    def create_model(self, load_weights):
+        model = Sequential()
+
+        model.add(Conv2D(64, (3, 3), activation='elu',
+                         padding='same', input_shape=self.io.image_shape))
+        for i in range(19):
+            model.add(Conv2D(32, (3, 3), activation='elu', padding='same'))
+
+        model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
+        adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
+
+        model.compile(optimizer=adam, loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.io.model_path)
+
+        self.model = model
+        return model
+
+
+testmodels = {'ELUBasicSR': ELUBasicSR,
+              'ELUVDSR': ELUVDSR,
+              'ELUDeepDenoiseSR': ELUDeepDenoiseSR,
+              'ELUExpansionSR': ELUExpansionSR
+              }
+
+models.update(testmodels) # Adds test models in all
+
+"""
+     TODO : Genetic Models section
+"""
