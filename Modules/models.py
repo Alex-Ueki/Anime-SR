@@ -26,17 +26,15 @@ from Modules.modelio import ModelIO
 #   "io" : { dictionary of io class state values }
 # }
 #
-# PU: Add history when time permits
 
 class ModelState(callbacks.Callback):
 
-    def __init__(self, io, verbose=False, load_state=True, save_state=True):
+    def __init__(self, io, verbose=False):
 
         self.io = io
-        self.save_state = save_state
         self.verbose = verbose
 
-        if load_state and os.path.isfile(io.state_path):
+        if os.path.isfile(io.state_path):
             print('Loading existing .json state')
             with open(io.state_path, 'r') as f:
                 self.state = json.load(f)
@@ -66,13 +64,13 @@ class ModelState(callbacks.Callback):
 
         self.state['epoch_count'] += 1
 
-        if self.save_state:
-            with open(self.io.state_path, 'w') as f:
-                json.dump(self.state, f, indent=4)
+        with open(self.io.state_path, 'w') as f:
+            json.dump(self.state, f, indent=4)
 
         if self.verbose: print('Completed epoch', self.state['epoch_count'])
 
 # GPU : Untested, but may be needed for VDSR
+
 class AdjustableGradient(callbacks.Callback):
 
     def __init__(self, optimizer, theta = 1.0):
@@ -180,7 +178,7 @@ class BaseSRCNNModel(object):
     # Uses images in self.io.training_path for Training
     # Uses images in self.io.validation_path for Validation
 
-    def fit(self, max_epochs=255, run_epochs=0, load_state=True, save_state=True):
+    def fit(self, max_epochs=255, run_epochs=0):
 
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
@@ -204,7 +202,7 @@ class BaseSRCNNModel(object):
 
         # Set up the model state. Can potentially load saved state.
 
-        model_state = ModelState(self.io, verbose=False, load_state=load_state, save_state=save_state)
+        model_state = ModelState(self.io, verbose=False)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
