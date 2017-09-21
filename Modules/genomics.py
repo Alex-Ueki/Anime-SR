@@ -51,8 +51,6 @@ convolutions = {
     "c2567" : [Conv2D(256, (7, 7), activation='elu', padding='same'), -1],
     "c2569" : [Conv2D(256, (9, 9), activation='elu', padding='same'), -1],
 
-    "c643b" : [Conv2D(64, (3, 3), activation='elu', padding='same'), -1],
-
 }
 
 # Combinations combine multiple layers. If a layer is the source for a combiner,
@@ -135,38 +133,38 @@ def expressed(sequence):
 
 def build_model(layers, shape=(64,64,3), lr=0.001, metrics=[]):
 
+    # Wire the layers. As we generate each layer, we update the layers[] list
+    # with the constructed layer, so that subsequent layers can be created that
+    # link back to them.
+
+    for i,layer in enumerate(layers):
+        #print(i)
+        #[print(l) for l in layers]
+        #print('')
+        if i == 0:
+            # Set up the input layer (which expressed() set up as a dummy layer).
+            layers[0] = Input(shape=shape)
+        else:
+            # If we do not deep copy the layer object, then if the model reuses
+            # the same type layer type, keras bombs.
+
+            layer_function = deepcopy(layer[0])
+
+            # Also, we can't have two layers with the same name, so make them
+            # unique.
+
+            layer_function.name = layer_function.name + '_' + str(i)
+
+            # Our inputs are either a single layer or a list of layers
+
+            layer_inputs = [layers[n] for n in layer[1:]]
+            #print('layer function:',layer_function)
+            if len(layer_inputs) == 1:
+                layer_inputs = layer_inputs[0]
+            #print('layer inputs:',layer_inputs)
+            layers[i] = layer_function(layer_inputs)
+
     try:
-
-        # Wire the layers. As we generate each layer, we update the layers[] list
-        # with the constructed layer, so that subsequent layers can be created that
-        # link back to them.
-
-        for i,layer in enumerate(layers):
-            #print(i)
-            #[print(l) for l in layers]
-            #print('')
-            if i == 0:
-                # Set up the input layer (which expressed() set up as a dummy layer).
-                layers[0] = Input(shape=shape)
-            else:
-                # If we do not deep copy the layer object, then if the model reuses
-                # the same type layer type, keras bombs.
-
-                layer_function = deepcopy(layer[0])
-
-                # Also, we can't have two layers with the same name, so make them
-                # unique.
-
-                layer_function.name = layer_function.name + '_' + str(i)
-
-                # Our inputs are either a single layer or a list of layers
-
-                layer_inputs = [layers[n] for n in layer[1:]]
-                #print('layer function:',layer_function)
-                if len(layer_inputs) == 1:
-                    layer_inputs = layer_inputs[0]
-                #print('layer inputs:',layer_inputs)
-                layers[i] = layer_function(layer_inputs)
 
         # Create and compile the model
 
@@ -312,7 +310,7 @@ def fitness(organism, io):
 
     print('Testing fitness of {}'.format(organism))
 
-    io.name = organism
+    io.model_type = organism
 
     m = BaseSRCNNModel(organism, io)
 
@@ -325,11 +323,22 @@ def fitness(organism, io):
 
     m.model = model
 
-    # Now we have a compiled model, execute it.
+    # Now we have a compiled model, execute it - or at least try to, there are still some
+    # models that may bomb out
 
-    results = m.fit(max_epochs=io.epochs, load_state=False, save_state=False)
+    try:
+
+        results = m.fit(max_epochs=io.epochs, verbose=True, bargraph=False)
+
+    except KeyboardInterrupt:
+
+        raise
+
+    except:
+        print('Unfittable model; failed with {}'.format(sys.exc_info()))
+        results = 999999.0
+
     print('Fitness: ', results)
-
     return results
 
 

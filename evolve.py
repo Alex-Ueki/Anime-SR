@@ -29,6 +29,9 @@ Options are:
     Options are overridden by the contents of genepool.json, if any. Thus they are typically only specified on
     the first run.
 
+    Note: creates a "Darwinian-{options}-h5" temp file in {Data}/models. It is deleted before every model fit
+    but then automatically created again by Keras.
+
 """
 
 from Modules.misc import oops, validate, terminate
@@ -206,8 +209,6 @@ if __name__ == '__main__':
         for path in ['data', 'training', 'validation']:
             if path + '_path' in genepool['io']:
                 paths[path] = genepool['io'][path + '_path']
-
-    print(paths)
 
     # Validation and error checking
 
