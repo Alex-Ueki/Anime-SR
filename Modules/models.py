@@ -30,7 +30,6 @@ from Modules.modelio import ModelIO
 
 class ModelState(callbacks.Callback):
 
-    def __init__(self, io, load_state=True, save_state=True):
     def __init__(self, io, verbose=False, load_state=True, save_state=True):
 
         self.io = io
