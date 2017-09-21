@@ -445,7 +445,7 @@ if __name__ == '__main__':
 
         print('Creating new children')
 
-        while len(children) < (max_population - min_population):
+        while len(children) < (max_population - len(parents)):
             mother, father = [p.split('-') for p in random.sample(parents,2)]
             child = '-'.join(genomics.mutate(mother, father))
             if child not in parents and child not in children and child not in graveyard:

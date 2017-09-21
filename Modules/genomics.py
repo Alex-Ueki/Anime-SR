@@ -137,34 +137,34 @@ def build_model(layers, shape=(64,64,3), lr=0.001, metrics=[]):
     # with the constructed layer, so that subsequent layers can be created that
     # link back to them.
 
-    for i,layer in enumerate(layers):
-        #print(i)
-        #[print(l) for l in layers]
-        #print('')
-        if i == 0:
-            # Set up the input layer (which expressed() set up as a dummy layer).
-            layers[0] = Input(shape=shape)
-        else:
-            # If we do not deep copy the layer object, then if the model reuses
-            # the same type layer type, keras bombs.
-
-            layer_function = deepcopy(layer[0])
-
-            # Also, we can't have two layers with the same name, so make them
-            # unique.
-
-            layer_function.name = layer_function.name + '_' + str(i)
-
-            # Our inputs are either a single layer or a list of layers
-
-            layer_inputs = [layers[n] for n in layer[1:]]
-            #print('layer function:',layer_function)
-            if len(layer_inputs) == 1:
-                layer_inputs = layer_inputs[0]
-            #print('layer inputs:',layer_inputs)
-            layers[i] = layer_function(layer_inputs)
-
     try:
+
+        for i,layer in enumerate(layers):
+            #print(i)
+            #[print(l) for l in layers]
+            #print('')
+            if i == 0:
+                # Set up the input layer (which expressed() set up as a dummy layer).
+                layers[0] = Input(shape=shape)
+            else:
+                # If we do not deep copy the layer object, then if the model reuses
+                # the same type layer type, keras bombs.
+
+                layer_function = deepcopy(layer[0])
+
+                # Also, we can't have two layers with the same name, so make them
+                # unique.
+
+                layer_function.name = layer_function.name + '_' + str(i)
+
+                # Our inputs are either a single layer or a list of layers
+
+                layer_inputs = [layers[n] for n in layer[1:]]
+                #print('layer function:',layer_function)
+                if len(layer_inputs) == 1:
+                    layer_inputs = layer_inputs[0]
+                #print('layer inputs:',layer_inputs)
+                layers[i] = layer_function(layer_inputs)
 
         # Create and compile the model
 
