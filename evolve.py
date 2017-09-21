@@ -1,21 +1,15 @@
 """
-Usage: train.py [option(s)] ...
+Usage: evolve.py [option(s)] ...
 
-    Trains a model. The available models are:
-
-        BasicSR
-        ExpansionSR
-        DeepDenoiseSR
-        VDSR
+    Evolves (hopefully) improved models
 
 Options are:
 
-    type=model          model type, default is BasicSR
+    genepool=path       path to genepool file, default is {Data}/genepool.json
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
-    epochs=nnn          max epoch count, default=100. See below for more details
-    epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
+    epochs=nnn          epoch count, default=10.
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
     quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
@@ -29,17 +23,12 @@ Options are:
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
-    model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
-    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
-    You can terminate a training session with ^C, and then resume training by reissuing the same command. The model's state
-    is completely stored in the .h5 file, and the training state is in the _state.json file.
+    Options are overridden by the contents of genepool.json, if any. Thus they are typically only specified on
+    the first run.
 
-    The epochs value is the maximum number of epochs that will be trained **over multiple sessions**. So if you have
-    previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,
-    you could specify epochs+=25 to limit the current training run to 25 epochs.
 """
 
 from Modules.misc import oops, validate, terminate
@@ -47,29 +36,41 @@ from Modules.misc import oops, validate, terminate
 import numpy as np
 import sys
 import os
+import json
+import random
+
+# Checkpoint state to genepool.json file
+
+def checkpoint(path, population, graveyard, io):
+
+    state = { 'population': population,
+              'graveyard': graveyard,
+              'io': io.asdict()
+            }
+
+    with open(path, 'w') as f:
+        json.dump(state, f, indent=4)
 
 if __name__ == '__main__':
 
     # Initialize defaults. Note that we trim 240 pixels off right and left, this is
     # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
 
-    model_type = 'BasicSR'
-    tile_width, tile_height, tile_border, epochs, run_epochs = 60, 60, 2, 100, -1
+    tile_width, tile_height, tile_border, epochs = 60, 60, 2, 10
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
-    black_level, quality = -1.0, 1.0
+    black_level, quality = -1.0, 0.5
     jitter, shuffle, skip = 1, 1, 1
-    initial_lr = -1.0  # PU: if no learning rate manually specified, model default will be used
+    lr = 0.001
     paths = {}
 
     # Order of options in this list can be important; if one option is a substring
     # of the other, the smaller one must come first.
 
-    options = sorted(['type', 'width', 'height', 'border', 'training',
-                      'validation', 'model', 'data', 'state', 'black',
+    options = sorted(['genepool', 'width', 'height', 'border', 'training',
+                      'validation', 'data', 'black',
                       'jitter', 'shuffle', 'skip', 'lr', 'quality',
                       'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                      'left', 'right', 'top', 'bottom',
-                      'epochs', 'epochs+'])
+                      'left', 'right', 'top', 'bottom', 'epochs'])
 
     # Parse options
 
@@ -114,9 +115,7 @@ if __name__ == '__main__':
 
         op = opmatch[0]
 
-        if op == 'type':
-            model_type = valuecase
-        elif op == 'width':
+        if op == 'width':
             tile_width, errors = validate(
                 errors, vnum, vnum <= 0, 'Tile width invalid ({})', option)
         elif op == 'height':
@@ -129,8 +128,8 @@ if __name__ == '__main__':
             black_level, errors = validate(
                 errors, fnum, fnum <= 0, 'Black level invalid ({})', option)
         elif op == 'lr':
-            initial_lr, errors = validate(
-                errors, fnum, errors, initial_lr <= 0.0 or initial_lr > 0.01,
+            lr, errors = validate(
+                errors, fnum, errors, lr <= 0.0 or lr > 0.01,
                 'Learning rate should be 0 > lr <= 0.01 ({})', option)
         elif op == 'quality':
             quality, errors = validate(
@@ -139,9 +138,6 @@ if __name__ == '__main__':
         elif op == 'epochs':
             epochs, errors = validate(
                 errors, vnum, vnum <= 0, 'Max epoch count invalid ({})', option)
-        elif op == 'epochs+':
-            run_epochs, errors = validate(
-                errors, vnum, vnum <= 0, 'Run epoch count invalid ({})', option)
         elif op == 'trimleft' or op == 'left':
             trim_left, errors = validate(
                 errors, vnum, vnum <= 0, 'Left trim value invalid ({})', option)
@@ -166,7 +162,7 @@ if __name__ == '__main__':
             shuffle, errors = validate(
                 errors, vnum, vnum != 0 and vnum != 1,
                 'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
-        elif op in ['data', 'training', 'validation', 'model', 'state']:
+        elif op in ['data', 'training', 'validation', 'genepool']:
             paths[op] = value
 
     terminate(errors)
@@ -178,23 +174,40 @@ if __name__ == '__main__':
 
     dpath = paths['data']
 
+    if 'genepool' not in paths:
+        paths['genepool'] = os.path.join(dpath, 'genepool.json')
+
     if 'training' not in paths:
         paths['training'] = os.path.join(dpath, 'train_images', 'training')
 
     if 'validation' not in paths:
         paths['validation'] = os.path.join(dpath, 'train_images', 'validation')
 
-    # Remind user what we're about to do.
+    # set up our initial state
 
-    print('             Model : {}'.format(model_type))
-    print('        Tile Width : {}'.format(tile_width))
-    print('       Tile Height : {}'.format(tile_height))
-    print('       Tile Border : {}'.format(tile_border))
-    print('        Max Epochs : {}'.format(epochs))
-    print('        Run Epochs : {}'.format(run_epochs))
-    print('    Data root path : {}'.format(paths['data']))
-    print('   Training Images : {}'.format(paths['training']))
-    print(' Validation Images : {}'.format(paths['validation']))
+    genepool = {}
+    poolpath = paths['genepool']
+
+    if os.path.exists(poolpath):
+        if os.path.isfile(poolpath):
+            print('Loading existing genepool')
+            with open(poolpath, 'r') as f:
+                genepool = json.load(f)
+        else:
+            errors = oops(errors, True, 'Genepool path is not a reference to a file ({})', poolpath)
+    else:
+        errors = oops(errors, not os.access(os.path.dirname(poolpath), os.W_OK), 'Genepool folder is not writeable ({})', poolpath)
+
+    terminate(errors, False)
+
+    # At this point, we may have loaded a genepool that overrides our paths
+
+    if 'io' in genepool:
+        for path in ['data', 'training', 'validation']:
+            if path + '_path' in genepool['io']:
+                paths[path] = genepool['io'][path + '_path']
+
+    print(paths)
 
     # Validation and error checking
 
@@ -296,32 +309,80 @@ if __name__ == '__main__':
     if black_level < 0:
         black_level = np.min(test_images[0][0])
 
-    # Since we've gone to the trouble of reading in all the path data, let's make it available to our models for reuse
-
-    for fc, f in enumerate(image_paths):
-        for sc, s in enumerate(sub_folders):
-            paths[f + '.' + s] = image_info[fc][sc]
-
-    # Only at this point can we set default model and state filenames because that depends on image type
-
-    if 'model' not in paths:
-        paths['model'] = os.path.join(
-            dpath, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
-
-    if 'state' not in paths:
-        paths['state'] = os.path.join(
-            dpath, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix))
-
-    tpath = os.path.dirname(paths['state'])
-    errors = oops(errors, not os.path.exists(tpath),
-                  'Model state path ({}) does not exist'.format(tpath))
-
-    tpath = os.path.dirname(paths['model'])
-    errors = oops(errors, not os.path.exists(tpath),
-                  'Model path ({}) does not exist'.format(tpath))
-
     terminate(errors, False)
 
+    # Initialize missing values in genepool
+
+    from Modules.modelio import ModelIO
+
+    if 'population' in genepool:
+        population = genepool['population']
+    else:
+        print('Initializing population...')
+        population = [ "c649-c321-out5",
+                       "c649-c321-c323-c325-avg123-out5",
+                       "c643-c643-pool-c1283-c1283-pool-c2563-usam-c1283-c1283-add16-usam-c643-c643-add112-out5"
+                     ]
+
+    if 'graveyard' in genepool:
+        graveyard = genepool['graveyard']
+    else:
+        print('Initializing graveyard...')
+        graveyard = []
+
+    # Over-ride defaults/options with contents of genepool.json, if any...
+
+    if 'io' in genepool:
+        io = genepool['io']
+        image_width = io['image_width']
+        image_height = io['image_height']
+        tile_width = io['base_tile_width']
+        tile_height = io['base_tile_height']
+        border = io['border']
+        border_mode = io['border_mode']
+        black_level = io['black_level']
+        trim_top = io['trim_top']
+        trim_bottom = io['trim_bottom']
+        trim_left = io['trim_left']
+        trim_right = io['trim_right']
+        jitter = io['jitter']
+        shuffle = io['shuffle']
+        skip = io['skip']
+        quality = io['quality']
+        epochs = io['epochs']
+        lr = io['lr']
+        paths = io['paths']
+
+    # Initialize ModelIO structure
+
+    io = ModelIO(model_type='Darwinian',
+                 image_width=image_width, image_height=image_height,
+                 base_tile_width=tile_width, base_tile_height=tile_height,
+                 channels=3,
+                 border=tile_border,
+                 border_mode='edge',
+                 batch_size=16,
+                 black_level=black_level,
+                 trim_top=trim_top, trim_bottom=trim_bottom,
+                 trim_left=trim_left, trim_right=trim_right,
+                 jitter=jitter, shuffle=shuffle, skip=skip,
+                 quality=quality,
+                 img_suffix=img_suffix,
+                 paths=paths,
+                 epochs=epochs,
+                 lr=lr
+                )
+
+    # Remind user what we're about to do.
+
+    print('          Genepool : {}'.format(paths['genepool']))
+    print('        Tile Width : {}'.format(tile_width))
+    print('       Tile Height : {}'.format(tile_height))
+    print('       Tile Border : {}'.format(tile_border))
+    print('        Max Epochs : {}'.format(epochs))
+    print('    Data root path : {}'.format(paths['data']))
+    print('   Training Images : {}'.format(paths['training']))
+    print(' Validation Images : {}'.format(paths['validation']))
     print('  Input Image Size : {} x {}'.format(s1[1], s1[0]))
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(
         trim_top, trim_bottom, trim_left, trim_right))
@@ -335,68 +396,51 @@ if __name__ == '__main__':
     print('           Quality : {}'.format(quality))
     print('')
 
-    # Train the model
+    checkpoint(poolpath, population, graveyard, io)
 
-    from Modules.modelio import ModelIO
+    # Evolve the genepool
+
     import Modules.models as models
+    import Modules.genomics as genomics
 
-    errors = oops(errors, model_type != 'all' and model_type not in models.models,
-        'Unknown model type ({})')
+    # these will later be option parameters
 
-    terminate(errors, False)
+    max_population = 20
+    min_population = 5
 
-    model_list = models.models if model_type.lower() == 'all' else [model_type]
-    for model in model_list:
+    # Repeat until program terminated.
 
-        # Put proper model name in the model and state paths
+    while True:
+        # Ensure we have fitness values for all the organisms in the population
 
-        for entry in ['model', 'state']:
-            path = paths[entry]
-            folder_name, file_name = os.path.split(path)
-            file_name_parts = file_name.split('-')
-            file_name_parts[0] = model
-            file_name = '-'.join(file_name_parts)
-            path = os.path.join(folder_name, file_name)
-            paths[entry] = path
+        for i,organism in enumerate(population):
+            if type(organism) is not list:
+                population[i] = [organism, genomics.fitness(organism, io)]
+                checkpoint(poolpath, population, graveyard, io)
 
-        # Configure model IO
+        # If our population has expanded to the maximum size, kill the least
+        # fit organisms.
 
-        io = ModelIO(model_type=model,
-                     image_width=image_width, image_height=image_height,
-                     base_tile_width=tile_width, base_tile_height=tile_height,
-                     channels=3,
-                     border=tile_border,
-                     border_mode='edge',
-                     batch_size=16,
-                     black_level=black_level,
-                     trim_top=trim_top, trim_bottom=trim_bottom,
-                     trim_left=trim_left, trim_right=trim_right,
-                     jitter=jitter, shuffle=shuffle, skip=skip,
-                     quality=quality,
-                     img_suffix=img_suffix,
-                     paths=paths)
+        if len(population) >= max_population:
+            print('Trimming population to {}...'.format(min_population))
+            population.sort(key=lambda org: org[1])
+            graveyard.extend(population[min_population:])
+            population = population[:min_population]
+            checkpoint(poolpath, population, graveyard, io)
 
-        # Create and fit model (best model state will be automatically saved)
+        # Expand the population to the maximum size.
 
-        sr = models.models[model](io)
+        parents = [p[0] for p in population]
+        children = []
 
-        # If no initial_lr is specified, the default of 0.0 means that the
-        # model's default learning rate will be used
+        print('Creating new children')
 
-        if initial_lr > 0.0:
-            print('Learning Rate reset to {}'.format(initial_lr))
-            sr.set_lr(initial_lr)
+        while len(children) < (max_population - min_population):
+            mother, father = [p.split('-') for p in random.sample(parents,2)]
+            child = '-'.join(genomics.mutate(mother, father))
+            if child not in parents and child not in children and child not in graveyard:
+                children.append(child)
 
-        config = sr.get_config()
-        print('Model configuration:')
-        for key in config:
-            print('{:>18s} : {}'.format(key, config[key]))
-
-        # PU: Cannot adjust ending epoch number until we load the model state,
-        # which does not happen until we fit(). So we have to pass both
-        # the max epoch and the run # of epochs.
-
-        sr.fit(max_epochs=epochs, run_epochs=run_epochs)
-
-    print('')
-    print('Training completed...')
+        population.extend(children)
+        
+        checkpoint(poolpath, population, graveyard, io)

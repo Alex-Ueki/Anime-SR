@@ -22,18 +22,20 @@ from Modules.modelio import ModelIO
 #
 # { "epoch_count": nnnn,
 #   "best_values": { dictionary of logs values },
-#   "best_epoch": { dictionary of logs values }
+#   "best_epoch": { dictionary of logs values },
+#   "io" : { dictionary of io class state values }
 # }
 #
 # PU: Add history when time permits
 
 class ModelState(callbacks.Callback):
 
-    def __init__(self, io):
+    def __init__(self, io, load_state=True, save_state=True):
 
         self.io = io
+        self.save_state = save_state
 
-        if os.path.isfile(io.state_path):
+        if load_state and os.path.isfile(io.state_path):
             print('Loading existing .json state')
             with open(io.state_path, 'r') as f:
                 self.state = json.load(f)
@@ -63,9 +65,9 @@ class ModelState(callbacks.Callback):
 
         self.state['epoch_count'] += 1
 
-        with open(self.io.state_path, 'w') as f:
-            json.dump(self.state, f, indent=4)
-        # print('Completed epoch', self.state['epoch_count'])
+        if self.save_state:
+            with open(self.io.state_path, 'w') as f:
+                json.dump(self.state, f, indent=4)
 
 # GPU : Untested, but may be needed for VDSR
 class AdjustableGradient(callbacks.Callback):
@@ -175,7 +177,7 @@ class BaseSRCNNModel(object):
     # Uses images in self.io.training_path for Training
     # Uses images in self.io.validation_path for Validation
 
-    def fit(self, max_epochs=255, run_epochs=0, save_history=True):
+    def fit(self, max_epochs=255, run_epochs=0, load_state=True, save_state=True):
 
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
@@ -197,9 +199,9 @@ class BaseSRCNNModel(object):
                                                      mode='min',
                                                      save_weights_only=False)
 
-        # Set up the model state, reading in prior results info if available
+        # Set up the model state. Can potentially load saved state.
 
-        model_state = ModelState(self.io)
+        model_state = ModelState(self.io, load_state=load_state, save_state=save_state)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
@@ -214,7 +216,7 @@ class BaseSRCNNModel(object):
                          learning_rate,
                          model_state]
 
-        print('Training model : %s' % (self.__class__.__name__))
+        print('Training model : {}'.format(self.io.name))
 
         # Offset epoch counts if we are resuming training. If this is the first
         # run, epoch_count will be initialized to -1
@@ -247,7 +249,9 @@ class BaseSRCNNModel(object):
                     vkey, model_state.state['best_values'][vkey], model_state.state['best_epoch'][vkey]))
         print('')
 
-        return self.model
+        # PU: Changed to return the best validation results
+
+        return model_state.state['best_values']['val_' + self.lf]
 
     # Predict a sequence of tiles. This can later be expanded to do multiprocessing
 
@@ -478,7 +482,7 @@ class VDSR(BaseSRCNNModel):
         self.model = model
         return model
 
-# Parental Unit Pathetic Super-Resolution Model
+# Parental Unit Pathetic Super-Resolution Model (elu vs. relu test)
 
 class PUPSR(BaseSRCNNModel):
 
@@ -489,15 +493,20 @@ class PUPSR(BaseSRCNNModel):
     # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
-        model = Sequential()
 
-        model.add(Conv2D(64, (9, 9), activation='relu',
-                         padding='same', input_shape=self.io.image_shape))
-        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
+        a = Input(shape=self.io.image_shape)
+        b = Conv2D(64, (9, 9), activation='elu', padding='same')(a)
+        c = Conv2D(32, (1, 1), activation='elu', padding='same')(b)
+        d = Conv2D(self.io.channels, (5, 5), padding='same')(c)
+        model = Model(a, d)
 
-        adam = optimizers.Adam(lr=.001)
+        print(a)
+        print(b)
+        print(c)
+        print(d)
+        print(model)
+
+        adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])

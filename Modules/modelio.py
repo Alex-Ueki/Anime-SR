@@ -36,7 +36,10 @@ class ModelIO():
                  residual=False,
                  quality=1.0,
                  img_suffix='',
-                 paths={}):
+                 paths={},
+                 epochs=10,
+                 lr=0.001,
+                 ):
 
 
         self.model_type = model_type
@@ -51,6 +54,11 @@ class ModelIO():
         self.residual = residual
         self.quality = quality
         self.paths = paths
+
+        # These values are just stashed in io for convenience
+
+        self.epochs = epochs
+        self.lr = lr
 
         from keras import backend as K
         self.theano = K.image_dim_ordering() == 'th'
@@ -253,5 +261,8 @@ class ModelIO():
                 'state_path': self.state_path,
                 'model_type': self.model_type,
                 'alpha': self.alpha,
-                'beta': self.beta
+                'beta': self.beta,
+                'epochs': self.epochs,
+                'lr': self.lr,
+                'paths': self.paths
                 }

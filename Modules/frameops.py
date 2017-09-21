@@ -13,7 +13,6 @@ import os
 import copy
 import random
 import psutil
-#from keras import backend as K
 from skimage import transform as tf
 
 import Modules.dpx as dpx
