@@ -349,7 +349,7 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
 
     io.model_type = organism
 
-    m = BaseSRCNNModel(organism, io)
+    m = BaseSRCNNModel(organism, io, verbose=False, bargraph=False)
 
     model = build_model(genome, shape=io.image_shape, lr=io.lr, metrics=[m.evaluation_function])
 
@@ -363,19 +363,19 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
 
     try:
 
-        results = m.fit(max_epochs=1, verbose=True, bargraph=False)
+        results = m.fit(max_epochs=1)
 
         if fail_first != None and results > fail_first:
             print('Fail_first triggered!')
             return results
 
-        results = m.fit(max_epochs=io.epochs // 2, verbose=True, bargraph=False)
+        results = m.fit(max_epochs=io.epochs // 2)
 
         if fail_halfway != None and results > fail_halfway:
             print('Fail_halfway triggered!')
             return results
 
-        results = m.fit(max_epochs=io.epochs, verbose=True, bargraph=False)
+        results = m.fit(max_epochs=io.epochs)
 
     except KeyboardInterrupt:
 

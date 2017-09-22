@@ -188,7 +188,7 @@ if __name__ == '__main__':
     # make to the definition of the models in models.py, old model files will still
     # work.
 
-    sr = models.BaseSRCNNModel(name=model_type, io=io)
+    sr = models.BaseSRCNNModel(name=model_type, io=io, verbose=False, bargraph=False)
 
     # Compute some handy information
 

@@ -401,7 +401,7 @@ if __name__ == '__main__':
 
         # Create and fit model (best model state will be automatically saved)
 
-        sr = models.models[model](io)
+        sr = models.models[model](io, verbose=verbose, bargraph=bargraph)
 
         # If no initial_lr is specified, the default of 0.0 means that the
         # model's default learning rate will be used
@@ -419,7 +419,7 @@ if __name__ == '__main__':
         # which does not happen until we fit(). So we have to pass both
         # the max epoch and the run # of epochs.
 
-        sr.fit(max_epochs=epochs, run_epochs=run_epochs, verbose=verbose, bargraph=bargraph)
+        sr.fit(max_epochs=epochs, run_epochs=run_epochs)
 
     print('')
     print('Training completed...')

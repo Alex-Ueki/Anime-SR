@@ -29,13 +29,14 @@ from Modules.modelio import ModelIO
 
 class ModelState(callbacks.Callback):
 
-    def __init__(self, io, verbose=False):
+    def __init__(self, io, verbose=True):
 
         self.io = io
         self.verbose = verbose
 
         if os.path.isfile(io.state_path):
-            print('Loading existing .json state')
+            if self.verbose:
+                print('Loading existing .json state')
             with open(io.state_path, 'r') as f:
                 self.state = json.load(f)
 
@@ -68,21 +69,24 @@ class ModelState(callbacks.Callback):
         with open(self.io.state_path, 'w') as f:
             json.dump(self.state, f, indent=4)
 
-        if self.verbose: print('Completed epoch', self.state['epoch_count'])
+        if self.verbose:
+            print('Completed epoch', self.state['epoch_count'])
 
 # GPU : Untested, but may be needed for VDSR
 
 class AdjustableGradient(callbacks.Callback):
 
-    def __init__(self, optimizer, theta = 1.0):
+    def __init__(self, optimizer, theta = 1.0, verbose=True):
 
         self.optimizer = optimizer
         self.lr = optimizer.lr.get_value()
         self.theta = theta
+        self.verbose = verbose
 
     def on_train_begin(self, logs={}):
 
-        print('Starting Gradient Clipping Value: %f' % (self.theta/self.lr))
+        if self.verbose:
+            print('Starting Gradient Clipping Value: %f' % (self.theta/self.lr))
         self.optimizer.clipvalue.set_value(self.theta/self.lr)
 
     def on_epoch_end(self, batch, logs={}):
@@ -91,7 +95,8 @@ class AdjustableGradient(callbacks.Callback):
         if (self.lr != optimizer.lr.get_value()):
             self.lr = optimizer.lr.get_value()
             self.optimizer.clipvalue.set_value(self.theta/self.lr)
-            print('Changed Gradient Clipping Value: %f' % (self.theta/self.lr))
+            if self.verbose:
+                print('Changed Gradient Clipping Value: %f' % (self.theta/self.lr))
 
 
 
@@ -142,19 +147,23 @@ class BaseSRCNNModel(object):
     # tiling, image generators, etc. lf is the name of the
     # loss function to use.
 
-    def __init__(self, name, io, lf='PeakSignaltoNoiseRatio'):
+    def __init__(self, name, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
         self.name = name
         self.io = io
         self.lf = lf
         self.val_lf = 'val_' + lf
         self.evaluation_function = loss_functions[lf](io.border)
+        self.verbose = verbose
+        self.bargraph = bargraph
 
         if os.path.isfile(io.model_path):
-            print('Loading existing .h5 model')
+            if self.verbose:
+                print('Loading existing .h5 model')
             self.model = load_model(io.model_path, custom_objects={ lf: self.evaluation_function })
         else:
-            print('Creating new untrained model')
+            if self.verbose:
+                print('Creating new untrained model')
             self.model = self.create_model(load_weights=False)
 
     # Config will be a dictionary with contents similar to this:
@@ -179,7 +188,7 @@ class BaseSRCNNModel(object):
     # Uses images in self.io.training_path for Training
     # Uses images in self.io.validation_path for Validation
 
-    def fit(self, max_epochs=255, run_epochs=0, verbose=True, bargraph=True):
+    def fit(self, max_epochs=255, run_epochs=0):
 
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
@@ -189,7 +198,7 @@ class BaseSRCNNModel(object):
                                                     factor=0.9,
                                                     min_lr=0.0002,
                                                     patience=10,
-                                                    verbose=verbose)
+                                                    verbose=self.verbose)
 
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
@@ -197,13 +206,13 @@ class BaseSRCNNModel(object):
         model_checkpoint = callbacks.ModelCheckpoint(self.io.model_path,
                                                      monitor=self.val_lf,
                                                      save_best_only=True,
-                                                     verbose=verbose,
+                                                     verbose=self.verbose,
                                                      mode='min',
                                                      save_weights_only=False)
 
         # Set up the model state. Can potentially load saved state.
 
-        model_state = ModelState(self.io, verbose=verbose)
+        model_state = ModelState(self.io, verbose=self.verbose)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
@@ -212,13 +221,15 @@ class BaseSRCNNModel(object):
         if 'best_values' in model_state.state and self.val_lf in model_state.state['best_values']:
             model_checkpoint.best = model_state.state['best_values'][self.val_lf]
 
-        print('Best {} found so far: {}'.format(self.val_lf,model_checkpoint.best))
+        if self.verbose:
+            print('Best {} found so far: {}'.format(self.val_lf,model_checkpoint.best))
 
         callback_list = [model_checkpoint,
                          learning_rate,
                          model_state]
 
-        print('Training model : {}'.format(self.io.model_type))
+        if self.verbose:
+            print('Training model : {}'.format(self.io.model_type))
 
         # Offset epoch counts if we are resuming training.
 
@@ -233,13 +244,13 @@ class BaseSRCNNModel(object):
                                  steps_per_epoch=samples_per_epoch // self.io.batch_size,
                                  epochs=epochs,
                                  callbacks=callback_list,
-                                 verbose=bargraph,
+                                 verbose=self.bargraph,
                                  validation_data=self.io.validation_data_generator(),
                                  validation_steps=val_count // self.io.batch_size,
                                  initial_epoch=initial_epoch)
 
-        if verbose:
-            if bargraph:
+        if self.verbose:
+            if self.bargraph:
                 print('')
             print('          Training results for : {}'.format(self.name))
 
@@ -258,13 +269,13 @@ class BaseSRCNNModel(object):
 
     # Predict a sequence of tiles. This can later be expanded to do multiprocessing
 
-    def predict_tiles(self, tile_generator, batches, verbose=True):
+    def predict_tiles(self, tile_generator, batches):
 
         print('predict tiles')
 
         result = self.model.predict_generator(generator=tile_generator,
                                               steps=batches,
-                                              verbose=verbose)
+                                              verbose=self.verbose)
 
         # Deprocess patches
         if K.image_dim_ordering() == 'th':
@@ -282,50 +293,6 @@ class BaseSRCNNModel(object):
                                                 steps=self.io.eval_images_count() // self.io.batch_size)
         print("Loss = %.5f, PeekSignalToNoiseRatio = %.5f" % (results[0], results[1]))
 
-    """
-    # Run predictions on images in self.io.predict_path
-
-    def predict(self, verbose=True):
-
-        import os
-        from Modules.frameops import imsave
-
-        # Create prediction for image patches
-
-        result = self.model.predict_generator(self.io.prediction_data_generator(),
-                                              steps=self.io.predict_images_count() // self.io.batch_size,
-                                              verbose=verbose)
-
-        if verbose:
-            print('\nDe-processing images.')
-
-        # Deprocess patches
-        if K.image_dim_ordering() == 'th':
-            result = result.transpose((0, 2, 3, 1)).astype(np.float32) * 255.
-        else:
-            result = result.astype(np.float32) * 255.
-
-        if verbose:
-            print('Completed De-processing image.')
-
-        (num, width, height, channels) = result.shape
-        output_directory = os.path.join(self.io.predict_path, self.name)
-        if not os.path.exists(output_directory):
-            os.makedirs(output_directory)
-
-        if verbose:
-            print(('Saving %d images into ' % num) + output_directory)
-        # Getting old file names
-        file_names = [f for f in sorted(os.listdir(
-            os.path.join(self.io.predict_path, self.io.alpha)))]
-        for i in range(num):
-            output = np.clip(result[i, :, :, :], 0, 255).astype(
-                'uint8')  # TODO Change this for new image type
-            filename = output_directory + (self.name + '_' + file_names[i])
-            imsave(filename, output)
-        if verbose:
-            print(('Save %d images into ' % num) + output_directory)
-"""
 
     # Save the model to a .h5 file
 
@@ -336,9 +303,9 @@ class BaseSRCNNModel(object):
 
 class BasicSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(BasicSR, self).__init__('BasicSR', io)
+        super(BasicSR, self).__init__('BasicSR', io, lf, verbose, bargraph)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -363,9 +330,9 @@ class BasicSR(BaseSRCNNModel):
 
 class ExpansionSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(ExpansionSR, self).__init__('ExpansionSR', io)
+        super(ExpansionSR, self).__init__('ExpansionSR', io, lf, verbose, bargraph)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -403,9 +370,9 @@ class ExpansionSR(BaseSRCNNModel):
 
 class DeepDenoiseSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', io)
+        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', io, lf, verbose, bargraph)
 
     def create_model(self, load_weights):
 
@@ -456,9 +423,9 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
 class VDSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(VDSR, self).__init__('VDSR', io)
+        super(VDSR, self).__init__('VDSR', io, lf, verbose, bargraph)
 
     def create_model(self, load_weights):
 
@@ -490,9 +457,9 @@ class VDSR(BaseSRCNNModel):
 
 class PUPSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(PUPSR, self).__init__('PUPSR', io)
+        super(PUPSR, self).__init__('PUPSR', io, lf, verbose, bargraph)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -524,9 +491,9 @@ class PUPSR(BaseSRCNNModel):
 
 class GPUSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(GPUSR, self).__init__('GPUSR', io)
+        super(GPUSR, self).__init__('GPUSR', io, lf, verbose, bargraph)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -568,9 +535,9 @@ models = {'BasicSR': BasicSR,
 
 class ELUBasicSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(ELUBasicSR, self).__init__('BasicSR', io)
+        super(ELUBasicSR, self).__init__('BasicSR', io, lf, verbose, bargraph)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -595,9 +562,9 @@ class ELUBasicSR(BaseSRCNNModel):
 
 class ELUExpansionSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(ELUExpansionSR, self).__init__('ExpansionSR', io)
+        super(ELUExpansionSR, self).__init__('ExpansionSR', io, lf, verbose, bargraph)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -635,9 +602,9 @@ class ELUExpansionSR(BaseSRCNNModel):
 
 class ELUDeepDenoiseSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(ELUDeepDenoiseSR, self).__init__('DeepDenoiseSR', io)
+        super(ELUDeepDenoiseSR, self).__init__('DeepDenoiseSR', io, lf, verbose, bargraph)
 
     def create_model(self, load_weights):
 
@@ -685,9 +652,9 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
 
 class ELUVDSR(BaseSRCNNModel):
 
-    def __init__(self, io):
+    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
-        super(ELUVDSR, self).__init__('VDSR', io)
+        super(ELUVDSR, self).__init__('VDSR', io, lf, verbose, bargraph)
 
     def create_model(self, load_weights):
         model = Sequential()
