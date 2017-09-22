@@ -529,10 +529,15 @@ models = {'BasicSR': BasicSR,
 
 """
     TestModels section
-     Define all experimental models
-     train.py can train this models using type=test
+    Define all experimental models
+    train.py can train this models using type=test
 """
 
+"""
+    Evaluation results
+       BasicSR : Loss = 0.00058 | PeekSignalToNoiseRatio = -39.41335
+    ELUBasicSR : Loss = 0.00032 | PeekSignalToNoiseRatio = -44.32544
+"""
 class ELUBasicSR(BaseSRCNNModel):
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
@@ -560,6 +565,11 @@ class ELUBasicSR(BaseSRCNNModel):
         self.model = model
         return model
 
+"""
+    Evaluation results
+    ELUExpansionSR : Loss = 0.00033 | PeekSignalToNoiseRatio = -45.90310
+       ExpansionSR : Loss = 0.00043 | PeekSignalToNoiseRatio = -41.49931
+"""
 class ELUExpansionSR(BaseSRCNNModel):
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
@@ -599,7 +609,11 @@ class ELUExpansionSR(BaseSRCNNModel):
         self.model = model
         return model
 
-
+"""
+    Evaluation results
+    ELUDeepDenoiseSR : Loss = 0.00065 | PeekSignalToNoiseRatio = -40.46243
+       DeepDenoiseSR : Loss = 0.00044 | PeekSignalToNoiseRatio = -42.58665
+"""
 class ELUDeepDenoiseSR(BaseSRCNNModel):
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
@@ -650,6 +664,11 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
         self.model = model
         return model
 
+"""
+    Evaluation results
+    ELUVDSR : Loss = 0.00027 | PeekSignalToNoiseRatio = -45.43717
+       VDSR : Loss = 0.01211 | PeekSignalToNoiseRatio = -19.73214
+"""
 class ELUVDSR(BaseSRCNNModel):
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
