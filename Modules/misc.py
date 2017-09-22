@@ -27,9 +27,9 @@ def clear_screen():
 # Print with timestamp
 
 
-def printlog(s):
+def printlog(*s):
 
-    print('{:%Y-%m-%d %H:%M:%S.%f}: {}'.format(datetime.datetime.now(), s))
+    print('{:%Y-%m-%d %H:%M:%S.%f}:'.format(datetime.datetime.now()),*s)
 
 # Setup default directories
 

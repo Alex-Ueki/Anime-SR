@@ -99,15 +99,14 @@ outputs = {
 
 }
 
-# For convenience, make a dictionary of all the possible codons that can be expressed
+# For convenience, make a dictionary of all the possible codons that can be expressed.
 # Python 3.5 black magic!
 
 all_codons = {**convolutions, **combinations, **introns, **outputs}
 
-# Mutation selection list (of dicts); we double-up on convolutions. Used to select
-# a random codon for mutation
+# Mutation selection list (of dicts. Used to select a random codon for mutation.
 
-mutable_codons = [convolutions, convolutions, combinations, introns]
+mutable_codons = [convolutions, combinations, introns]
 
 # A list of codons names is a genome. An expressed genome is one where the
 # codon name is replaced by the values in the codon (the function and connections),

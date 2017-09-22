@@ -427,7 +427,7 @@ if __name__ == '__main__':
     while True:
         # Ensure we have fitness values for all the organisms in the population
 
-        for i,genome in enumerate(population):
+        for i, genome in enumerate(population):
             if type(genome) is not list:
                 # Delete the model and state files (if any) so we start with
                 # a fresh slate
@@ -446,10 +446,11 @@ if __name__ == '__main__':
         if len(population) >= MAX_POPULATION:
             printlog('Trimming population to {}...'.format(MIN_POPULATION))
             population.sort(key=lambda org: org[1])
-            graveyard.extend(population[MIN_POPULATION:])
+            graveyard.extend([p[0] for p in population[MIN_POPULATION:]])
             population = population[:MIN_POPULATION]
             checkpoint(poolpath, population, graveyard, io)
-
+            graveyard.sort()
+            
         # Expand the population to the maximum size.
 
         parents = [p[0] for p in population]
@@ -462,6 +463,8 @@ if __name__ == '__main__':
             child = '-'.join(genomics.mutate(mother, father))
             if child not in parents and child not in children and child not in graveyard:
                 children.append(child)
+            else:
+                printlog('Duplicate genome rejected...')
 
         population.extend(children)
 
