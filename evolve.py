@@ -39,7 +39,7 @@ Options are:
 
 """
 
-from Modules.misc import oops, validate, terminate, set_docstring
+from Modules.misc import oops, validate, terminate, set_docstring, printlog
 
 import numpy as np
 import sys
@@ -444,7 +444,7 @@ if __name__ == '__main__':
         # If our population has expanded to the maximum size, kill the least fit organisms.
 
         if len(population) >= MAX_POPULATION:
-            print('Trimming population to {}...'.format(MIN_POPULATION))
+            printlog('Trimming population to {}...'.format(MIN_POPULATION))
             population.sort(key=lambda org: org[1])
             graveyard.extend(population[MIN_POPULATION:])
             population = population[:MIN_POPULATION]
@@ -455,7 +455,7 @@ if __name__ == '__main__':
         parents = [p[0] for p in population]
         children = []
 
-        print('Creating new children')
+        printlog('Creating new children')
 
         while len(children) < (MAX_POPULATION - len(parents)):
             mother, father = [p.split('-') for p in random.sample(parents,2)]

@@ -5,10 +5,12 @@ Miscellaneous utility functions for Anime-SR
 import platform
 import os
 import sys
+import datetime
 
 # Will be set by module that imports us
 
 owner_docstring = ''
+
 
 def set_docstring(docstring):
 
@@ -19,8 +21,15 @@ def set_docstring(docstring):
 
 
 def clear_screen():
-    # Clear the screen.
+
     os.system('cls' if platform.system().lower() == 'windows' else 'clear')
+
+# Print with timestamp
+
+
+def printlog(s):
+
+    print('{:%Y-%m-%d %H:%M:%S.%f}: {}'.format(datetime.datetime.now(), s))
 
 # Setup default directories
 

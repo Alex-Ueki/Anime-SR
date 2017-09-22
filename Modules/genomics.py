@@ -4,6 +4,7 @@ Toolkit for evolving Keras models - WORK IN PROGRESS
 
 import random
 import sys
+import datetime
 from copy import deepcopy
 
 from keras.models import Sequential, Model, load_model
@@ -15,6 +16,7 @@ import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
 from Modules.models import BaseSRCNNModel
+from Modules.misc import printlog
 
 DEBUG = True
 DEBUG_FLAG = False
@@ -156,9 +158,6 @@ def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
     try:
 
         for i,layer in enumerate(layers):
-            #print(i)
-            #[print(l) for l in layers]
-            #print('')
             if i == 0:
                 # Set up the input layer (which expressed() set up as a dummy layer).
                 layers[0] = Input(shape=shape)
@@ -177,10 +176,10 @@ def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
                 # Our inputs are either a single layer or a list of layers
 
                 layer_inputs = [layers[n] for n in layer[1:]]
-                #print('layer function:',layer_function)
+
                 if len(layer_inputs) == 1:
                     layer_inputs = layer_inputs[0]
-                #print('layer inputs:',layer_inputs)
+
                 layers[i] = layer_function(layer_inputs)
 
         # Create and compile the model
@@ -198,7 +197,7 @@ def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
         raise
 
     except:
-        print('Cannot compile: {}'.format(sys.exc_info()[1]))
+        printlog('Cannot compile: {}'.format(sys.exc_info()[1]))
         return None
 
 # Determine if a genome is viable (in other words, that the model makes some
@@ -210,7 +209,7 @@ def basic_viability(genome):
     if type(genome) is not list:
         genome = genome.split('-')
 
-    print('Checking viability of {}'.format('-'.join(genome)))
+    printlog('Checking viability of {}'.format('-'.join(genome)))
 
     expression = expressed(genome)
 
@@ -345,7 +344,7 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
 
     organism = '-'.join(genome)
 
-    print('Testing fitness of {}'.format(organism))
+    printlog('Testing fitness of {}'.format(organism))
 
     io.model_type = organism
 
@@ -363,37 +362,40 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
 
     try:
 
+        stime = datetime.datetime.now()
         results = m.fit(max_epochs=1)
+        etime = datetime.datetime.now()
+
+        halfway = io.epochs // 2
 
         if fail_first != None and results > fail_first:
-            print('Fail_first triggered!')
+            printlog('Fail_first triggered - fitness={}'.format(results))
             return results
+        else:
+            eta = etime + (etime - stime) * (halfway - 1)
+            printlog('After 1 epoch: fitness={}, halfway ETA={:%I:%M:%S %p}'.format(results, eta))
 
-        results = m.fit(max_epochs=io.epochs // 2)
+        stime = datetime.datetime.now()
+        results = m.fit(max_epochs=halfway)
+        etime = datetime.datetime.now()
 
         if fail_halfway != None and results > fail_halfway:
-            print('Fail_halfway triggered!')
+            printlog('Fail_halfway triggered - fitness={}'.format(results))
             return results
+        else:
+            eta = etime + (etime - stime) * halfway / (halfway - 1)
+            printlog('After {} epochs: fitness={}, completion ETA={:%I:%M:%S %p}'.format(halfway, results, eta))
 
         results = m.fit(max_epochs=io.epochs)
+        printlog('After {} epochs: fitness={}'.format(io.epochs, results))
 
     except KeyboardInterrupt:
 
         raise
 
     except:
-        print('Cannot fit: {}'.format(sys.exc_info()[1]))
+        printlog('Cannot fit: {}'.format(sys.exc_info()[1]))
         results = 999999.0
 
-    print('Fitness: ', results)
+    printlog('Fitness: {}'.format(results))
     return results
-
-
-
-# Assemble a model from a genome. Return None if the genome is non-viable
-
-if __name__ == "__main__":
-
-    derf = [Conv2D(32, (1, 1), activation='elu', padding='same')]
-    print(derf)
-    print(derf * 3)
