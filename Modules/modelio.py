@@ -154,24 +154,24 @@ class ModelIO():
     # Data generators
 
     def training_data_generator(self):
-        return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip, self.quality, self.residual)
+        return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip, self.quality)
 
     # Validation generator uses all the tiles, not just the best ones.
 
     def validation_data_generator(self):
-        return self._image_generator_frameops(self.validation_path, False, self.shuffle, self.skip, 1.0, self.residual)
+        return self._image_generator_frameops(self.validation_path, False, self.shuffle, self.skip, 1.0)
 
     # Evaluation and Prediction generators will never shuffle, jitter, skip or use just the best tiles.
 
     def evaluation_data_generator(self):
-        return self._image_generator_frameops(self.evaluation_path, False, False, False, 1.0, self.residual)
+        return self._image_generator_frameops(self.evaluation_path, False, False, False, 1.0)
 
     def prediction_data_generator(self):
-        return self._predict_image_generator_frameops(self.predict_path, False, False, False, 1.0, self.residual)
+        return self._predict_image_generator_frameops(self.predict_path, False, False, False, 1.0)
 
     # Frameops versions of image generators
 
-    def _image_generator_frameops(self, directory, shuffle, jitter, skip, quality, residual):
+    def _image_generator_frameops(self, directory, shuffle, jitter, skip, quality):
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
@@ -196,7 +196,7 @@ class ModelIO():
                     trim_left=self.trim_left, trim_right=self.trim_right,
                     trim_top=self.trim_top, trim_bottom=self.trim_bottom,
                     shuffle=shuffle, jitter=jitter, skip=skip, quality=quality,
-                    theano=self.theano):
+                    theano=self.theano, residual=self.residual):
                 alpha_tiles[batch_index] = alpha_tile
                 beta_tiles[batch_index] = beta_tile
                 batch_index += 1
@@ -251,6 +251,7 @@ class ModelIO():
                 'shuffle': self.shuffle,
                 'skip': self.skip,
                 'quality': self.quality,
+                'residual': self.residual,
                 'img_suffix': self.img_suffix,
                 'data_path': self.data_path,
                 'training_path': self.training_path,

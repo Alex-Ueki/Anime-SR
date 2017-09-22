@@ -180,6 +180,7 @@ if __name__ == '__main__':
                  shuffle=False,
                  skip=False,
                  quality=1.0,
+                 residual=iostate['residual'],
                  img_suffix=iostate['img_suffix'],
                  paths={})
 
@@ -242,6 +243,8 @@ if __name__ == '__main__':
         for i, tile in enumerate(tiles):
             tile_batch[i] = tile
 
+        # GPU : PU please check this
+        if
         # Debug code to confirm what we are doing
 
         if DEBUG and img_path == first_path:
@@ -255,6 +258,10 @@ if __name__ == '__main__':
 
         predicted_tiles = sr.model.predict(tile_batch, tiles_per_img)
 
+        # GPU : PU please check
+        if io.residual:
+            predicted_tiles += tile_batch
+            
         # Debug code to confirm what we are doing
 
         if DEBUG and img_path == first_path:
