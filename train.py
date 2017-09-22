@@ -202,12 +202,10 @@ if __name__ == '__main__':
     dpath = paths['data']
 
     if 'training' not in paths:
-        paths['training'] = os.path.abspath(
-            os.path.join(dpath, 'train_images', 'training'))
+        paths['training'] = os.path.join(dpath, 'train_images', 'training')
 
     if 'validation' not in paths:
-        paths['validation'] = os.path.abspath(
-            os.path.join(dpath, 'train_images', 'validation'))
+        paths['validation'] = os.path.join(dpath, 'train_images', 'validation')
 
     # Remind user what we're about to do.
 
