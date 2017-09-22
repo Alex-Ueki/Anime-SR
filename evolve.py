@@ -63,13 +63,14 @@ FAIL_HALFWAY = -39.0        # Modles must attain fitness < this after EPOCHS // 
 
 def checkpoint(path, population, graveyard, io):
 
-    state = { 'population': population,
-              'graveyard': graveyard,
-              'io': io.asdict()
-            }
+    state = {'population': population,
+             'graveyard': graveyard,
+             'io': io.asdict()
+             }
 
     with open(path, 'w') as f:
         json.dump(state, f, indent=4)
+
 
 if __name__ == '__main__':
 
@@ -124,7 +125,7 @@ if __name__ == '__main__':
 
         opmatch = [s for s in options if s.startswith(op)]
 
-        if len(opmatch) ==0 or len(opmatch) > 1 and opmatch[0] != op:
+        if len(opmatch) == 0 or len(opmatch) > 1 and opmatch[0] != op:
             errors = oops(errors, True, '{} option ({})',
                           ('Unknown' if len(opmatch) == 0 else 'Ambiguous', op))
             continue
@@ -211,9 +212,11 @@ if __name__ == '__main__':
             with open(poolpath, 'r') as f:
                 genepool = json.load(f)
         else:
-            errors = oops(errors, True, 'Genepool path is not a reference to a file ({})', poolpath)
+            errors = oops(
+                errors, True, 'Genepool path is not a reference to a file ({})', poolpath)
     else:
-        errors = oops(errors, not os.access(os.path.dirname(poolpath), os.W_OK), 'Genepool folder is not writeable ({})', poolpath)
+        errors = oops(errors, not os.access(os.path.dirname(
+            poolpath), os.W_OK), 'Genepool folder is not writeable ({})', poolpath)
 
     terminate(errors, False)
 
@@ -334,10 +337,10 @@ if __name__ == '__main__':
         population = genepool['population']
     else:
         print('Initializing population...')
-        population = [ "c649-c321-out5",
-                       "c649-c321-c323-c325-avg123-out5",
-                       "c643-c643-pool-c1283-c1283-pool-c2563-usam-c1283-c1283-add16-usam-c643-c643-add112-out5"
-                     ]
+        population = ["c649-c321-out5",
+                      "c649-c321-c323-c325-avg123-out5",
+                      "c643-c643-pool-c1283-c1283-pool-c2563-usam-c1283-c1283-add16-usam-c643-c643-add112-out5"
+                      ]
 
     if 'graveyard' in genepool:
         graveyard = genepool['graveyard']
@@ -386,7 +389,7 @@ if __name__ == '__main__':
                  paths=paths,
                  epochs=EPOCHS,
                  lr=lr
-                )
+                 )
 
     # Remind user what we're about to do.
 
@@ -438,7 +441,8 @@ if __name__ == '__main__':
 
                 # Build a model for the organism, train the model, and record the results
 
-                population[i] = [genome, genomics.fitness(genome, io, fail_first=FAIL_FIRST, fail_halfway=FAIL_HALFWAY)]
+                population[i] = [genome, genomics.fitness(
+                    genome, io, fail_first=FAIL_FIRST, fail_halfway=FAIL_HALFWAY)]
                 checkpoint(poolpath, population, graveyard, io)
 
         # If our population has expanded to the maximum size, kill the least fit organisms.
@@ -450,16 +454,16 @@ if __name__ == '__main__':
             population = population[:MIN_POPULATION]
             checkpoint(poolpath, population, graveyard, io)
             graveyard.sort()
-            
+
         # Expand the population to the maximum size.
 
         parents = [p[0] for p in population]
         children = []
 
-        printlog('Creating new children')
+        printlog('Creating new children...')
 
         while len(children) < (MAX_POPULATION - len(parents)):
-            mother, father = [p.split('-') for p in random.sample(parents,2)]
+            mother, father = [p.split('-') for p in random.sample(parents, 2)]
             child = '-'.join(genomics.mutate(mother, father))
             if child not in parents and child not in children and child not in graveyard:
                 children.append(child)

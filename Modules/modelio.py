@@ -19,7 +19,6 @@ import os
 
 class ModelIO():
 
-
     def __init__(self,
                  model_type='BasicSR',
                  image_width=1920, image_height=1080,
@@ -41,7 +40,6 @@ class ModelIO():
                  lr=0.001,
                  ):
 
-
         self.model_type = model_type
         self.image_width, self.image_height = image_width, image_height
         self.base_tile_width, self.base_tile_height = base_tile_width, base_tile_height
@@ -51,9 +49,7 @@ class ModelIO():
         self.channels, self.black_level = channels, black_level
         self.batch_size, self.img_suffix = batch_size, img_suffix
         self.jitter, self.shuffle, self.skip = jitter, shuffle, skip
-        self.residual = residual
-        self.quality = quality
-        self.paths = paths
+        self.residual, self.quality, self.paths = residual, quality, paths
 
         # These values are just stashed in io for convenience
 

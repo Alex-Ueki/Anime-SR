@@ -62,7 +62,7 @@ if __name__ == '__main__':
 
         opmatch = [s for s in options if s.startswith(op)]
 
-        if len(opmatch) ==0 or len(opmatch) > 1 and opmatch[0] != op:
+        if len(opmatch) == 0 or len(opmatch) > 1 and opmatch[0] != op:
             errors = oops(errors, True, '{} option ({})',
                           ('Unknown' if len(opmatch) == 0 else 'Ambiguous', op))
             continue
@@ -188,7 +188,8 @@ if __name__ == '__main__':
     # make to the definition of the models in models.py, old model files will still
     # work.
 
-    sr = models.BaseSRCNNModel(name=model_type, io=io, verbose=False, bargraph=False)
+    sr = models.BaseSRCNNModel(
+        name=model_type, io=io, verbose=False, bargraph=False)
 
     # Compute some handy information
 

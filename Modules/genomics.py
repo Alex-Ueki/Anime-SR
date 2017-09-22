@@ -1,5 +1,5 @@
 """
-Toolkit for evolving Keras models - WORK IN PROGRESS
+Toolkit for evolving Keras models
 """
 
 import random
@@ -29,29 +29,29 @@ DEBUG_FLAG = False
 
 convolutions = {
 
-    "c321" : [Conv2D(32, (1, 1), activation='elu', padding='same'), -1],
-    "c323" : [Conv2D(32, (3, 3), activation='elu', padding='same'), -1],
-    "c325" : [Conv2D(32, (5, 5), activation='elu', padding='same'), -1],
-    "c327" : [Conv2D(32, (7, 7), activation='elu', padding='same'), -1],
-    "c329" : [Conv2D(32, (9, 9), activation='elu', padding='same'), -1],
+    "c321": [Conv2D(32, (1, 1), activation='elu', padding='same'), -1],
+    "c323": [Conv2D(32, (3, 3), activation='elu', padding='same'), -1],
+    "c325": [Conv2D(32, (5, 5), activation='elu', padding='same'), -1],
+    "c327": [Conv2D(32, (7, 7), activation='elu', padding='same'), -1],
+    "c329": [Conv2D(32, (9, 9), activation='elu', padding='same'), -1],
 
-    "c641" : [Conv2D(64, (1, 1), activation='elu', padding='same'), -1],
-    "c643" : [Conv2D(64, (3, 3), activation='elu', padding='same'), -1],
-    "c645" : [Conv2D(64, (5, 5), activation='elu', padding='same'), -1],
-    "c647" : [Conv2D(64, (7, 7), activation='elu', padding='same'), -1],
-    "c649" : [Conv2D(64, (9, 9), activation='elu', padding='same'), -1],
+    "c641": [Conv2D(64, (1, 1), activation='elu', padding='same'), -1],
+    "c643": [Conv2D(64, (3, 3), activation='elu', padding='same'), -1],
+    "c645": [Conv2D(64, (5, 5), activation='elu', padding='same'), -1],
+    "c647": [Conv2D(64, (7, 7), activation='elu', padding='same'), -1],
+    "c649": [Conv2D(64, (9, 9), activation='elu', padding='same'), -1],
 
-    "c1281" : [Conv2D(128, (1, 1), activation='elu', padding='same'), -1],
-    "c1283" : [Conv2D(128, (3, 3), activation='elu', padding='same'), -1],
-    "c1285" : [Conv2D(128, (5, 5), activation='elu', padding='same'), -1],
-    "c1287" : [Conv2D(128, (7, 7), activation='elu', padding='same'), -1],
-    "c1289" : [Conv2D(128, (9, 9), activation='elu', padding='same'), -1],
+    "c1281": [Conv2D(128, (1, 1), activation='elu', padding='same'), -1],
+    "c1283": [Conv2D(128, (3, 3), activation='elu', padding='same'), -1],
+    "c1285": [Conv2D(128, (5, 5), activation='elu', padding='same'), -1],
+    "c1287": [Conv2D(128, (7, 7), activation='elu', padding='same'), -1],
+    "c1289": [Conv2D(128, (9, 9), activation='elu', padding='same'), -1],
 
-    "c2561" : [Conv2D(256, (1, 1), activation='elu', padding='same'), -1],
-    "c2563" : [Conv2D(256, (3, 3), activation='elu', padding='same'), -1],
-    "c2565" : [Conv2D(256, (5, 5), activation='elu', padding='same'), -1],
-    "c2567" : [Conv2D(256, (7, 7), activation='elu', padding='same'), -1],
-    "c2569" : [Conv2D(256, (9, 9), activation='elu', padding='same'), -1],
+    "c2561": [Conv2D(256, (1, 1), activation='elu', padding='same'), -1],
+    "c2563": [Conv2D(256, (3, 3), activation='elu', padding='same'), -1],
+    "c2565": [Conv2D(256, (5, 5), activation='elu', padding='same'), -1],
+    "c2567": [Conv2D(256, (7, 7), activation='elu', padding='same'), -1],
+    "c2569": [Conv2D(256, (9, 9), activation='elu', padding='same'), -1],
 
 }
 
@@ -61,20 +61,20 @@ convolutions = {
 
 combinations = {
 
-    "add12"  : [Add(), -1, -2],
-    "add13"  : [Add(), -1, -3],
-    "add14"  : [Add(), -1, -4],
-    "add15"  : [Add(), -1, -5],
-    "add16"  : [Add(), -1, -6],
-    "add17"  : [Add(), -1, -7],
-    "add18"  : [Add(), -1, -8],
-    "add19"  : [Add(), -1, -9],
-    "add110"  : [Add(), -1, -10],
-    "add111"  : [Add(), -1, -11],
-    "add112"  : [Add(), -1, -12],
-    "avg12"  : [Average() , -1, -2],
-    "avg123" : [Average() , -1, -2, -3],
-    "addbad" : [Add(), -2, -4],
+    "add12": [Add(), -1, -2],
+    "add13": [Add(), -1, -3],
+    "add14": [Add(), -1, -4],
+    "add15": [Add(), -1, -5],
+    "add16": [Add(), -1, -6],
+    "add17": [Add(), -1, -7],
+    "add18": [Add(), -1, -8],
+    "add19": [Add(), -1, -9],
+    "add110": [Add(), -1, -10],
+    "add111": [Add(), -1, -11],
+    "add112": [Add(), -1, -12],
+    "avg12": [Average(), -1, -2],
+    "avg123": [Average(), -1, -2, -3],
+    "addbad": [Add(), -2, -4],
 
 }
 
@@ -82,8 +82,8 @@ combinations = {
 
 introns = {
 
-    "pool" : [MaxPooling2D((2, 2)), -1],
-    "usam" : [UpSampling2D(), -1],
+    "pool": [MaxPooling2D((2, 2)), -1],
+    "usam": [UpSampling2D(), -1],
 
 }
 
@@ -91,11 +91,11 @@ introns = {
 
 outputs = {
 
-    "out1" : [Conv2D(3, (1, 1), padding='same'), -1],
-    "out3" : [Conv2D(3, (3, 3), padding='same'), -1],
-    "out5" : [Conv2D(3, (5, 5), padding='same'), -1],
-    "out7" : [Conv2D(3, (7, 7), padding='same'), -1],
-    "out9" : [Conv2D(3, (9, 9), padding='same'), -1],
+    "out1": [Conv2D(3, (1, 1), padding='same'), -1],
+    "out3": [Conv2D(3, (3, 3), padding='same'), -1],
+    "out5": [Conv2D(3, (5, 5), padding='same'), -1],
+    "out7": [Conv2D(3, (7, 7), padding='same'), -1],
+    "out9": [Conv2D(3, (9, 9), padding='same'), -1],
 
 }
 
@@ -114,6 +114,7 @@ mutable_codons = [convolutions, combinations, introns]
 # Also, a dummy input layer is spliced on. Expects a list but will convert a string
 # if provided.
 
+
 def expressed(sequence):
 
     if type(sequence) is not list:
@@ -129,7 +130,8 @@ def expressed(sequence):
 
     # Convert wiring from offsets to absolute positions
 
-    expression = [ [v if i==0 else v+n for i,v in enumerate(gene)] for n,gene in enumerate(expression)]
+    expression = [[v if i == 0 else v + n for i,
+                   v in enumerate(gene)] for n, gene in enumerate(expression)]
 
     return expression
 
@@ -142,7 +144,8 @@ def expressed(sequence):
 # lr        initial learning rate
 # metrics   callbacks
 
-def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
+
+def build_model(genome, layers=None, shape=(64, 64, 3), lr=0.001, metrics=[]):
 
     if type(genome) is not list:
         genome = genome.split('-')
@@ -156,7 +159,7 @@ def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
 
     try:
 
-        for i,layer in enumerate(layers):
+        for i, layer in enumerate(layers):
             if i == 0:
                 # Set up the input layer (which expressed() set up as a dummy layer).
                 layers[0] = Input(shape=shape)
@@ -170,7 +173,7 @@ def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
                 # unique. Use the genome code to make it more clear (keep in mind
                 # it does not have a dummy input layer, so -1 offset)
 
-                layer_function.name = genome[i-1] + '_' + str(i)
+                layer_function.name = genome[i - 1] + '_' + str(i)
 
                 # Our inputs are either a single layer or a list of layers
 
@@ -183,9 +186,9 @@ def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
 
         # Create and compile the model
 
-        model = Model(layers[0],layers[-1])
+        model = Model(layers[0], layers[-1])
 
-        adam = optimizers.Adam(lr=lr, clipvalue=(1.0/.001), epsilon=0.001)
+        adam = optimizers.Adam(lr=lr, clipvalue=(1.0 / .001), epsilon=0.001)
 
         model.compile(optimizer=adam, loss='mse', metrics=metrics)
 
@@ -202,6 +205,7 @@ def build_model(genome, layers=None, shape=(64,64,3), lr=0.001, metrics=[]):
 # Determine if a genome is viable (in other words, that the model makes some
 # sort of sense, does not contain useless layers, etc.). You can write your
 # own viability function.
+
 
 def basic_viability(genome):
 
@@ -239,6 +243,7 @@ def basic_viability(genome):
 # Choose a random codon. If items is None, select a random codon. Otherwise
 # Items must be a dict or a list of dicts.
 
+
 def random_codon(items=None):
 
     if items == None:
@@ -260,10 +265,11 @@ def random_codon(items=None):
 # father    parental genome (only used for transposition)
 # min_len   minimum length of the resulting genome
 # max_len   maximum length of the resulting genome
-# odds      list of relative odds of transpositon, addition, deletion, mutate
+# odds      list of relative odds of transposition, addition, deletion, mutate
 # viable    viability function; takes a codon list, returns true if it is acceptable
 
-def mutate(mother, father, min_len=3, max_len=30, odds=[3,5,5,8], viable=basic_viability):
+
+def mutate(mother, father, min_len=3, max_len=30, odds=[3, 5, 5, 8], viable=basic_viability):
 
     if type(mother) is not list:
         mother = mother.split('-')
@@ -276,13 +282,13 @@ def mutate(mother, father, min_len=3, max_len=30, odds=[3,5,5,8], viable=basic_v
 
     while child == None or not viable(child):
 
-        choice = random.randint(1,sum(odds))
+        choice = random.randint(1, sum(odds))
 
         # transpose codons from father to mother. Always at least 1 codon
         # from mother.
 
         if choice <= odds[0]:
-            splice = random.randint(1,mother_len-1)
+            splice = random.randint(1, mother_len - 1)
             child = mother[:-splice] + father[-splice:]
             if child == mother or child == father:
                 child = None
@@ -291,16 +297,15 @@ def mutate(mother, father, min_len=3, max_len=30, odds=[3,5,5,8], viable=basic_v
         choice -= odds[0]
 
         child = mother[:]
-        splice = random.randint(0,mother_len-1)
-
+        splice = random.randint(0, mother_len - 1)
 
         # add codon; fail if it would make genome too long
 
         if choice <= odds[1]:
-            if mother_len == max_len :
+            if mother_len == max_len:
                 child = None
             else:
-                child.insert(splice,random_codon())
+                child.insert(splice, random_codon())
             continue
 
         choice -= odds[1]
@@ -326,6 +331,7 @@ def mutate(mother, father, min_len=3, max_len=30, odds=[3,5,5,8], viable=basic_v
 
 # Testing...
 
+
 import types
 
 # Determine the fitness of an organism by creating its model and running it.
@@ -335,6 +341,7 @@ import types
 # fail_first    fail after first epoch if fitness greater than this value.
 # fail_halfway  fail after midpoint in training if fitness greater than this value.
 #               (None == don't check)
+
 
 def fitness(genome, io, fail_first=None, fail_halfway=None):
 
@@ -349,7 +356,8 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
 
     m = BaseSRCNNModel(organism, io, verbose=False, bargraph=False)
 
-    model = build_model(genome, shape=io.image_shape, lr=io.lr, metrics=[m.evaluation_function])
+    model = build_model(genome, shape=io.image_shape,
+                        lr=io.lr, metrics=[m.evaluation_function])
 
     if model == None:
         return 999999.0
@@ -357,7 +365,7 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
     m.model = model
 
     # Now we have a compiled model, execute it - or at least try to, there are still some
-    # models that may bomb out
+    # models that may bomb out.
 
     try:
 
@@ -372,7 +380,8 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
             return results
         else:
             eta = etime + (etime - stime) * (halfway - 1)
-            printlog('After 1 epoch: fitness={}, halfway ETA={:%I:%M:%S %p}'.format(results, eta))
+            printlog(
+                'After 1 epoch: fitness={}, will be halfway @ {:%I:%M:%S %p}'.format(results, eta))
 
         stime = datetime.datetime.now()
         results = m.fit(max_epochs=halfway)
@@ -383,7 +392,8 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
             return results
         else:
             eta = etime + (etime - stime) * halfway / (halfway - 1)
-            printlog('After {} epochs: fitness={}, completion ETA={:%I:%M:%S %p}'.format(halfway, results, eta))
+            printlog('After {} epochs: fitness={}, will complete @ {:%I:%M:%S %p}'.format(
+                halfway, results, eta))
 
         results = m.fit(max_epochs=io.epochs)
         printlog('After {} epochs: fitness={}'.format(io.epochs, results))

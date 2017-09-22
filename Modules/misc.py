@@ -29,7 +29,7 @@ def clear_screen():
 
 def printlog(*s):
 
-    print('{:%Y-%m-%d %H:%M:%S.%f}:'.format(datetime.datetime.now()),*s)
+    print('{:%Y-%m-%d %H:%M:%S.%f}:'.format(datetime.datetime.now()), *s)
 
 # Setup default directories
 

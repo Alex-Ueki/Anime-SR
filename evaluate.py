@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
         opmatch = [s for s in options if s.startswith(op)]
 
-        if len(opmatch) ==0 or len(opmatch) > 1 and opmatch[0] != op:
+        if len(opmatch) == 0 or len(opmatch) > 1 and opmatch[0] != op:
             errors = oops(errors, True, '{} option ({})',
                           ('Unknown' if len(opmatch) == 0 else 'Ambiguous', op))
             continue
@@ -81,7 +81,6 @@ if __name__ == '__main__':
 
     dpath = paths['data']
 
-
     if 'images' not in paths:
         paths['images'] = os.path.join(dpath, 'eval_images')
 
@@ -89,7 +88,8 @@ if __name__ == '__main__':
     paths['Beta'] = os.path.join(paths['images'], 'Beta')
 
     if 'model' not in paths:
-        paths['model'] = os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5')
+        paths['model'] = os.path.join(
+            dpath, 'models', 'BasicSR-60-60-2-dpx.h5')
     else:
         model_split = os.path.splitext(paths['model'])
         if model_split[1] == '':
@@ -111,11 +111,11 @@ if __name__ == '__main__':
     print('       Model Type : {}'.format(model_type))
     print('')
 
-
     # Validation and error checking
 
     for p in paths:
-        errors = oops(errors, not os.path.exists(paths[p]),'Path to {} is not valid ({})'.format(p.title(),paths[p]))
+        errors = oops(errors, not os.path.exists(
+            paths[p]), 'Path to {} is not valid ({})'.format(p.title(), paths[p]))
 
     terminate(errors, False)
 
@@ -151,18 +151,19 @@ if __name__ == '__main__':
     image_ext = os.path.splitext(image_info[0])[1][1:].lower()
 
     errors = oops(errors, image_ext != iostate['img_suffix'].lower(),
-        'Image files are of type [{}] but model was trained on [{}]'.format(image_ext,iostate['img_suffix'].lower()))
+                  'Image files are of type [{}] but model was trained on [{}]'.format(image_ext, iostate['img_suffix'].lower()))
 
-    terminate(errors,False)
+    terminate(errors, False)
 
     # Configure model IO
 
     from Modules.modelio import ModelIO
     import Modules.models as models
 
-    error = oops(errors,model_type not in models.models,'Unknown model type ({})'.format(model_type))
+    error = oops(errors, model_type not in models.models,
+                 'Unknown model type ({})'.format(model_type))
 
-    terminate(errors,False)
+    terminate(errors, False)
 
     io = ModelIO(model_type=model_type,
                  image_width=iostate['image_width'],
@@ -190,12 +191,15 @@ if __name__ == '__main__':
     # make to the definition of the models in models.py, old model files will still
     # work.
 
-    sr = models.BaseSRCNNModel(name=model_type, io=io, verbose=False, bargraph=False)
+    sr = models.BaseSRCNNModel(
+        name=model_type, io=io, verbose=False, bargraph=False)
 
     # Compute some handy information
 
-    row_width = (io.image_width - io.trim_left - io.trim_right) // io.base_tile_width
-    row_height = (io.image_height - io.trim_top - io.trim_bottom) // io.base_tile_height
+    row_width = (io.image_width - io.trim_left -
+                 io.trim_right) // io.base_tile_width
+    row_height = (io.image_height - io.trim_top -
+                  io.trim_bottom) // io.base_tile_height
     tiles_per_img = row_width * row_height
     batches_per_image = (tiles_per_img + (io.batch_size - 1)) // io.batch_size
     tile_width = io.base_tile_width + 2 * io.border
