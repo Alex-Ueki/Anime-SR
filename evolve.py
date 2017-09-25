@@ -46,6 +46,7 @@ import sys
 import os
 import json
 import random
+import itertools
 
 set_docstring(__doc__)
 
@@ -55,22 +56,81 @@ MAX_POPULATION = 20         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
 
 EPOCHS = 10                 # Number of epochs to train
-FAIL_FIRST = -33.0          # Models must attain fitness < this after first epoch
-FAIL_HALFWAY = -39.0        # Modles must attain fitness < this after EPOCHS // 2 epochs
 
+best_fitness = 0            # the best fitness we have found so far
+
+# Fitness heuristic function, returns True if training should be aborted
+# early.
+
+def you_are_the_weakest_link_goodbye(fitness, current_epoch, max_epochs):
+
+    if best_fitness >=0:
+        return False
+
+    fitness = fitness / best_fitness
+
+    # We must always be at least half as good as the best fitness
+
+    if fitness < 0.5:
+        return True
+
+    # By the half-way point we must be at least 75% of the way there
+
+    requirement = 1.0 - (0.5 / max_epochs) * (max_epochs - current_epoch)
+
+    return fitness < requirement
 
 # Checkpoint state to genepool.json file
 
-def checkpoint(path, population, graveyard, io):
+def checkpoint(path, population, graveyard, statistics, io):
 
     state = {'population': population,
              'graveyard': graveyard,
+             'statistics': statistics,
              'io': io.asdict()
              }
 
     with open(path, 'w') as f:
         json.dump(state, f, indent=4)
 
+# Slice and dice a genome and generate statistics for later analysis. Statistics
+# is a dictionary, genome is a list [genome, fitness]
+
+def ligate(statistics, genome):
+
+    genome, fitness = genome
+
+    if type(genome) is not list:
+        genome = genome.split('-')
+
+    # compute the list of codons and subparts taken 1 to n at a time, where
+    # n is the size of the codon.
+
+    fragments = []
+    for codon in genome:
+        bases = codon.split('_')
+        for i in range(len(bases)):
+            fragments.extend(itertools.combinations(bases,i+1))
+
+    # update the statistics tuple for each fragment. The tuples are
+    # (best, mean, worst, count), and in this case best is the most
+    # negative.
+
+    for f in fragments:
+        f = '_'.join(f)
+        if f not in statistics:
+            statistics[f] = (fitness, fitness, fitness, 1)
+        else:
+            best, mean, worst, count = statistics[f]
+
+            best = best if best < fitness else fitness
+            worst = worst if worst > fitness else fitness
+            mean = (mean * count + fitness) / (count + 1)
+            count += 1
+
+            statistics[f] = (best, mean, worst, count)
+
+    return statistics
 
 if __name__ == '__main__':
 
@@ -337,9 +397,8 @@ if __name__ == '__main__':
         population = genepool['population']
     else:
         print('Initializing population...')
-        population = ["c649-c321-out5",
-                      "c649-c321-c323-c325-avg123-out5",
-                      "c643-c643-pool-c1283-c1283-pool-c2563-usam-c1283-c1283-add16-usam-c643-c643-add112-out5"
+        population = ["conv_f64_k9_elu-conv_f32_k1_elu-out_k5_elu",
+                      "conv_f64_k9_elu-conv_f32_k1_elu-avg_f32_k135_d3_elu-out_k5_elu",
                       ]
 
     if 'graveyard' in genepool:
@@ -348,13 +407,14 @@ if __name__ == '__main__':
         print('Initializing graveyard...')
         graveyard = []
 
+    if 'statistics' in genepool:
+        statistics = genepool['statistics']
+    else:
+        print('Initializing statistics...')
+        statistics = {}
+
     # Over-ride defaults/options with contents of genepool.json, if any...
 
-    if 'io' in genepool:
-        io = genepool['io']
-        image_width = io['image_width']
-        image_height = io['image_height']
-        tile_width = io['base_tile_width']
         tile_height = io['base_tile_height']
         border = io['border']
         border_mode = io['border_mode']
@@ -400,8 +460,6 @@ if __name__ == '__main__':
     print('    Min Population : {}'.format(MIN_POPULATION))
     print('    Max Population : {}'.format(MAX_POPULATION))
     print('   Epochs to train : {}'.format(EPOCHS))
-    print('        Fail First > {}'.format(FAIL_FIRST))
-    print('      Fail Halfway > {}'.format(FAIL_HALFWAY))
     print('    Data root path : {}'.format(paths['data']))
     print('   Training Images : {}'.format(paths['training']))
     print(' Validation Images : {}'.format(paths['validation']))
@@ -418,7 +476,7 @@ if __name__ == '__main__':
     print('           Quality : {}'.format(quality))
     print('')
 
-    checkpoint(poolpath, population, graveyard, io)
+    checkpoint(poolpath, population, graveyard, statistics, io)
 
     # Evolve the genepool
 
@@ -428,7 +486,10 @@ if __name__ == '__main__':
     # Repeat until program terminated.
 
     while True:
-        # Ensure we have fitness values for all the organisms in the population
+        # Ensure we have fitness values for all the organisms in the population.
+        # Get the best fitness value so far to use as a training goal.
+
+        best_fitness = population[0][1] if type(population[0]) is list else 0.0
 
         for i, genome in enumerate(population):
             if type(genome) is not list:
@@ -441,9 +502,15 @@ if __name__ == '__main__':
 
                 # Build a model for the organism, train the model, and record the results
 
-                population[i] = [genome, genomics.fitness(
-                    genome, io, fail_first=FAIL_FIRST, fail_halfway=FAIL_HALFWAY)]
-                checkpoint(poolpath, population, graveyard, io)
+                population[i] = [genome, genomics.fitness(genome, io,
+                                apoptosis=you_are_the_weakest_link_goodbye)]
+
+                # Generate all sorts of statistics on various genome combinations. Later we
+                # may use them to optimize evolution a it.
+
+                statistics = ligate(statistics, population[i])
+
+                checkpoint(poolpath, population, graveyard, statistics, io)
 
         # If our population has expanded to the maximum size, kill the least fit organisms.
 
@@ -452,7 +519,7 @@ if __name__ == '__main__':
             population.sort(key=lambda org: org[1])
             graveyard.extend([p[0] for p in population[MIN_POPULATION:]])
             population = population[:MIN_POPULATION]
-            checkpoint(poolpath, population, graveyard, io)
+            checkpoint(poolpath, population, graveyard, statistics, io)
             graveyard.sort()
 
         # Expand the population to the maximum size.
@@ -472,4 +539,4 @@ if __name__ == '__main__':
 
         population.extend(children)
 
-        checkpoint(poolpath, population, graveyard, io)
+        checkpoint(poolpath, population, graveyard, statistics, io)

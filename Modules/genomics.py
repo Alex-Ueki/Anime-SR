@@ -5,11 +5,12 @@ Toolkit for evolving Keras models
 import random
 import sys
 import datetime
+import itertools
 from copy import deepcopy
 
 from keras.models import Sequential, Model, load_model
-from keras.layers import Concatenate, Add, Average, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
-from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D, Conv2DTranspose
+from keras.layers import Concatenate, Add, Average, Multiply, Maximum, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
+from keras.layers.convolutional import Conv2D
 from keras import backend as K
 from keras.utils.np_utils import to_categorical
 import keras.callbacks as callbacks
@@ -18,180 +19,130 @@ import keras.optimizers as optimizers
 from Modules.models import BaseSRCNNModel
 from Modules.misc import printlog
 
-DEBUG = True
-DEBUG_FLAG = False
+_DEBUG = True
 
-# Codons are the individual model layers that the evolver supports. Each codon is
-# a tuple consisting of a layer generator and the layer offset(s) that feed it.
+# Codons are the individual model layers that the evolver supports. A genetic
+# code consists of a sequence of codons, each of which gets input from the
+# previous one and feeds it to the subsequent one. They are expressed as a
+# sequence of codon names, separated by - characters.
 #
+# Composite codons consist of a set of codons separated by : characters. In
+# a composite codon containing N codons, the first N-1 codons get the same
+# input, and then feed their outputs to a final merge codon.
 
-# Convolutions are the most common unit
+# Convolutions are the most common unit. Autogenerate codons with a variety of
+# filter sizes, kernel ranges, and activation functions. The parameters to the
+# convolution are embedded in the codon name so that they can be tweaked easily.
+# Codon names always start with a type code and end with an activation code.
 
-convolutions = {
+filters = [32, 64, 128, 256]
+kernels = [1, 3, 5, 7, 9]
+acts = ['linear', 'elu', 'tanh', 'softsign']
+depths = [2, 3, 4]
 
-    "c321": [Conv2D(32, (1, 1), activation='elu', padding='same'), -1],
-    "c323": [Conv2D(32, (3, 3), activation='elu', padding='same'), -1],
-    "c325": [Conv2D(32, (5, 5), activation='elu', padding='same'), -1],
-    "c327": [Conv2D(32, (7, 7), activation='elu', padding='same'), -1],
-    "c329": [Conv2D(32, (9, 9), activation='elu', padding='same'), -1],
+convolutions = {'conv_f{}_k{}_{}'.format(f, k, a): Conv2D(f, (k, k), activation=a, padding='same')
+                for a in acts for k in kernels for f in filters}
 
-    "c641": [Conv2D(64, (1, 1), activation='elu', padding='same'), -1],
-    "c643": [Conv2D(64, (3, 3), activation='elu', padding='same'), -1],
-    "c645": [Conv2D(64, (5, 5), activation='elu', padding='same'), -1],
-    "c647": [Conv2D(64, (7, 7), activation='elu', padding='same'), -1],
-    "c649": [Conv2D(64, (9, 9), activation='elu', padding='same'), -1],
+# Merge codons combine multiple layers. They are only expressed inside composite
+# codons
 
-    "c1281": [Conv2D(128, (1, 1), activation='elu', padding='same'), -1],
-    "c1283": [Conv2D(128, (3, 3), activation='elu', padding='same'), -1],
-    "c1285": [Conv2D(128, (5, 5), activation='elu', padding='same'), -1],
-    "c1287": [Conv2D(128, (7, 7), activation='elu', padding='same'), -1],
-    "c1289": [Conv2D(128, (9, 9), activation='elu', padding='same'), -1],
+mergers = {'add': Add(), 'avg': Average(), 'mult': Multiply(), 'max': Maximum()}
 
-    "c2561": [Conv2D(256, (1, 1), activation='elu', padding='same'), -1],
-    "c2563": [Conv2D(256, (3, 3), activation='elu', padding='same'), -1],
-    "c2565": [Conv2D(256, (5, 5), activation='elu', padding='same'), -1],
-    "c2567": [Conv2D(256, (7, 7), activation='elu', padding='same'), -1],
-    "c2569": [Conv2D(256, (9, 9), activation='elu', padding='same'), -1],
+# Autogenerate composite codons. We have some restrictions; for example, the filter
+# size of all the convolutions must be the same.
 
-}
+composites = {}
+for m in mergers:
+    for f in filters:
+        for a in acts:
+            for d in depths:
+                for k in itertools.combinations(kernels, d):
+                    cname = '{}_f{}_k{}_d{}_{}'.format(m, f, ''.join([str(x) for x in k]), d, a)
+                    flist = [convolutions['conv_f{}_k{}_{}'.format(f, n, a)] for n in k] + [mergers[m]]
+                    composites[cname] = flist
 
-# Combinations combine multiple layers. If a layer is the source for a combiner,
-# the next layer actually gets its input from the layer that feeds the source
-# layer. This permits the gene to have multiple paths.
-
-combinations = {
-
-    "add12": [Add(), -1, -2],
-    "add13": [Add(), -1, -3],
-    "add14": [Add(), -1, -4],
-    "add15": [Add(), -1, -5],
-    "add16": [Add(), -1, -6],
-    "add17": [Add(), -1, -7],
-    "add18": [Add(), -1, -8],
-    "add19": [Add(), -1, -9],
-    "add110": [Add(), -1, -10],
-    "add111": [Add(), -1, -11],
-    "add112": [Add(), -1, -12],
-    "avg12": [Average(), -1, -2],
-    "avg123": [Average(), -1, -2, -3],
-    "addbad": [Add(), -2, -4],
-
-}
-
-# Introns are intermediate layers.
-
-introns = {
-
-    "pool": [MaxPooling2D((2, 2)), -1],
-    "usam": [UpSampling2D(), -1],
-
-}
 
 # The output layer is always a convolution layer that generates 3 channels
 
-outputs = {
+outputs = {'out_k{}_{}'.format(k, a): Conv2D(3, (k,k), padding='same') for k in kernels for a in acts}
 
-    "out1": [Conv2D(3, (1, 1), padding='same'), -1],
-    "out3": [Conv2D(3, (3, 3), padding='same'), -1],
-    "out5": [Conv2D(3, (5, 5), padding='same'), -1],
-    "out7": [Conv2D(3, (7, 7), padding='same'), -1],
-    "out9": [Conv2D(3, (9, 9), padding='same'), -1],
+# For convenience, make a dictionary of all the possible codons. Python 3.5 black magic!
 
-}
-
-# For convenience, make a dictionary of all the possible codons that can be expressed.
-# Python 3.5 black magic!
-
-all_codons = {**convolutions, **combinations, **introns, **outputs}
+all_codons = {**convolutions, **composites, **outputs, **mergers}
 
 # Mutation selection list (of dicts. Used to select a random codon for mutation.
 
-mutable_codons = [convolutions, combinations, introns]
-
-# A list of codons names is a genome. An expressed genome is one where the
-# codon name is replaced by the values in the codon (the function and connections),
-# and the relative connections have been replaced by absolute connection indexes.
-# Also, a dummy input layer is spliced on. Expects a list but will convert a string
-# if provided.
-
-
-def expressed(sequence):
-
-    if type(sequence) is not list:
-        sequence = sequence.split('-')
-
-    # Get the wiring hookups for the sequence
-
-    expression = [list(all_codons[gene]) for gene in sequence]
-
-    # Add a dummy input layer
-
-    expression.insert(0, [None, 0])
-
-    # Convert wiring from offsets to absolute positions
-
-    expression = [[v if i == 0 else v + n for i,
-                   v in enumerate(gene)] for n, gene in enumerate(expression)]
-
-    return expression
+mutable_codons = [convolutions, composites]
 
 # Build and compile a keras model from an expressed sequence of codons.
 # Returns the model or None if the compile failed in some way
 #
 # genome    list of codon names (if string, will be converted)
-# layers    expressed(genome). Will be computed if not provided, but caller usually has it
 # shape     shape of model input
 # lr        initial learning rate
 # metrics   callbacks
 
 
-def build_model(genome, layers=None, shape=(64, 64, 3), lr=0.001, metrics=[]):
+def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=[]):
 
     if type(genome) is not list:
         genome = genome.split('-')
 
-    if layers == None:
-        layers = expressed(genome)
+    # Get the wiring hookups for the sequence, and preface them with an
+    # input layer. This means genome[i-1] is the code for codon[i].
 
-    # Wire the layers. As we generate each layer, we update the layers[] list
-    # with the constructed layer, so that subsequent layers can be created that
-    # link back to them.
+    codons = [Input(shape=shape)] + [all_codons[gene] for gene in genome]
+
+    # Wire the Codons. As we generate each layer, we update the codons[] list
+    # with the constructed layer, so that subsequent codons can be connected
+    # to them. We don't have to create the first (input) codon. All Keras layer
+    # functions have to be deep-copied so that they are unique objects.
+
+    if _DEBUG:
+        all_layers = [codons[0]]
 
     try:
 
-        for i, layer in enumerate(layers):
-            if i == 0:
-                # Set up the input layer (which expressed() set up as a dummy layer).
-                layers[0] = Input(shape=shape)
-            else:
-                # If we do not deep copy the layer object, then if the model reuses
-                # the same type layer type, keras bombs.
+        for i, layer in enumerate(codons):
+            if i > 0:
+                layer = deepcopy(layer)
+                if type(layer) is list:
+                    # Composite multi-layer codon with a merge as the last element.
+                    # Wire all the input layers to previous codon, then
+                    # wire their outputs to the merge layer
+                    for j in range(len(layer)):
+                        layer[j] = deepcopy(layer[j])
+                        layer[j].name = genome[i-1] + '_{}_{}'.format(i,j)
+                        if j < len(layer) - 1:
+                            layer[j] = layer[j](codons[i-1])
+                        else:
+                            layer[j] = layer[j](layer[:-1])
+                    # Update the layer to point to the output layer
+                    codons[i] = layer[-1]
+                    if _DEBUG:
+                        all_layers.extend(layer)
+                else:
+                    # Simple 1-layer codon
+                    layer.name = genome[i-1] + '_{}'.format(i)
+                    codons[i] = layer(codons[i-1])
+                    if _DEBUG:
+                        all_layers.append(codons[i])
 
-                layer_function = deepcopy(layer[0])
-
-                # Also, we can't have two layers with the same name, so make them
-                # unique. Use the genome code to make it more clear (keep in mind
-                # it does not have a dummy input layer, so -1 offset)
-
-                layer_function.name = genome[i - 1] + '_' + str(i)
-
-                # Our inputs are either a single layer or a list of layers
-
-                layer_inputs = [layers[n] for n in layer[1:]]
-
-                if len(layer_inputs) == 1:
-                    layer_inputs = layer_inputs[0]
-
-                layers[i] = layer_function(layer_inputs)
+        if _DEBUG:
+            for i,layer in enumerate(all_layers):
+                print('Layer',i, layer.name, layer, layer._consumers)
+            print('')
 
         # Create and compile the model
 
-        model = Model(layers[0], layers[-1])
+        model = Model(codons[0], codons[-1])
 
         adam = optimizers.Adam(lr=lr, clipvalue=(1.0 / .001), epsilon=0.001)
 
         model.compile(optimizer=adam, loss='mse', metrics=metrics)
 
+        if _DEBUG:
+            print('Compiled model: shape={}, lr={}, metrics={}'.format(shape, lr, metrics))
         return model
 
     except KeyboardInterrupt:
@@ -200,48 +151,18 @@ def build_model(genome, layers=None, shape=(64, 64, 3), lr=0.001, metrics=[]):
 
     except:
         printlog('Cannot compile: {}'.format(sys.exc_info()[1]))
+        raise
         return None
 
-# Determine if a genome is viable (in other words, that the model makes some
-# sort of sense, does not contain useless layers, etc.). You can write your
-# own viability function.
+# Determine if a genome is viable. In the default case, all genomes are
+# viable, but you may want to subsitute a more advanced filter.
 
+def always_viable(genome):
 
-def basic_viability(genome):
-
-    if type(genome) is not list:
-        genome = genome.split('-')
-
-    printlog('Checking viability of {}'.format('-'.join(genome)))
-
-    expression = expressed(genome)
-
-    # What are the source layers for each layer? It's just handy not to have
-    # the layer functions.
-
-    sources = [gene[1:] for gene in expression]
-
-    # A sequence is not viable if it has a layer that wants to connect to
-    # a layer prior to the base layer.
-
-    if min([min(s) for s in sources]) < 0:
-        return False
-
-    # A sequence is not viable unless all layers are the source for at least
-    # one other layer (except for the final output layer, of course).
-
-    used = {link for layer in sources for link in layer}
-
-    if len(used) != len(genome):
-        return False
-
-    # Finally, just try and build the model and if it fails, we know we
-    # had a problem.
-
-    return build_model(genome, expression) != None
+    return True
 
 # Choose a random codon. If items is None, select a random codon. Otherwise
-# Items must be a dict or a list of dicts.
+# Items may be a dict or a list of dicts.
 
 
 def random_codon(items=None):
@@ -257,19 +178,31 @@ def random_codon(items=None):
     else:
         return items
 
-# Mutate a model. There are 4 possible mutations that can occur; transposition
-# between two models, addition of a codon, deletion of a codon, or mutation of
-# a codon. Parameters are:
+# Generate a random sorted kernel sequence string
+
+def kernel_sequence(number):
+
+    return ''.join(sorted([str(n) for n in random.sample(kernels, number)]))
+
+# Mutate a model. There are 5 possible mutations that can occur:
+#
+# point     point mutation of a parameter of a codon
+# insert    insert a new codon
+# delete    delete a codon
+# transpose move a codon somewhere else in the genome
+# conjugate replace codons with codons in another genome
+#
+# Parameters:
 #
 # mother    parental genome (list of codons; if string will be converted)
 # father    parental genome (only used for transposition)
 # min_len   minimum length of the resulting genome
 # max_len   maximum length of the resulting genome
-# odds      list of relative odds of transposition, addition, deletion, mutate
+# odds      list of relative odds of point, insert, delete, transpose, conjugate
 # viable    viability function; takes a codon list, returns true if it is acceptable
 
 
-def mutate(mother, father, min_len=3, max_len=30, odds=[3, 5, 5, 8], viable=basic_viability):
+def mutate(mother, father, min_len=3, max_len=30, odds=(10, 2, 2, 1, 1), viable=always_viable):
 
     if type(mother) is not list:
         mother = mother.split('-')
@@ -280,70 +213,117 @@ def mutate(mother, father, min_len=3, max_len=30, odds=[3, 5, 5, 8], viable=basi
     mother_len = len(mother)
     child = None
 
-    while child == None or not viable(child):
+    while child == None or child == mother or not viable(child):
 
+        child = mother[:]
         choice = random.randint(1, sum(odds))
 
-        # transpose codons from father to mother. Always at least 1 codon
-        # from mother.
+        # make a point mutation in a codon. Codon will always be in the format
+        # type_parameter_parameter_... _activation and parameter will always
+        # be in format letter-code[digits]. The type is never changed, and we
+        # do special handling for the activation function
 
         if choice <= odds[0]:
-            splice = random.randint(1, mother_len - 1)
-            child = mother[:-splice] + father[-splice:]
-            if child == mother or child == father:
-                child = None
+            locus = random.randrange(mother_len)
+            codons = mother[locus].split('_')
+            basepair = random.randrange(1,len(codons))
+            if basepair == len(codons) - 1:
+                codons[basepair] = random.choice(acts)
+            else:
+                base = codons[basepair][0]
+                param = codons[basepair][1:]
+                if base == 'k':
+                    # If the codon has a depth parameter we need a sequence of kernel sizes, but we
+                    # can deduce this by the length of the current k parameter, since currently
+                    # they are all single-digit.
+                    param = kernel_sequence(len(param))
+                elif base == 'd':
+                    # If we change the depth we have to also change the k parameter
+                    param = random.choice(depths)
+                    codons = [c if c[0] != 'k' else 'k' + kernel_sequence(param) for c in codons]
+                elif base == 'f':
+                    param = random.choice(filters)
+                else:
+                    printlog('Unknown parameter base {} in {}'.format(base, mother[locus]))
+                    param = 'XXX'
+                codons[basepair] = base + str(param)
+            child[locus] = '_'.join(codons)
+            if _DEBUG:
+                print('Point mutation: {} -> {}'.format(mother[locus], child[locus]))
             continue
 
         choice -= odds[0]
+        splice = random.randrange(mother_len)
 
-        child = mother[:]
-        splice = random.randint(0, mother_len - 1)
-
-        # add codon; fail if it would make genome too long
+        # Insert codon; fail if it would make genome too long
 
         if choice <= odds[1]:
-            if mother_len == max_len:
+            if mother_len >= max_len:
                 child = None
             else:
-                child.insert(splice, random_codon())
+                codon = random_codon()
+                child.insert(splice, codon)
+                if _DEBUG:
+                    print('Insertion: {}'.format(codon))
             continue
 
         choice -= odds[1]
 
-        last_codon = splice == (mother_len - 1)
-
-        # delete codon (except we never delete last codon, which is always an output codon)
+        # Delete codon (except we never delete last codon, which is always an output codon)
 
         if choice <= odds[2]:
-            if mother_len == min_len or last_codon:
+            if mother_len <= min_len or splice == (mother_len - 1):
                 child = None
             else:
+                if _DEBUG:
+                    print('Deletion: {}'.format(child[splice]))
                 del child[splice]
             continue
 
-        # mutate codon
 
-        child[splice] = random_codon(outputs if last_codon else None)
-        if child == mother or child == father:
-            child == None
+        # Transpose a codon -- but never the last one, and never move after
+        # the last one.
+
+        choice -= odds[2]
+
+        if choice <= odds[3]:
+            if splice == (mother_len - 1):
+                child = None
+            else:
+                codon = child[splice]
+                del child[splice]
+                splice = random.randrange(len(child)-1)
+                child.insert(splice, codon)
+                if _DEBUG:
+                    print('Transposition: {}'.format(codon))
+            continue
+
+
+        # Conjugate father and mother.
+
+        if choice <= odds[0]:
+            splice = random.randrange(1, mother_len)
+            child = mother[:-splice] + father[-splice:]
+            if child == mother or child == father:
+                child = None
+            else:
+                if _DEBUG:
+                    print('Conjugation')
+
+        # Loop around until we have a useful child.
 
     return child
 
-# Testing...
-
-
-import types
+#import types
 
 # Determine the fitness of an organism by creating its model and running it.
 #
 # organism      string or list with genetic code to be tested
 # io            ModelIO parameter record
-# fail_first    fail after first epoch if fitness greater than this value.
-# fail_halfway  fail after midpoint in training if fitness greater than this value.
-#               (None == don't check)
+# apoptosis     Function that returns True if we should quit early
 
 
-def fitness(genome, io, fail_first=None, fail_halfway=None):
+def fitness(genome, io, apoptosis=None):
 
     if type(genome) is not list:
         genome = genome.split('-')
@@ -360,7 +340,7 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
                         lr=io.lr, metrics=[m.evaluation_function])
 
     if model == None:
-        return 999999.0
+        return 0.0
 
     m.model = model
 
@@ -375,25 +355,25 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
 
         halfway = io.epochs // 2
 
-        if fail_first != None and results > fail_first:
-            printlog('Fail_first triggered - fitness={}'.format(results))
+        eta = etime + (etime - stime) * (halfway - 1)
+        printlog(
+            'After 1 epoch: fitness={}, will be halfway @ {:%I:%M:%S %p}'.format(results, eta))
+
+        if apoptosis != None and apoptosis(results, 1, io.epochs):
+            printlog('Apoptosis triggered!')
             return results
-        else:
-            eta = etime + (etime - stime) * (halfway - 1)
-            printlog(
-                'After 1 epoch: fitness={}, will be halfway @ {:%I:%M:%S %p}'.format(results, eta))
 
         stime = datetime.datetime.now()
         results = m.fit(max_epochs=halfway)
         etime = datetime.datetime.now()
 
-        if fail_halfway != None and results > fail_halfway:
-            printlog('Fail_halfway triggered - fitness={}'.format(results))
+        eta = etime + (etime - stime) * halfway / (halfway - 1)
+        printlog('After {} epochs: fitness={}, will complete @ {:%I:%M:%S %p}'.format(
+            halfway, results, eta))
+
+        if apoptosis != None and apoptosis(results, halfway, io.epochs):
+            printlog('Apoptosis triggered!')
             return results
-        else:
-            eta = etime + (etime - stime) * halfway / (halfway - 1)
-            printlog('After {} epochs: fitness={}, will complete @ {:%I:%M:%S %p}'.format(
-                halfway, results, eta))
 
         results = m.fit(max_epochs=io.epochs)
         printlog('After {} epochs: fitness={}'.format(io.epochs, results))
@@ -404,7 +384,8 @@ def fitness(genome, io, fail_first=None, fail_halfway=None):
 
     except:
         printlog('Cannot fit: {}'.format(sys.exc_info()[1]))
-        results = 999999.0
+        raise
+        results = 0.0
 
     printlog('Fitness: {}'.format(results))
     return results
