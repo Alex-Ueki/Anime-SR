@@ -66,7 +66,7 @@ def genepool_display(data, filter=None, last_mod=None):
     if last_mod == None:
         timestamp = ''
     else:
-        timestamp = ' (as of {:%Y-%m-%d %I:%M:%S %p})'.format(datetime.datetime.fromtimestamp(last_mod))
+        timestamp = ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(datetime.datetime.fromtimestamp(last_mod))
 
     with open(genepool, 'r') as f:
         state = json.load(f)
@@ -80,7 +80,7 @@ def genepool_display(data, filter=None, last_mod=None):
         trained = [p for p in info if type(p) is list]
         untrained = [p for p in info if type(p) is not list]
 
-        print('Current Population{}:\n'.format(timestamp))
+        print('Current Population{}\n'.format(timestamp))
         trained.sort(key=lambda x: x[1])
         max_width = max([12] + [len(p[0]) for p in trained])
         print('{} {:>9s}'.format('Trained Genomes:'.ljust(max_width + 4), 'PSNR'))
@@ -98,14 +98,14 @@ def genepool_display(data, filter=None, last_mod=None):
     elif data == 'graveyard':
 
         max_width = max([15] + [len(p) for p in info])
-        print('Genepool graveyard{}:\n{}'.format(timestamp, '-' * (max_width + 4)))
+        print('Genepool graveyard{}\n{}'.format(timestamp, '-' * (max_width + 4)))
         for model in info:
             print('    {}'.format(model))
 
     elif data == 'statistics':
         # Gene construction info; cribbed from genomics.py
 
-        print('Genepool statistics{}:\n'.format(timestamp))
+        print('Genepool statistics{}\n'.format(timestamp))
 
         acts = ['_linear', '_elu', '_tanh', '_softsign']
         layers = ['conv_', 'add_', 'avg_', 'mult_', 'max_']
@@ -138,7 +138,7 @@ def genepool_display(data, filter=None, last_mod=None):
 
     elif data == 'io':
 
-        print('Genepool IO settings{}:\n'.format(timestamp))
+        print('Genepool IO settings{}\n'.format(timestamp))
         keys = sorted(info.keys())
         max_width = max([len(k) for k in keys])
         for key in sorted(info.keys()):
@@ -152,7 +152,7 @@ def models_display(states, last_mod=None):
     if last_mod == None:
         timestamp = ''
     else:
-        timestamp = ' (as of {:%Y-%m-%d %I:%M:%S %p})'.format(datetime.datetime.fromtimestamp(last_mod))
+        timestamp = ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(datetime.datetime.fromtimestamp(last_mod))
 
     # Gather the info we need from the state files
 
@@ -168,7 +168,7 @@ def models_display(states, last_mod=None):
 
     clear_screen()
 
-    title = 'Trained Models{}:'.format(timestamp)
+    title = 'Trained Models{}'.format(timestamp)
 
     max_width = max([len(title)-4] + [len(p[3]) for p in info])
     print('{} {:>9s} {:>7s} {:>7s}'.format(

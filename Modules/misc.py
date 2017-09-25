@@ -6,8 +6,6 @@ import platform
 import os
 import sys
 import datetime
-import multiprocessing
-import time
 
 # Will be set by module that imports us
 

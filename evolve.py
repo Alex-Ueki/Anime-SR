@@ -35,7 +35,9 @@ Options are:
         Creates a "Darwinian-{options}-h5" temp file in {Data}/models. It is deleted before every model fit
         but then automatically created again by Keras.
 
-        There are some hard-coded parameters at present, defined as constants at the start of evolve.py
+        There are some hard-coded parameters at present, defined as constants at the start of evolve.py.
+
+        See Modules/genomics.py for details on the structure of genes, codons and other genetic elements.
 
 """
 
