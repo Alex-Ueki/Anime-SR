@@ -202,7 +202,7 @@ def kernel_sequence(number):
 # viable    viability function; takes a codon list, returns true if it is acceptable
 
 
-def mutate(mother, father, min_len=3, max_len=30, odds=(10, 2, 2, 1, 1), viable=always_viable):
+def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), viable=always_viable):
 
     if type(mother) is not list:
         mother = mother.split('-')
@@ -214,7 +214,6 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(10, 2, 2, 1, 1), viable=
     child = None
 
     while child == None or child == mother or not viable(child):
-
         child = mother[:]
         choice = random.randint(1, sum(odds))
 
@@ -301,14 +300,13 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(10, 2, 2, 1, 1), viable=
 
         # Conjugate father and mother.
 
-        if choice <= odds[0]:
-            splice = random.randrange(1, mother_len)
-            child = mother[:-splice] + father[-splice:]
-            if child == mother or child == father:
-                child = None
-            else:
-                if _DEBUG:
-                    print('Conjugation')
+        splice = random.randrange(1, mother_len)
+        child = mother[:-splice] + father[-splice:]
+        if child == mother or child == father:
+            child = None
+        else:
+            if _DEBUG:
+                print('Conjugation')
 
         # Loop around until we have a useful child.
 
