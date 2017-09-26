@@ -5,7 +5,7 @@ Usage: monitor.py
     .json files.
 """
 
-from Modules.misc import oops, validate, terminate, set_docstring, printlog, clear_screen
+from Modules.misc import set_docstring, printlog, clear_screen, bcolors
 from functools import reduce
 
 import sys
@@ -19,7 +19,12 @@ set_docstring(__doc__)
 
 # Maximum display width (in characters)
 
-SWIDTH = 100
+SWIDTH = 109
+
+# Hilight dashes in genomes If things look garbled, disable. Tested only
+# on Windows 10!
+
+DASHIT = True
 
 # Paths
 
@@ -37,6 +42,7 @@ layers = ['conv', 'add', 'avg', 'mult', 'max']
 # Fit a string to the screen width (SWIDTH), adjusting for size of
 # other content
 
+
 def fitstr(s, other):
 
     w = SWIDTH - other
@@ -45,14 +51,26 @@ def fitstr(s, other):
         w = w - 5
         if w < 2:
             return s[:w]
-        lc = w // 2
-        rc = w - lc
+        lc, rc = w // 2, w - lc
         return s[:lc] + ' ... ' + s[-rc:]
 
     return s
 
+# Hilight dash marks and optionally right-pad
+
+
+def endash(s, max_width=0):
+
+    padding = max(0, max_width - len(s))
+
+    if DASHIT:
+        s = s.replace('-', bcolors.HEADER + '-' + bcolors.ENDC)
+
+    return s + ' ' * padding
+
 # Get the last modified time of a path (which may be a folder or None).
 # Filter files by suffix.
+
 
 def mod_time(path, suffix='.json'):
 
@@ -61,12 +79,15 @@ def mod_time(path, suffix='.json'):
     else:
         times = 0.0
         for (root, dirs, files) in os.walk(path):
-            print([os.path.getmtime(os.path.join(root, f)) for f in files if f.endswith(suffix)])
-            times = max([times] + [os.path.getmtime(os.path.join(root, f)) for f in files if f.endswith(suffix)])
+            print([os.path.getmtime(os.path.join(root, f))
+                   for f in files if f.endswith(suffix)])
+            times = max([times] + [os.path.getmtime(os.path.join(root, f))
+                                   for f in files if f.endswith(suffix)])
         return times
 
 # Extract the contents of all the _state.json files in the path and return
 # them in a list.
+
 
 def state_files(path, suffix='_state.json'):
 
@@ -76,7 +97,8 @@ def state_files(path, suffix='_state.json'):
         jsons = []
         for (root, dirs, files) in os.walk(path):
             print(root, dirs, files)
-            jsons.extend([json.load(open(os.path.join(root, f), 'r')) for f in files if f.endswith(suffix)])
+            jsons.extend([json.load(open(os.path.join(root, f), 'r'))
+                          for f in files if f.endswith(suffix)])
         return jsons
 
 # Display current status overviews of a genepool.json file
@@ -87,7 +109,8 @@ def genepool_display(data, filter=None, last_mod=None):
     if last_mod == None:
         timestamp = ''
     else:
-        timestamp = ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(datetime.datetime.fromtimestamp(last_mod))
+        timestamp = ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(
+            datetime.datetime.fromtimestamp(last_mod))
 
     with open(genepool, 'r') as f:
         state = json.load(f)
@@ -109,21 +132,22 @@ def genepool_display(data, filter=None, last_mod=None):
         for model in trained:
 
             print('    {} {:9.4f}'.format(
-                model[0].ljust(max_width), model[1]))
+                endash(model[0], max_width), model[1]))
 
         if len(untrained) > 0:
             max_width = max([len(p) for p in untrained])
             print('\nUntrained Genomes:\n{}'.format('-' * (max_width + 4)))
             for model in untrained:
-                print('    {}'.format(model))
+                print('    {}'.format(endash(model)))
 
     elif data == 'graveyard':
 
         info = [fitstr(p, 4) for p in info]
         max_width = max([15] + [len(p) for p in info])
-        print('Genepool graveyard{}\n{}'.format(timestamp, '-' * (max_width + 4)))
+        print('Genepool graveyard{}\n{}'.format(
+            timestamp, '-' * (max_width + 4)))
         for model in info:
-            print('    {}'.format(model))
+            print('    {}'.format(endash(model)))
 
     elif data == 'statistics':
         # Gene construction info; cribbed from genomics.py
@@ -149,15 +173,15 @@ def genepool_display(data, filter=None, last_mod=None):
             title = 'Filtered codons ({})'.format(','.join(codon_filter))
             codons = [c for c in info if all(s in c[0] for s in codon_filter)]
 
-        max_width = max([len(title)-4] + [len(p[0]) for p in codons])
+        max_width = max([len(title) - 4] + [len(p[0]) for p in codons])
         print('{} {:>9s} {:>9s} {:>9s} {:>6s}'.format(
             title.ljust(max_width + 4), 'Best', 'Mean', 'Worst', 'Count'))
         d9 = '-' * 9
-        print('{} {:>9s} {:>9s} {:>9s} {:>6s}'.format('-' * (max_width + 4), d9, d9, d9, '-' * 6))
+        print('{} {:>9s} {:>9s} {:>9s} {:>6s}'.format(
+            '-' * (max_width + 4), d9, d9, d9, '-' * 6))
         for codon in codons:
             print('    {} {:9.4f} {:9.4f} {:9.4f} {:6d}'.format(
-                codon[0].ljust(max_width), codon[1], codon[2], codon[3], codon[4]))
-
+                endash(codon[0], max_width), codon[1], codon[2], codon[3], codon[4]))
 
     elif data == 'io':
 
@@ -173,12 +197,14 @@ def genepool_display(data, filter=None, last_mod=None):
     else:
         print('Unknown genepool selector [{}]'.format(data))
 
+
 def models_display(states, last_mod=None):
 
     if last_mod == None:
         timestamp = ''
     else:
-        timestamp = ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(datetime.datetime.fromtimestamp(last_mod))
+        timestamp = ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(
+            datetime.datetime.fromtimestamp(last_mod))
 
     # Gather the info we need from the state files
 
@@ -187,7 +213,8 @@ def models_display(states, last_mod=None):
         bv = s['best_values']['val_PeakSignaltoNoiseRatio']
         be = s['best_epoch']['val_PeakSignaltoNoiseRatio']
         ep = s['epoch_count']
-        sp = fitstr(os.path.basename(s['io']['model_path']).split('.h5')[0], 30)
+        sp = fitstr(os.path.basename(
+            s['io']['model_path']).split('.h5')[0], 30)
         info.append((bv, be, ep, sp))
 
     info.sort()
@@ -196,14 +223,16 @@ def models_display(states, last_mod=None):
 
     title = 'Trained Models{}'.format(timestamp)
 
-    max_width = max([len(title)-4] + [len(p[3]) for p in info])
+    max_width = max([len(title) - 4] + [len(p[3]) for p in info])
     print('{} {:>9s} {:>7s} {:>7s}'.format(
         title.ljust(max_width + 4), 'Best', '@Epoch', '#Epochs'))
     d9 = '-' * 9
-    print('{} {:>9s} {:>7s} {:>7s}'.format('-' * (max_width + 4), '-' * 9, '-' * 7, '-' * 7))
+    print('{} {:>9s} {:>7s} {:>7s}'.format(
+        '-' * (max_width + 4), '-' * 9, '-' * 7, '-' * 7))
     for item in info:
         print('    {} {:9.4f} {:7d} {:7d}'.format(
-            item[3].ljust(max_width), item[0], item[1], item[2]))
+            endash(item[3], max_width), item[0], item[1], item[2]))
+
 
 if __name__ == '__main__':
 
@@ -235,21 +264,24 @@ if __name__ == '__main__':
 
         # Display requested information
 
-        last_mod = mod_time(monitor_paths[cmd]) if cmd in monitor_paths else 10000000.0
+        last_mod = mod_time(
+            monitor_paths[cmd]) if cmd in monitor_paths else 10000000.0
 
         if cmd in genepool_data:
             genepool_display(genepool_data[cmd], codon_filter, last_mod)
         elif cmd == 'M':
             models_display(state_files(models), last_mod)
         elif cmd == 'F':
-            print('\nEnter Stats Filter (one or more substrings, comma-separated), then press ENTER.')
+            print(
+                '\nEnter Stats Filter (one or more substrings, comma-separated), then press ENTER.')
             print('An empty filter displays the best complete codons.\n')
             try:
                 codon_filter = input('Filter >')
             except EOFError:
                 codon_filter = ''
             print(codon_filter)
-            codon_filter = None if codon_filter == '' else codon_filter.split(',')
+            codon_filter = None if codon_filter == '' else codon_filter.split(
+                ',')
             cmd = 'S'
             genepool_display(genepool_data[cmd], codon_filter, last_mod)
         elif cmd in ['Q']:
@@ -259,7 +291,7 @@ if __name__ == '__main__':
         # Get user command
 
         ch = input('\n{:%I:%M:%S %p} : M)odels, Genepool P)opulation, G)raveyard, S)tats, Set F)ilter, I)O, Q)uit [ENTER to refresh] >'.format(
-                datetime.datetime.now()))
+            datetime.datetime.now()))
 
         if ch != '':
             cmd = ch[0].upper()
