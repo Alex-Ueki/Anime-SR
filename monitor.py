@@ -17,6 +17,10 @@ import itertools
 
 set_docstring(__doc__)
 
+# Maximum display width (in characters)
+
+SWIDTH = 100
+
 # Paths
 
 genepool = os.path.join('Data', 'genepool.json')
@@ -29,6 +33,23 @@ kernels = [1, 3, 5, 7, 9]
 depths = [2, 3, 4]
 acts = ['linear', 'elu', 'tanh', 'softsign']
 layers = ['conv', 'add', 'avg', 'mult', 'max']
+
+# Fit a string to the screen width (SWIDTH), adjusting for size of
+# other content
+
+def fitstr(s, other):
+
+    w = SWIDTH - other
+
+    if len(s) > w:
+        w = w - 5
+        if w < 2:
+            return s[:w]
+        lc = w // 2
+        rc = w - lc
+        return s[:lc] + ' ... ' + s[-rc:]
+
+    return s
 
 # Get the last modified time of a path (which may be a folder or None).
 # Filter files by suffix.
@@ -77,8 +98,8 @@ def genepool_display(data, filter=None, last_mod=None):
 
     if data == 'population':
 
-        trained = [p for p in info if type(p) is list]
-        untrained = [p for p in info if type(p) is not list]
+        trained = [[fitstr(p[0], 14), p[1]] for p in info if type(p) is list]
+        untrained = [fitstr(p, 4) for p in info if type(p) is not list]
 
         print('Current Population{}\n'.format(timestamp))
         trained.sort(key=lambda x: x[1])
@@ -86,6 +107,7 @@ def genepool_display(data, filter=None, last_mod=None):
         print('{} {:>9s}'.format('Trained Genomes:'.ljust(max_width + 4), 'PSNR'))
         print('{} {:>9s}'.format('-' * (max_width + 4), '-' * 9))
         for model in trained:
+
             print('    {} {:9.4f}'.format(
                 model[0].ljust(max_width), model[1]))
 
@@ -97,6 +119,7 @@ def genepool_display(data, filter=None, last_mod=None):
 
     elif data == 'graveyard':
 
+        info = [fitstr(p, 4) for p in info]
         max_width = max([15] + [len(p) for p in info])
         print('Genepool graveyard{}\n{}'.format(timestamp, '-' * (max_width + 4)))
         for model in info:
@@ -112,11 +135,11 @@ def genepool_display(data, filter=None, last_mod=None):
 
         # convert the statistics dictionary to a list of lists
 
-        info = [[key] + info[key] for key in info.keys()]
+        info = [[fitstr(key, 41)] + info[key] for key in info.keys()]
 
-        # sort by max fitness
+        # sort by max fitness:mean fitness:worst fitness
 
-        info.sort(key=lambda n: n[1])
+        info.sort(key=lambda n: n[1:])
 
         if codon_filter == None:
             title = 'Complete codons (Count >= 5):'
@@ -128,7 +151,7 @@ def genepool_display(data, filter=None, last_mod=None):
 
         max_width = max([len(title)-4] + [len(p[0]) for p in codons])
         print('{} {:>9s} {:>9s} {:>9s} {:>6s}'.format(
-            title.ljust(max_width + 4), 'Best', 'Median', 'Worst', 'Count'))
+            title.ljust(max_width + 4), 'Best', 'Mean', 'Worst', 'Count'))
         d9 = '-' * 9
         print('{} {:>9s} {:>9s} {:>9s} {:>6s}'.format('-' * (max_width + 4), d9, d9, d9, '-' * 6))
         for codon in codons:
@@ -138,6 +161,9 @@ def genepool_display(data, filter=None, last_mod=None):
 
     elif data == 'io':
 
+        for k in info['paths'].keys():
+            info['paths[\'{}\']'.format(k)] = info['paths'][k]
+        del info['paths']
         print('Genepool IO settings{}\n'.format(timestamp))
         keys = sorted(info.keys())
         max_width = max([len(k) for k in keys])
@@ -161,7 +187,7 @@ def models_display(states, last_mod=None):
         bv = s['best_values']['val_PeakSignaltoNoiseRatio']
         be = s['best_epoch']['val_PeakSignaltoNoiseRatio']
         ep = s['epoch_count']
-        sp = os.path.basename(s['io']['model_path']).split('.h5')[0]
+        sp = fitstr(os.path.basename(s['io']['model_path']).split('.h5')[0], 30)
         info.append((bv, be, ep, sp))
 
     info.sort()
