@@ -7,7 +7,8 @@ import os
 import sys
 import datetime
 
-# Will be set by module that imports us
+# Will be set by module that imports us - used by terminate() to display
+# appropriate help.
 
 owner_docstring = ''
 
@@ -96,7 +97,7 @@ def validate(error_state, new_value, is_error, msg, error_value=None, end_run=Fa
 
 
 # Terminate run if errors have been encountered.
-# Parental Unit has already done penance for this pun.
+# Parental Unit has already done penance for this joke.
 
 
 def terminate(sarah_connor, verbose=True):
