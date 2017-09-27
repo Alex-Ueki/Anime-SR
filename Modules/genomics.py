@@ -240,11 +240,19 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), best_fit
         if choice <= odds[0]:
             locus = random.randrange(mother_len)
             codons = mother[locus].split('_')
-            basepair = random.randrange(1,len(codons))
+            basepair = random.randrange(len(codons))
             while True:
                 if basepair == len(codons) - 1:
+                    # choose new activation function
                     new_codon = random.choice(acts)
+                elif basepair == 0:
+                    # choose new codon type (only if a merge-type codon)
+                    if codons[0] in mergers:
+                        new_codon = random.choice(mergers.keys) + codons[0][1:]
+                    else:
+                        new_codon = codons[0]
                 else:
+                    # tweak a codon parameter
                     base = codons[basepair][0]
                     param = codons[basepair][1:]
                     if base == 'k':
