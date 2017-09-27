@@ -492,7 +492,7 @@ if __name__ == '__main__':
                 # the previously trained genomes, exit early (which will generate a new
                 # population using a "better" genepool)
 
-                if population[i][1] > worst_fitness:
+                if population[i][1] < worst_fitness:
                     break
 
         # Remove untrained populations
