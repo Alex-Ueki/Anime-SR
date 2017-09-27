@@ -361,6 +361,7 @@ def fitness(genome, io, apoptosis=None):
             printlog('Apoptosis triggered!')
             return results
 
+        prev_results = results
         stime = datetime.datetime.now()
         results = m.fit(max_epochs=halfway)
         etime = datetime.datetime.now()
@@ -369,7 +370,7 @@ def fitness(genome, io, apoptosis=None):
         printlog('After {} epochs: fitness={}, will complete @ {:%I:%M:%S %p}'.format(
             halfway, results, eta))
 
-        if apoptosis != None and apoptosis(results, halfway, io.epochs):
+        if apoptosis != None and apoptosis(results, halfway, io.epochs, last_fitness=prev_results):
             printlog('Apoptosis triggered!')
             return results
 

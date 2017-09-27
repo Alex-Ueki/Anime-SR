@@ -56,22 +56,27 @@ set_docstring(__doc__)
 
 MAX_POPULATION = 20         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
-
 EPOCHS = 10                 # Number of epochs to train
-
 best_fitness = 0            # the best fitness we have found so far
 
 # Fitness heuristic function, returns True if training should be aborted
 # early.
 
-def you_are_the_weakest_link_goodbye(fitness, current_epoch, max_epochs):
 
-    if best_fitness >=0:
+def you_are_the_weakest_link_goodbye(fitness, current_epoch, max_epochs, last_fitness=None):
+
+    if best_fitness >= 0:
         return False
+
+    # if last_fitness is a value, our current fitness must be an improvement
+
+    if last_fitness != None and fitness >= last_fitness:
+        return True
 
     fitness = fitness / best_fitness
 
-    # We must always be at least half as good as the best fitness
+    # We must always be at least half as good as the best fitness, and if last_fitness
+    # is a value, we must show improvement
 
     if fitness < 0.5:
         return True
@@ -83,6 +88,7 @@ def you_are_the_weakest_link_goodbye(fitness, current_epoch, max_epochs):
     return fitness < requirement
 
 # Checkpoint state to genepool.json file
+
 
 def checkpoint(path, population, graveyard, statistics, io):
 
@@ -98,6 +104,7 @@ def checkpoint(path, population, graveyard, statistics, io):
 # Slice and dice a genome and generate statistics for later analysis. Statistics
 # is a dictionary, genome is a list [genome, fitness]
 
+
 def ligate(statistics, genome):
 
     genome, fitness = genome
@@ -112,7 +119,7 @@ def ligate(statistics, genome):
     for codon in genome:
         bases = codon.split('_')
         for i in range(len(bases)):
-            fragments.extend(itertools.combinations(bases,i+1))
+            fragments.extend(itertools.combinations(bases, i + 1))
 
     # update the statistics tuple for each fragment. The tuples are
     # (best, mean, worst, count), and in this case best is the most
@@ -125,14 +132,15 @@ def ligate(statistics, genome):
         else:
             best, mean, worst, count = statistics[f]
 
-            best = best if best < fitness else fitness
-            worst = worst if worst > fitness else fitness
+            best = min(best, fitness)
+            worst = max(worst, fitness)
             mean = (mean * count + fitness) / (count + 1)
             count += 1
 
             statistics[f] = (best, mean, worst, count)
 
     return statistics
+
 
 if __name__ == '__main__':
 
@@ -504,8 +512,9 @@ if __name__ == '__main__':
 
                 # Build a model for the organism, train the model, and record the results
 
-                population[i] = [genome, genomics.fitness(genome, io,
-                                apoptosis=you_are_the_weakest_link_goodbye)]
+                population[i] = [ genome,
+                                  genomics.fitness(genome, io, apoptosis=you_are_the_weakest_link_goodbye)
+                                ]
 
                 # Generate all sorts of statistics on various genome combinations. Later we
                 # may use them to optimize evolution a it.
