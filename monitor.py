@@ -9,6 +9,7 @@ from Modules.misc import set_docstring, printlog, clear_screen, bcolors
 from functools import reduce
 
 import sys
+import re
 import os
 import json
 import time
@@ -93,6 +94,7 @@ def state_files(path, suffix='_state.json'):
 
 def genepool_display(data, filter=None, last_mod=None):
 
+
     timestamp = '' if last_mod == None else ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(
         datetime.datetime.fromtimestamp(last_mod))
 
@@ -149,16 +151,13 @@ def genepool_display(data, filter=None, last_mod=None):
 
         info.sort(key=lambda n: n[1:])
 
-        if codon_filter == ['']:
+        if codon_filter == None:
             title = 'Complete codons (Count >= 5):'
             codons = [c for c in info if c[4] >= 5 and any(c[0].startswith(
                 x) for x in layers) and any(c[0].endswith(y) for y in acts) and c[0].count('_') > 1]
-        elif codon_filter == ['*']:
-            title = 'All codons'
-            codons = info
         else:
-            title = 'Filtered codons ({})'.format(','.join(codon_filter))
-            codons = [c for c in info if all(s in c[0] for s in codon_filter)]
+            title = 'Filtered codons ({})'.format(codon_filter.pattern)
+            codons = [c for c in info if codon_filter.search(c[0])]
 
         max_width = max([len(title) - 4] + [len(p[0]) for p in codons])
         print('{} {:>9s} {:>9s} {:>9s} {:>6s}'.format(
@@ -243,7 +242,7 @@ if __name__ == '__main__':
     # Default command
 
     cmd = 'P'
-    codon_filter = ['']
+    codon_filter = None
 
     while True:
 
@@ -258,12 +257,15 @@ if __name__ == '__main__':
             models_display(state_files(models), last_mod)
         elif cmd == 'F':
             print(
-                '\nEnter Stats Filter (one or more substrings, comma-separated), then press ENTER.')
-            print('* = all codon fragments, empty = best complete codons.\n')
+                '\nEnter Stats Filter regular expression, then press ENTER. Leave blank to display best genomes.\n')
             try:
-                codon_filter = input('Filter >').split(',')
+                codon_filter = input('Filter >')
+                if codon_filter == '':
+                    codon_filter = None
+                else:
+                    codon_filter = re.compile(codon_filter)
             except EOFError:
-                codon_filter = []
+                codon_filter = None
             cmd = 'S'
             genepool_display(genepool_data[cmd], codon_filter, last_mod)
         elif cmd in ['Q']:
