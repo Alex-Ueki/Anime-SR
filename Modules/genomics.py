@@ -161,23 +161,6 @@ def always_viable(genome):
 
     return True
 
-# Choose a random codon. If items is None, select a random codon. Otherwise
-# Items may be a dict or a list of dicts.
-
-
-def random_codon(items=None):
-
-    if items == None:
-        items = mutable_codons
-
-    while type(items) in (list, tuple):
-        items = random.choice(items)
-
-    if type(items) is dict:
-        return random.choice(list(items.keys()))
-    else:
-        return items
-
 # Generate a random sorted kernel sequence string
 
 def kernel_sequence(number):
@@ -194,15 +177,47 @@ def kernel_sequence(number):
 #
 # Parameters:
 #
-# mother    parental genome (list of codons; if string will be converted)
-# father    parental genome (only used for transposition)
-# min_len   minimum length of the resulting genome
-# max_len   maximum length of the resulting genome
-# odds      list of relative odds of point, insert, delete, transpose, conjugate
-# viable    viability function; takes a codon list, returns true if it is acceptable
+# mother        parental genome (list of codons; if string will be converted)
+# father        parental genome (only used for transposition)
+# min_len       minimum length of the resulting genome
+# max_len       maximum length of the resulting genome
+# odds          list of relative odds of point, insert, delete, transpose, conjugate
+# best_fitness  the fitness of the best genome found so far.
+# statistics    dictionary of codon statistics for guiding evolotion
+# viable        viability function; takes a codon list, returns true if it is acceptable
+
+def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), best_fitness=0.0, statistics={}, viable=always_viable):
+
+    # a codon is "fit enough" if it is *not* in the statistics dictionary or
+    # if it passes a dice roll based on how close its mean fitness is to the
+    # best fitness of all the genomes. This will give a slight preference to
+    # the better codons, but still allow for variety
+
+    def selection_pressure(codon):
+
+        if best_fitness >= 0 or codon not in statistics:
+            return True
+
+        codon_fitness = statistics[codon][1]
+
+        return codon_fitness >= 0 or random.random() >= codon_fitness / best_fitness
+
+    # Choose a random codon from mutable_codons
 
 
-def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), viable=always_viable):
+    def random_codon():
+
+        items = mutable_codons
+
+        while type(items) in (list, tuple):
+            items = random.choice(items)
+
+        if type(items) is dict:
+            return random.choice(list(items.keys()))
+        else:
+            return items
+
+    # Make sure inputs are lists
 
     if type(mother) is not list:
         mother = mother.split('-')
@@ -226,26 +241,30 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), viable=a
             locus = random.randrange(mother_len)
             codons = mother[locus].split('_')
             basepair = random.randrange(1,len(codons))
-            if basepair == len(codons) - 1:
-                codons[basepair] = random.choice(acts)
-            else:
-                base = codons[basepair][0]
-                param = codons[basepair][1:]
-                if base == 'k':
-                    # If the codon has a depth parameter we need a sequence of kernel sizes, but we
-                    # can deduce this by the length of the current k parameter, since currently
-                    # they are all single-digit.
-                    param = kernel_sequence(len(param))
-                elif base == 'd':
-                    # If we change the depth we have to also change the k parameter
-                    param = random.choice(depths)
-                    codons = [c if c[0] != 'k' else 'k' + kernel_sequence(param) for c in codons]
-                elif base == 'f':
-                    param = random.choice(filters)
+            while True:
+                if basepair == len(codons) - 1:
+                    new_codon = random.choice(acts)
                 else:
-                    printlog('Unknown parameter base {} in {}'.format(base, mother[locus]))
-                    param = 'XXX'
-                codons[basepair] = base + str(param)
+                    base = codons[basepair][0]
+                    param = codons[basepair][1:]
+                    if base == 'k':
+                        # If the codon has a depth parameter we need a sequence of kernel sizes, but we
+                        # can deduce this by the length of the current k parameter, since currently
+                        # they are all single-digit.
+                        param = kernel_sequence(len(param))
+                    elif base == 'd':
+                        # If we change the depth we have to also change the k parameter
+                        param = random.choice(depths)
+                        codons = [c if c[0] != 'k' else 'k' + kernel_sequence(param) for c in codons]
+                    elif base == 'f':
+                        param = random.choice(filters)
+                    else:
+                        printlog('Unknown parameter base {} in {}'.format(base, mother[locus]))
+                        param = 'XXX'
+                    new_codon = base + str(param)
+                if selection_pressure(new_codon):
+                    break
+            codons[basepair] = new_codon
             child[locus] = '_'.join(codons)
             if _DEBUG:
                 print('Point mutation: {} -> {}'.format(mother[locus], child[locus]))
@@ -260,7 +279,10 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), viable=a
             if mother_len >= max_len:
                 child = None
             else:
-                codon = random_codon()
+                while True:
+                    codon = random_codon()
+                    if selection_pressure(codon):
+                        break
                 child.insert(splice, codon)
                 if _DEBUG:
                     print('Insertion: {}'.format(codon))
@@ -312,7 +334,46 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), viable=a
 
     return child
 
-#import types
+# Slice and dice a genome and generate statistics for analysis. Statistics
+# is a dictionary; for each genetic fragment, it contains a (best, mean,
+# worst, count) tuple
+
+
+def ligate(statistics, genome, fitness):
+
+    if type(genome) is not list:
+        genome = genome.split('-')
+
+    # compute the list of codons and subparts taken 1 to n at a time, where
+    # n is the size of the codon.
+
+    fragments = []
+    for codon in genome:
+        bases = codon.split('_')
+        for i in range(len(bases)):
+            fragments.extend(itertools.combinations(bases, i + 1))
+
+    # update the statistics tuple for each fragment. The tuples are
+    # (best, mean, worst, count), and in this case best is the most
+    # negative.
+
+    for f in fragments:
+        f = '_'.join(f)
+        if f not in statistics:
+            statistics[f] = (fitness, fitness, fitness, 1)
+        else:
+            best, mean, worst, count = statistics[f]
+
+            best = min(best, fitness)
+            worst = max(worst, fitness)
+            mean = (mean * count + fitness) / (count + 1)
+            count += 1
+
+            statistics[f] = (best, mean, worst, count)
+
+    return statistics
+
+
 
 # Determine the fitness of an organism by creating its model and running it.
 #

@@ -101,46 +101,6 @@ def checkpoint(path, population, graveyard, statistics, io):
     with open(path, 'w') as f:
         json.dump(state, f, indent=4)
 
-# Slice and dice a genome and generate statistics for later analysis. Statistics
-# is a dictionary, genome is a list [genome, fitness]
-
-
-def ligate(statistics, genome):
-
-    genome, fitness = genome
-
-    if type(genome) is not list:
-        genome = genome.split('-')
-
-    # compute the list of codons and subparts taken 1 to n at a time, where
-    # n is the size of the codon.
-
-    fragments = []
-    for codon in genome:
-        bases = codon.split('_')
-        for i in range(len(bases)):
-            fragments.extend(itertools.combinations(bases, i + 1))
-
-    # update the statistics tuple for each fragment. The tuples are
-    # (best, mean, worst, count), and in this case best is the most
-    # negative.
-
-    for f in fragments:
-        f = '_'.join(f)
-        if f not in statistics:
-            statistics[f] = (fitness, fitness, fitness, 1)
-        else:
-            best, mean, worst, count = statistics[f]
-
-            best = min(best, fitness)
-            worst = max(worst, fitness)
-            mean = (mean * count + fitness) / (count + 1)
-            count += 1
-
-            statistics[f] = (best, mean, worst, count)
-
-    return statistics
-
 
 if __name__ == '__main__':
 
@@ -496,10 +456,14 @@ if __name__ == '__main__':
     # Repeat until program terminated.
 
     while True:
-        # Ensure we have fitness values for all the organisms in the population.
-        # Get the best fitness value so far to use as a training goal.
+        # Get the best fitness value so far to use as a training goal, and
+        # the worst fitness so we can trigger a repopulation if we get a
+        # good genome during training.
 
         best_fitness = population[0][1] if type(population[0]) is list else 0.0
+        worst_fitness = max([best_fitness] + [p[1] for p in population if p is list])
+
+        # Train all the untrained genomes in the population
 
         for i, genome in enumerate(population):
             if type(genome) is not list:
@@ -513,19 +477,31 @@ if __name__ == '__main__':
                 # Build a model for the organism, train the model, and record the results
 
                 population[i] = [ genome,
-                                  genomics.fitness(genome, io, apoptosis=you_are_the_weakest_link_goodbye)
+                                  genomics.fitness(genome, io,
+                                                   apoptosis=you_are_the_weakest_link_goodbye)
                                 ]
 
                 # Generate all sorts of statistics on various genome combinations. Later we
                 # may use them to optimize evolution a it.
 
-                statistics = ligate(statistics, population[i])
+                statistics = genomics.ligate(statistics, population[i][0], population[i][1])
 
                 checkpoint(poolpath, population, graveyard, statistics, io)
 
-        # If our population has expanded to the maximum size, kill the least fit organisms.
+                # If the model we just trained has better fitness than the worst fitness of
+                # the previously trained genomes, exit early (which will generate a new
+                # population using a "better" genepool)
 
-        if len(population) >= MAX_POPULATION:
+                if population[i][1] > worst_fitness:
+                    break
+
+        # Remove untrained populations
+
+        population = [p for p in population if type(p) is list]
+
+        # If our population has expanded past the minimum limit, cut back to the best.
+
+        if len(population) > MIN_POPULATION:
             printlog('Trimming population to {}...'.format(MIN_POPULATION))
             population.sort(key=lambda org: org[1])
             graveyard.extend([p[0] for p in population[MIN_POPULATION:]])
@@ -541,8 +517,8 @@ if __name__ == '__main__':
         printlog('Creating new children...')
 
         while len(children) < (MAX_POPULATION - len(parents)):
-            mother, father = [p.split('-') for p in random.sample(parents, 2)]
-            child = '-'.join(genomics.mutate(mother, father))
+            mother, father = [p for p in random.sample(parents, 2)]
+            child = '-'.join(genomics.mutate(mother, father, best_fitness=best_fitness, statistics=statistics))
             if child not in parents and child not in children and child not in graveyard:
                 children.append(child)
             else:
