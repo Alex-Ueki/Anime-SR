@@ -154,13 +154,6 @@ def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=[]):
         raise
         return None
 
-# Determine if a genome is viable. In the default case, all genomes are
-# viable, but you may want to subsitute a more advanced filter.
-
-def always_viable(genome):
-
-    return True
-
 # Generate a random sorted kernel sequence string
 
 def kernel_sequence(number):
@@ -186,7 +179,7 @@ def kernel_sequence(number):
 # statistics    dictionary of codon statistics for guiding evolotion
 # viable        viability function; takes a codon list, returns true if it is acceptable
 
-def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), best_fitness=0.0, statistics={}, viable=always_viable):
+def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), best_fitness=0.0, statistics={}, viable=None):
 
     # a codon is "fit enough" if it is *not* in the statistics dictionary or
     # if it passes a dice roll based on how close its mean fitness is to the
@@ -228,7 +221,7 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), best_fit
     mother_len = len(mother)
     child = None
 
-    while child == None or child == mother or not viable(child):
+    while child == None or child == mother or viable != None and not viable(child):
         child = mother[:]
         choice = random.randint(1, sum(odds))
 
