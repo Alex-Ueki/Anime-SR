@@ -154,12 +154,6 @@ def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=[]):
         raise
         return None
 
-# Generate a random sorted kernel sequence string
-
-def kernel_sequence(number):
-
-    return ''.join(sorted([str(n) for n in random.sample(kernels, number)]))
-
 # Mutate a model. There are 5 possible mutations that can occur:
 #
 # point     point mutation of a parameter of a codon
@@ -170,23 +164,23 @@ def kernel_sequence(number):
 #
 # Parameters:
 #
-# mother        parental genome (list of codons; if string will be converted)
-# father        parental genome (only used for transposition)
+# parent        parental genome (list of codons; if string will be converted)
+# conjugate     parental genome (only used for conjugation)
 # min_len       minimum length of the resulting genome
 # max_len       maximum length of the resulting genome
-# odds          list of relative odds of point, insert, delete, transpose, conjugate
+# odds          list of *cumulative* odds of point, insert, delete, transpose, conjugate
 # best_fitness  the fitness of the best genome found so far.
 # statistics    dictionary of codon statistics for guiding evolotion
 # viable        viability function; takes a codon list, returns true if it is acceptable
 
-def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), best_fitness=0.0, statistics={}, viable=None):
+def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 8, 9), best_fitness=0.0, statistics={}, viable=None):
 
     # a codon is "fit enough" if it is *not* in the statistics dictionary or
     # if it passes a dice roll based on how close its mean fitness is to the
     # best fitness of all the genomes. This will give a slight preference to
     # the better codons, but still allow for variety
 
-    def selection_pressure(codon):
+    def fit_enough(codon):
 
         if best_fitness >= 0 or codon not in statistics:
             return True
@@ -195,143 +189,184 @@ def mutate(mother, father, min_len=3, max_len=30, odds=(3, 3, 1, 1, 1), best_fit
 
         return codon_fitness >= 0 or random.random() >= codon_fitness / best_fitness
 
-    # Choose a random codon from mutable_codons
+    # Choose a random codon from mutable_codons, with suitable fitness
 
 
     def random_codon():
 
-        items = mutable_codons
+        while True:
+            codon = mutable_codons
 
-        while type(items) in (list, tuple):
-            items = random.choice(items)
+            while type(codon) in (list, tuple):
+                codon = random.choice(codon)
 
-        if type(items) is dict:
-            return random.choice(list(items.keys()))
-        else:
-            return items
+            if type(codon) is dict:
+                return random.choice(list(codon.keys()))
 
-    # Make sure inputs are lists
+            if fit_enough(codon):
+                break
 
-    if type(mother) is not list:
-        mother = mother.split('-')
+        return codon
 
-    if type(father) is not list:
-        father = father.split('-')
+    # make a point mutation in a codon. Codon will always be in the format
+    # type_parameter_parameter_... _activation and parameter will always
+    # be in format letter-code[digits]. The type is never changed, and we
+    # do special handling for the activation function
 
-    mother_len = len(mother)
+
+    def point_mutation(child, _):
+
+        # Generate a random sorted kernel sequence string
+
+        def kernel_sequence(number):
+
+            return ''.join(sorted([str(n) for n in random.sample(kernels, number)]))
+
+        locus = random.randrange(len(child))
+        original_locus = child[locus]
+        codons = original_locus.split('_')
+        basepair = random.randrange(len(codons))
+
+        while True:
+            if basepair == len(codons) - 1:
+                # choose new activation function
+                new_codon = random.choice(acts)
+            elif basepair == 0:
+                # choose new codon type (only if a merge-type codon)
+                if codons[0] in mergers:
+                    new_codon = random.choice(list(mergers.keys())) + codons[0][1:]
+                else:
+                    new_codon = codons[0]
+            else:
+                # tweak a codon parameter
+                base = codons[basepair][0]
+                param = codons[basepair][1:]
+                if base == 'k':
+                    # If the codon has a depth parameter we need a sequence of kernel sizes, but we
+                    # can deduce this by the length of the current k parameter, since currently
+                    # they are all single-digit.
+                    param = kernel_sequence(len(param))
+                elif base == 'd':
+                    # If we change the depth we have to also change the k parameter
+                    param = random.choice(depths)
+                    codons = [c if c[0] != 'k' else 'k' + kernel_sequence(param) for c in codons]
+                elif base == 'f':
+                    param = random.choice(filters)
+                else:
+                    printlog('Unknown parameter base {} in {}'.format(base, mother[locus]))
+                    param = 'XXX'
+                new_codon = base + str(param)
+            if fit_enough(new_codon):
+                break
+
+        codons[basepair] = new_codon
+        child[locus] = '_'.join(codons)
+
+        if _DEBUG:
+            print('    Point mutation {} -> {}'.format(original_locus, child[locus]))
+
+        return child
+
+    # Insertion mutation - never insert after output codon
+
+    def insertion(child, _):
+
+        child_len = len(child)
+
+        if child_len >= max_len:
+            return None
+
+        codon = random_codon()
+
+        child.insert(random.randrange(child_len), codon)
+
+        if _DEBUG:
+            print('         Insertion', codon)
+
+        return child
+
+    # Deletion mutation - never delete output codon!
+
+    def deletion(child, _):
+
+        child_len = len(child)
+
+        if child_len <= min_len:
+            return None
+
+        del child[random.randrange(child_len-1)]
+
+        if _DEBUG:
+            print('          Deletion')
+
+        return child
+
+    # Conjugate two genomes - always at least one codon from each contributor
+
+    def conjugation(child, conjugate):
+
+        splice = random.randrange(1, len(child))
+        child = child[:-splice] + conjugate[-splice:]
+
+        if _DEBUG:
+            print('       Conjugation')
+
+        return child
+
+    # Transposition mutation - never transpose output codon
+
+    def transposition(child, _):
+
+        splice = random.randrange(len(child)-1)
+        codon = child[splice]
+        del child[splice]
+
+        splice = random.randrange(len(child)-1)
+        child.insert(splice, codon)
+
+        if _DEBUG:
+            print('     Transposition {}'.format(codon))
+
+        return child
+
+    # -------------------------------------------------
+    # MAIN BODY OF evolve(). Make sure inputs are lists
+    # -------------------------------------------------
+
+    if type(parent) is not list:
+        parent = parent.split('-')
+
+    if type(conjugate) is not list:
+        conjugate = conjugate.split('-')
+
+    if _DEBUG:
+        print('   Mutation parent','-'.join(parent))
+        print('Mutation conjugate','-'.join(conjugate))
+
+    operations = [point_mutation, insertion, deletion, transposition, conjugation]
+
     child = None
 
-    while child == None or child == mother or viable != None and not viable(child):
-        child = mother[:]
-        choice = random.randint(1, sum(odds))
+    # Repeat until we get a useful mutation
 
-        # make a point mutation in a codon. Codon will always be in the format
-        # type_parameter_parameter_... _activation and parameter will always
-        # be in format letter-code[digits]. The type is never changed, and we
-        # do special handling for the activation function
+    while child == None or child == parent or child == conjugate or viable != None and not viable(child):
 
-        if choice <= odds[0]:
-            locus = random.randrange(mother_len)
-            codons = mother[locus].split('_')
-            basepair = random.randrange(len(codons))
-            while True:
-                if basepair == len(codons) - 1:
-                    # choose new activation function
-                    new_codon = random.choice(acts)
-                elif basepair == 0:
-                    # choose new codon type (only if a merge-type codon)
-                    if codons[0] in mergers:
-                        new_codon = random.choice(mergers.keys) + codons[0][1:]
-                    else:
-                        new_codon = codons[0]
-                else:
-                    # tweak a codon parameter
-                    base = codons[basepair][0]
-                    param = codons[basepair][1:]
-                    if base == 'k':
-                        # If the codon has a depth parameter we need a sequence of kernel sizes, but we
-                        # can deduce this by the length of the current k parameter, since currently
-                        # they are all single-digit.
-                        param = kernel_sequence(len(param))
-                    elif base == 'd':
-                        # If we change the depth we have to also change the k parameter
-                        param = random.choice(depths)
-                        codons = [c if c[0] != 'k' else 'k' + kernel_sequence(param) for c in codons]
-                    elif base == 'f':
-                        param = random.choice(filters)
-                    else:
-                        printlog('Unknown parameter base {} in {}'.format(base, mother[locus]))
-                        param = 'XXX'
-                    new_codon = base + str(param)
-                if selection_pressure(new_codon):
-                    break
-            codons[basepair] = new_codon
-            child[locus] = '_'.join(codons)
-            if _DEBUG:
-                print('Point mutation: {} -> {}'.format(mother[locus], child[locus]))
-            continue
+        # Deep copy the parent into child, choose a mutation type, and
+        # call the appropriate mutation function
 
-        choice -= odds[0]
-        splice = random.randrange(mother_len)
+        child = parent[:]
+        choice = random.randrange(sum(odds))
 
-        # Insert codon; fail if it would make genome too long
+        # I admit, this is a bit tricky! Will generate 5 for the first
+        # possible choice, 4 for the next, etc. Then use negative indexing
+        # to choose the right function!
 
-        if choice <= odds[1]:
-            if mother_len >= max_len:
-                child = None
-            else:
-                while True:
-                    codon = random_codon()
-                    if selection_pressure(codon):
-                        break
-                child.insert(splice, codon)
-                if _DEBUG:
-                    print('Insertion: {}'.format(codon))
-            continue
+        op = len([i for i in odds if choice < i])
+        child = operations[-op](child, conjugate)
 
-        choice -= odds[1]
-
-        # Delete codon (except we never delete last codon, which is always an output codon)
-
-        if choice <= odds[2]:
-            if mother_len <= min_len or splice == (mother_len - 1):
-                child = None
-            else:
-                if _DEBUG:
-                    print('Deletion: {}'.format(child[splice]))
-                del child[splice]
-            continue
-
-
-        # Transpose a codon -- but never the last one, and never move after
-        # the last one.
-
-        choice -= odds[2]
-
-        if choice <= odds[3]:
-            if splice == (mother_len - 1):
-                child = None
-            else:
-                codon = child[splice]
-                del child[splice]
-                splice = random.randrange(len(child)-1)
-                child.insert(splice, codon)
-                if _DEBUG:
-                    print('Transposition: {}'.format(codon))
-            continue
-
-
-        # Conjugate father and mother.
-
-        splice = random.randrange(1, mother_len)
-        child = mother[:-splice] + father[-splice:]
-        if child == mother or child == father:
-            child = None
-        else:
-            if _DEBUG:
-                print('Conjugation')
-
-        # Loop around until we have a useful child.
+    if _DEBUG:
+        print('   Resulting child','-'.join(child))
+        print('')
 
     return child
 

@@ -63,7 +63,7 @@ best_fitness = 0            # the best fitness we have found so far
 # early.
 
 
-def you_are_the_weakest_link_goodbye(fitness, current_epoch, max_epochs, last_fitness=None):
+def grim_reaper(fitness, current_epoch, max_epochs, last_fitness=None):
 
     if best_fitness >= 0:
         return False
@@ -75,15 +75,10 @@ def you_are_the_weakest_link_goodbye(fitness, current_epoch, max_epochs, last_fi
 
     fitness = fitness / best_fitness
 
-    # We must always be at least half as good as the best fitness, and if last_fitness
-    # is a value, we must show improvement
+    # First epoch must be at least 75% as good, halfway we need about 87.5%, and
+    # so on.
 
-    if fitness < 0.5:
-        return True
-
-    # By the half-way point we must be at least 75% of the way there
-
-    requirement = 1.0 - (0.5 / max_epochs) * (max_epochs - current_epoch)
+    requirement = 1.0 - 0.25 * (max_epochs - current_epoch) / (max_epochs - 1)
 
     return fitness < requirement
 
@@ -239,8 +234,12 @@ if __name__ == '__main__':
     if os.path.exists(poolpath):
         if os.path.isfile(poolpath):
             print('Loading existing genepool')
-            with open(poolpath, 'r') as f:
-                genepool = json.load(f)
+            try:
+                with open(poolpath, 'r') as f:
+                    genepool = json.load(f)
+            except:
+                print('Could not load and parse json. Did you edit "population" and forget to delete the trailing comma?')
+                errors = True
         else:
             errors = oops(
                 errors, True, 'Genepool path is not a reference to a file ({})', poolpath)
@@ -469,16 +468,14 @@ if __name__ == '__main__':
             if type(genome) is not list:
                 # Delete the model and state files (if any) so we start with
                 # a fresh slate
-                if os.path.isfile(io.model_path):
-                    os.remove(io.model_path)
-                if os.path.isfile(io.state_path):
-                    os.remove(io.state_path)
+                for p in (io.model_path, io.state_path):
+                    if os.path.isfile(p):
+                        os.remove(p)
 
                 # Build a model for the organism, train the model, and record the results
 
                 population[i] = [ genome,
-                                  genomics.fitness(genome, io,
-                                                   apoptosis=you_are_the_weakest_link_goodbye)
+                                  genomics.fitness(genome, io, apoptosis=grim_reaper)
                                 ]
 
                 # Generate all sorts of statistics on various genome combinations. Later we
@@ -511,14 +508,13 @@ if __name__ == '__main__':
 
         # Expand the population to the maximum size.
 
-        parents = [p[0] for p in population]
-        children = []
+        parents, children = [p[0] for p in population], []
 
         printlog('Creating new children...')
 
         while len(children) < (MAX_POPULATION - len(parents)):
-            mother, father = [p for p in random.sample(parents, 2)]
-            child = '-'.join(genomics.mutate(mother, father, best_fitness=best_fitness, statistics=statistics))
+            parent, conjugate = [p for p in random.sample(parents, 2)]
+            child = '-'.join(genomics.mutate(parent, conjugate, best_fitness=best_fitness, statistics=statistics))
             if child not in parents and child not in children and child not in graveyard:
                 children.append(child)
             else:
