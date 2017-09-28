@@ -182,7 +182,7 @@ if __name__ == '__main__':
                  quality=1.0,
                  residual=iostate['residual'],
                  img_suffix=iostate['img_suffix'],
-                 paths={})
+                 paths=paths)
 
     # Create model. Since the model file contains the complete model info, not just the
     # weights, we can instantiate it using the base class. So no matter what changes we
@@ -243,9 +243,6 @@ if __name__ == '__main__':
         for i, tile in enumerate(tiles):
             tile_batch[i] = tile
 
-        # GPU : PU please check this
-        if
-        # Debug code to confirm what we are doing
 
         if DEBUG and img_path == first_path:
             fname = os.path.basename(img_path)
@@ -258,12 +255,15 @@ if __name__ == '__main__':
 
         predicted_tiles = sr.model.predict(tile_batch, tiles_per_img)
 
-        # GPU : PU please check
+        # GPU : Just using this to debug, uncomment to print section to see results for yourself
+        # debugging: if residual, then the np.mean of tile_batch should be a
+        # near zero numbers. Testing supports a mean around 0.0003
+        # Without residual, mean is usually higher
+        # print('Debug: Residual {} Mean {}'.format(io.residual==1, np.mean(predicted_tiles)))
+
         if io.residual:
             predicted_tiles += tile_batch
             
-        # Debug code to confirm what we are doing
-
         if DEBUG and img_path == first_path:
             fname = os.path.basename(img_path)
             for i in range(0, tiles_per_img):

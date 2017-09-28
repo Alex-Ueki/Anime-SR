@@ -332,11 +332,11 @@ if __name__ == '__main__':
     # Only at this point can we set default model and state filenames because that depends on image type
 
     if 'model' not in paths:
-        name = ('Residual-' if residual else '') + '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)
+        name = '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)
         paths['model'] = os.path.abspath(os.path.join(dpath, 'models', name))
 
     if 'state' not in paths:
-        name = ('Residual-' if residual else '') + '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix)
+        name = '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix)
         paths['state'] = os.path.abspath(os.path.join(dpath, 'models', name))
 
     tpath = os.path.dirname(paths['state'])

@@ -572,7 +572,7 @@ def batch_generator(tile_generator, image_shape, batch_size):
             bnum +=1
             yield tiles
 
-    # Ouput residual tiles
+    # Output residual tiles
 
     if batch_index > 0:
         tiles = tiles[:batch_index]

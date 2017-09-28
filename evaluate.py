@@ -182,7 +182,7 @@ if __name__ == '__main__':
                  shuffle=False,
                  skip=False,
                  quality=1.0,
-                 residual=iostate['residual']
+                 residual=iostate['residual'],
                  img_suffix=iostate['img_suffix'],
                  paths={})
 
