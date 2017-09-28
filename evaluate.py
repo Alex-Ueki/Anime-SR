@@ -161,7 +161,7 @@ if __name__ == '__main__':
     from Modules.modelio import ModelIO
     import Modules.models as models
 
-    error = oops(errors, model_type not in models.models,
+    error = oops(errors, model_type not in models.MODELS,
                  'Unknown model type ({})'.format(model_type))
 
     terminate(errors, False)

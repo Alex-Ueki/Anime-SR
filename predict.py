@@ -171,7 +171,7 @@ def predict():
 
         # Configure model IO
 
-        errors = oops(errors, model_type not in models.models,
+        errors = oops(errors, model_type not in models.MODELS,
                       'Unknown model type ({})'.format(model_type))
 
         terminate(errors, False)

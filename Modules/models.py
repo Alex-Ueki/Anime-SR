@@ -1,38 +1,36 @@
+# pylint: disable=C0301
+# Line too long
 """
 Anime-SR core models
 """
 
 import os
-import time
 import json
 from abc import ABCMeta, abstractmethod
 
-import numpy as np
 from keras.models import Sequential, Model, load_model
-from keras.layers import Concatenate, Add, Average, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
-from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D, Conv2DTranspose
+from keras.layers import Add, Average, Input
+from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D
 from keras import backend as K
-from keras.utils.np_utils import to_categorical
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
-from Modules.modelio import ModelIO
-
-# State monitor callback. Tracks how well we are doing and writes
-# some state to a json file. This lets us resume training seamlessly.
-#
-# ModelState.state is:
-#
-# { "epoch_count": nnnn,
-#   "best_values": { dictionary of logs values },
-#   "best_epoch": { dictionary of logs values },
-#   "io" : { dictionary of io class state values }
-# }
-#
 
 class ModelState(callbacks.Callback):
+    """ State monitor callback. Tracks how well we are doing and writes
+        some state to a json file. This lets us resume training seamlessly.
 
+        ModelState.state is:
+
+        { "epoch_count": nnnn,
+          "best_values": { dictionary of logs values },
+          "best_epoch": { dictionary of logs values },
+          "io" : { dictionary of io class state values }
+        }
+    """
     def __init__(self, io, verbose=True):
+
+        super().__init__()
 
         self.io = io
         self.verbose = verbose
@@ -40,25 +38,25 @@ class ModelState(callbacks.Callback):
         if os.path.isfile(io.state_path):
             if self.verbose:
                 print('Loading existing .json state')
-            with open(io.state_path, 'r') as f:
-                self.state = json.load(f)
+            with open(io.state_path, 'r') as jsonfile:
+                self.state = json.load(jsonfile)
 
             # Update state with current run information
 
             self.state['io'] = io.asdict()
         else:
-            self.state = { 'epoch_count': 0,
-                           'best_values': {},
-                           'best_epoch': {},
-                           'io': io.asdict()
+            self.state = {'epoch_count': 0,
+                          'best_values': {},
+                          'best_epoch': {},
+                          'io': io.asdict()
                          }
 
-    def on_train_begin(self, logs={}):
+    def on_train_begin(self, logs=None):
 
         if self.verbose:
             print('Training commences...')
 
-    def on_epoch_end(self, batch, logs={}):
+    def on_epoch_end(self, epoch, logs=None):
 
         self.state['epoch_count'] += 1
 
@@ -69,8 +67,8 @@ class ModelState(callbacks.Callback):
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
 
-        with open(self.io.state_path, 'w') as f:
-            json.dump(self.state, f, indent=4)
+        with open(self.io.state_path, 'w') as jsonfile:
+            json.dump(self.state, jsonfile, indent=4)
 
         if self.verbose:
             print('Completed epoch', self.state['epoch_count'])
@@ -78,50 +76,56 @@ class ModelState(callbacks.Callback):
 # GPU : Untested, but may be needed for VDSR
 
 class AdjustableGradient(callbacks.Callback):
+    """ Untested callback written by GPU """
 
-    def __init__(self, optimizer, theta = 1.0, verbose=True):
+    def __init__(self, optimizer, theta=1.0, verbose=True):
+
+        super().__init__()
 
         self.optimizer = optimizer
         self.lr = optimizer.lr.get_value()
         self.theta = theta
         self.verbose = verbose
 
-    def on_train_begin(self, logs={}):
+    def on_train_begin(self, logs=None):
 
         if self.verbose:
             print('Starting Gradient Clipping Value: %f' % (self.theta/self.lr))
         self.optimizer.clipvalue.set_value(self.theta/self.lr)
 
-    def on_epoch_end(self, batch, logs={}):
+    def on_epoch_end(self, epoch, logs=None):
 
         # Get current LR
-        if (self.lr != optimizer.lr.get_value()):
-            self.lr = optimizer.lr.get_value()
+        if self.lr != self.optimizer.lr.get_value():
+            self.lr = self.optimizer.lr.get_value()
             self.optimizer.clipvalue.set_value(self.theta/self.lr)
             if self.verbose:
                 print('Changed Gradient Clipping Value: %f' % (self.theta/self.lr))
 
 
 
-def PSNRLoss(y_true, y_pred):
+def psnr_loss(y_true, y_pred):
+    """ PSNR is Peak Signal to Noise Ratio, which is similar to mean squared error.
 
-    # PSNR is Peak Signal to Noise Ratio, which is similar to mean squared error.
-    #
-    # It can be calculated as
-    # PSNR = 20 * log10(MAXp) - 10 * log10(MSE)
-    #
-    # When providing an unscaled input, MAXp = 255. Therefore 20 * log10(255)== 48.1308036087.
-    # However, since we are scaling our input, MAXp = 1. Therefore 20 * log10(1) = 0.
-    # Thus we remove that component completely and only compute the remaining MSE component.
+        It can be calculated as
+        PSNR = 20 * log10(MAXp) - 10 * log10(MSE)
+
+        When providing an unscaled input, MAXp = 255. Therefore 20 * log10(255)== 48.1308036087.
+        However, since we are scaling our input, MAXp = 1. Therefore 20 * log10(1) = 0.
+        Thus we remove that component completely and only compute the remaining MSE component.
+    """
 
     return -10.0 * K.log(1.0 / (K.mean(K.square(y_pred - y_true)))) / K.log(10.0)
 
 
-def PSNRLossBorder(border):
+def psnr_loss_border(border):
+    """ PSNR excluding the border pixels (returns function) """
 
-    def PeakSignaltoNoiseRatio(y_true, y_pred):
+    def psnr_loss_border_func(y_true, y_pred):
+        """ Curried psnr function that accounts for border pixels """
+
         if border == 0:
-            return PSNRLoss(y_true, y_pred)
+            return psnr_loss(y_true, y_pred)
         else:
             if K.image_data_format() == 'channels_first':
                 y_pred = y_pred[:, :, border:-border, border:-border]
@@ -129,20 +133,23 @@ def PSNRLossBorder(border):
             else:
                 y_pred = y_pred[:, border:-border, border:-border, :]
                 y_true = y_true[:, border:-border, border:-border, :]
-            return PSNRLoss(y_true, y_pred)
+            return psnr_loss(y_true, y_pred)
 
-    return PeakSignaltoNoiseRatio
+    func = psnr_loss_border_func
+    func.__name__ = 'PeakSignaltoNoiseRatio'
+    return func
 
 # Dictionary of loss functions (currently only one). All must take border as
 # a parameter and return a curried loss function.
 
-loss_functions = { 'PeakSignaltoNoiseRatio': PSNRLossBorder
+LOSS_FUNCTIONS = {'PeakSignaltoNoiseRatio': psnr_loss_border
                  }
 
-# Base superresolution model; subclass for each individual model.
+#
 
 
 class BaseSRCNNModel(object):
+    """ Base superresolution model; subclass for each individual model. """
 
     __metaclass__ = ABCMeta
 
@@ -156,14 +163,14 @@ class BaseSRCNNModel(object):
         self.io = io
         self.lf = lf
         self.val_lf = 'val_' + lf
-        self.evaluation_function = loss_functions[lf](io.border)
+        self.evaluation_function = LOSS_FUNCTIONS[lf](io.border)
         self.verbose = verbose
         self.bargraph = bargraph
 
         if os.path.isfile(io.model_path):
             if self.verbose:
                 print('Loading existing .h5 model')
-            self.model = load_model(io.model_path, custom_objects={ lf: self.evaluation_function })
+            self.model = load_model(io.model_path, custom_objects={lf: self.evaluation_function})
         else:
             if self.verbose:
                 print('Creating new untrained model')
@@ -173,25 +180,30 @@ class BaseSRCNNModel(object):
     # {'beta_2': 0.9990000128746033, 'beta_1': 0.8999999761581421, 'decay': 0.0, 'lr': 0.0008100000559352338, 'epsilon': 1e-08}
 
     def get_config(self):
+        """ Config will be a dictionary with contents similar to this:
+            {'beta_2': 0.9990000128746033, 'beta_1': 0.8999999761581421, 'decay': 0.0, 'lr': 0.0008100000559352338, 'epsilon': 1e-08}
+        """
 
         return self.model.optimizer.get_config()
 
-    # Learning rate setter
-
     def set_lr(self, new_lr):
+        """ Learning rate setter """
 
         self.model.optimizer.lr = K.variable(new_lr, name='lr')
 
     @abstractmethod
     def create_model(self, load_weights):
+        """ create_model is handled by subclasses """
 
         pass
 
-    # Standard method to train any of the models.
-    # Uses images in self.io.training_path for Training
-    # Uses images in self.io.validation_path for Validation
+
 
     def fit(self, max_epochs=255, run_epochs=0):
+        """ Train a model.
+            Uses images in self.io.training_path for Training
+            Uses images in self.io.validation_path for Validation
+        """
 
         samples_per_epoch = self.io.train_images_count()
         val_count = self.io.val_images_count()
@@ -225,7 +237,7 @@ class BaseSRCNNModel(object):
             model_checkpoint.best = model_state.state['best_values'][self.val_lf]
 
         if self.verbose:
-            print('Best {} found so far: {}'.format(self.val_lf,model_checkpoint.best))
+            print('Best {} found so far: {}'.format(self.val_lf, model_checkpoint.best))
 
         callback_list = [model_checkpoint,
                          learning_rate,
@@ -270,9 +282,10 @@ class BaseSRCNNModel(object):
 
         return model_state.state['best_values']['val_' + self.lf]
 
-    # Predict a sequence of tiles. This can later be expanded to do multiprocessing
+
 
     def predict_tiles(self, tile_generator, batches):
+        """ Predict a sequence of tiles. This can later be expanded to do multiprocessing """
 
         print('predict tiles')
 
@@ -286,9 +299,10 @@ class BaseSRCNNModel(object):
 
         return result
 
-    # Evaluate the model on self.evaluation_path
+
 
     def evaluate(self):
+        """ Evaluate the model on self.evaluation_path """
 
         print('Validating %s model' % self.name)
 
@@ -297,14 +311,19 @@ class BaseSRCNNModel(object):
         print("Loss = %.5f, PeekSignalToNoiseRatio = %.5f" % (results[0], results[1]))
 
 
-    # Save the model to a .h5 file
+    #
 
     def save(self, path=None):
+        """ Save the model to a .h5 file """
 
         self.model.save(self.io.model_path if path == None else path)
 
+#----------------------------------------------------------------------------------
+# BaseSRCNNModel Subclasses (add your custom models here)
+#----------------------------------------------------------------------------------
 
 class BasicSR(BaseSRCNNModel):
+    """ Basic SuperResolution """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -332,6 +351,7 @@ class BasicSR(BaseSRCNNModel):
         return model
 
 class ExpansionSR(BaseSRCNNModel):
+    """ Expansion SuperResolution """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -372,6 +392,7 @@ class ExpansionSR(BaseSRCNNModel):
 
 
 class DeepDenoiseSR(BaseSRCNNModel):
+    """ Deep Noise Reduction """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -421,10 +442,10 @@ class DeepDenoiseSR(BaseSRCNNModel):
         self.model = model
         return model
 
-# Very Deep Super Resolution
-
 
 class VDSR(BaseSRCNNModel):
+
+    """ Very Deep Super Resolution """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -436,11 +457,9 @@ class VDSR(BaseSRCNNModel):
 
         x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
 
-        for i in range(0, 19):
+        for _ in range(0, 19):
             x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
 
-        # Based on keras warning to upgrade, changed this from:
-        # decode = Conv2D(self.io.channels, (3, 3), activation='linear', border_mode='same')(x)
         decode = Conv2D(self.io.channels, (3, 3), activation='linear', padding='same')(x)
 
         model = Model(init, decode)
@@ -456,9 +475,9 @@ class VDSR(BaseSRCNNModel):
         self.model = model
         return model
 
-# Parental Unit Pathetic Super-Resolution Model (elu vs. relu test)
 
 class PUPSR(BaseSRCNNModel):
+    """ Parental Unit Pathetic Super-Resolution Model (elu vs. relu test) """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -485,14 +504,15 @@ class PUPSR(BaseSRCNNModel):
         self.model = model
         return model
 
-# Gene-Perpetuation Unit Super-Resolution Model
-# Tackles two problems with VDSR, Gradients and 'dead' neurons
-# Using VDSR with Exponential Linear Unit (elu), which allows negative values
-# I think the issue with VDSR is the ReLu creating "dead" neurons
-# Also added gradient clipping and an epsilon
-# TODO Residuals
 
 class GPUSR(BaseSRCNNModel):
+    """ Gene-Perpetuation Unit Super-Resolution Model
+        Tackles two problems with VDSR, Gradients and 'dead' neurons
+        Using VDSR with Exponential Linear Unit (elu), which allows negative values
+        I think the issue with VDSR is the ReLu creating "dead" neurons
+        Also added gradient clipping and an epsilon
+        TO-DO Residuals
+    """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -506,7 +526,7 @@ class GPUSR(BaseSRCNNModel):
 
         model.add(Conv2D(64, (3, 3), activation='elu',
                          padding='same', input_shape=self.io.image_shape))
-        for i in range(19):
+        for _ in range(19):
             model.add(Conv2D(64, (3, 3), activation='elu', padding='same'))
 
         model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
@@ -522,13 +542,13 @@ class GPUSR(BaseSRCNNModel):
         return model
 
 
-models = {'BasicSR': BasicSR,
+MODELS = {'BasicSR': BasicSR,
           'VDSR': VDSR,
           'DeepDenoiseSR': DeepDenoiseSR,
           'ExpansionSR': ExpansionSR,
           'PUPSR': PUPSR,
           'GPUSR': GPUSR
-          }
+         }
 
 """
     TestModels section
@@ -683,7 +703,7 @@ class ELUVDSR(BaseSRCNNModel):
 
         model.add(Conv2D(64, (3, 3), activation='elu',
                          padding='same', input_shape=self.io.image_shape))
-        for i in range(19):
+        for _ in range(19):
             model.add(Conv2D(64, (3, 3), activation='elu', padding='same'))
 
         model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
@@ -699,13 +719,13 @@ class ELUVDSR(BaseSRCNNModel):
         return model
 
 
-testmodels = {'ELUBasicSR': ELUBasicSR,
+TESTMODELS = {'ELUBasicSR': ELUBasicSR,
               'ELUVDSR': ELUVDSR,
               'ELUDeepDenoiseSR': ELUDeepDenoiseSR,
               'ELUExpansionSR': ELUExpansionSR
-              }
+             }
 
-models.update(testmodels) # Adds test models in all
+MODELS.update(TESTMODELS) # Adds test models in all
 
 """
      TODO : Genetic Models section

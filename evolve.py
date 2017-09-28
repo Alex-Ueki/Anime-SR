@@ -1,3 +1,5 @@
+# pylint: disable=C0301
+# Line too long
 """
 Usage: evolve.py [option(s)] ...
 
@@ -12,6 +14,7 @@ Options are:
     border=nnn          border size, default=2
     lr=.nnn             set initial learning rate. Should be 0.001 or less. Default = 0.001
     quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
+    residual=1|0|T|F    have the model train using residual images. Default is false.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240; can also use left=nnn
     trimright=nnn       pixels to trim on image right edge, default = 240; can also use right=nnn
@@ -85,19 +88,19 @@ def grim_reaper(fitness, current_epoch, max_epochs, last_fitness=None):
 # Checkpoint state to genepool.json file
 
 
-def checkpoint(path, population, graveyard, statistics, io):
+def checkpoint(json_path, _population, _graveyard, _statistics, _io):
 
-    state = {'population': population,
-             'graveyard': graveyard,
-             'statistics': statistics,
-             'io': io.asdict()
-             }
+    state = {'population': _population,
+             'graveyard': _graveyard,
+             'statistics': _statistics,
+             'io': _io.asdict()
+            }
 
-    with open(path, 'w') as f:
-        json.dump(state, f, indent=4)
+    with open(json_path, 'w') as jsonfile:
+        json.dump(state, jsonfile, indent=4)
 
 
-if __name__ == '__main__':
+def evolve():
 
     # Initialize defaults. Note that we trim 240 pixels off right and left, this is
     # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box
@@ -105,7 +108,7 @@ if __name__ == '__main__':
     tile_width, tile_height, tile_border, epochs = 60, 60, 2, 10
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level, quality = -1.0, 0.5
-    jitter, shuffle, skip = 1, 1, 1
+    jitter, shuffle, skip, residual = 1, 1, 1, False
     lr = 0.001
     paths = {}
 
@@ -116,7 +119,7 @@ if __name__ == '__main__':
                       'validation', 'data', 'black',
                       'jitter', 'shuffle', 'skip', 'lr', 'quality',
                       'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                      'left', 'right', 'top', 'bottom'])
+                      'left', 'right', 'top', 'bottom', 'residual'])
 
     # Parse options
 
@@ -193,6 +196,10 @@ if __name__ == '__main__':
         elif op == 'trimbottom' or op == 'bottom':
             trim_bottom, errors = validate(
                 errors, vnum, vnum <= 0, 'Bottom trim value invalid ({})', option)
+        elif op == 'residual':
+            residual, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Residual value invalid ({}). Must be 0, 1, T, F.', option)
         elif op == 'jitter':
             jitter, errors = validate(
                 errors, vnum, vnum != 0 and vnum != 1,
@@ -235,9 +242,9 @@ if __name__ == '__main__':
         if os.path.isfile(poolpath):
             print('Loading existing genepool')
             try:
-                with open(poolpath, 'r') as f:
-                    genepool = json.load(f)
-            except:
+                with open(poolpath, 'r') as jsonfile:
+                    genepool = json.load(jsonfile)
+            except Exception:
                 print('Could not load and parse json. Did you edit "population" and forget to delete the trailing comma?')
                 errors = True
         else:
@@ -368,7 +375,7 @@ if __name__ == '__main__':
         print('Initializing population...')
         population = ["conv_f64_k9_elu-conv_f32_k1_elu-out_k5_elu",
                       "conv_f64_k9_elu-conv_f32_k1_elu-avg_f32_k135_d3_elu-out_k5_elu",
-                      ]
+                     ]
 
     if 'graveyard' in genepool:
         graveyard = genepool['graveyard']
@@ -384,24 +391,24 @@ if __name__ == '__main__':
 
     # Over-ride defaults/options with contents of genepool.json, if any...
 
-        io = genepool['io']
+    io = genepool['io']
 
-        tile_height = io['base_tile_height']
-        border = io['border']
-        border_mode = io['border_mode']
-        black_level = io['black_level']
-        trim_top = io['trim_top']
-        trim_bottom = io['trim_bottom']
-        trim_left = io['trim_left']
-        trim_right = io['trim_right']
-        jitter = io['jitter']
-        shuffle = io['shuffle']
-        skip = io['skip']
-        residual = io['residual']
-        quality = io['quality']
-        epochs = io['epochs']
-        lr = io['lr']
-        paths = io['paths']
+    tile_height = io['base_tile_height']
+    border = io['border']
+    border_mode = io['border_mode']
+    black_level = io['black_level']
+    trim_top = io['trim_top']
+    trim_bottom = io['trim_bottom']
+    trim_left = io['trim_left']
+    trim_right = io['trim_right']
+    jitter = io['jitter']
+    shuffle = io['shuffle']
+    skip = io['skip']
+    residual = io['residual']
+    quality = io['quality']
+    epochs = io['epochs']
+    lr = io['lr']
+    paths = io['paths']
 
     # Initialize ModelIO structure
 
@@ -422,7 +429,7 @@ if __name__ == '__main__':
                  paths=paths,
                  epochs=EPOCHS,
                  lr=lr
-                 )
+                )
 
     # Remind user what we're about to do.
 
@@ -448,13 +455,13 @@ if __name__ == '__main__':
     print('              Skip : {}'.format(skip == 1))
     print('          Residual : {}'.format(residual == 1))
     print('           Quality : {}'.format(quality))
+    print(residual)
     print('')
 
     checkpoint(poolpath, population, graveyard, statistics, io)
 
     # Evolve the genepool
 
-    import Modules.models as models
     import Modules.genomics as genomics
 
     # Repeat until program terminated.
@@ -492,9 +499,11 @@ if __name__ == '__main__':
 
                 # If the model we just trained has better fitness than the worst fitness of
                 # the previously trained genomes, exit early (which will generate a new
-                # population using a "better" genepool)
+                # population using a "better" genepool). However, don't do this if we are
+                # training up an initial population sample.
 
-                if population[i][1] < worst_fitness:
+                trained = [p for p in population if type(p) is list]
+                if population[i][1] < worst_fitness and len(trained) >= MIN_POPULATION:
                     break
 
         # Remove untrained populations
@@ -528,3 +537,6 @@ if __name__ == '__main__':
         population.extend(children)
 
         checkpoint(poolpath, population, graveyard, statistics, io)
+
+if __name__ == '__main__':
+    evolve()

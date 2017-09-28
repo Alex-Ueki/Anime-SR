@@ -1,3 +1,5 @@
+# pylint: disable=C0301
+# Line too long
 """
 Usage: train.py [option(s)] ...
 
@@ -21,6 +23,7 @@ Options are:
     epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
     quality=.nnn        fraction of the "best" tiles used in training. Default is 1.0 (use all tiles)
+    residual=1|0|T|F    have the model train using residual images. Default is false.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -29,7 +32,6 @@ Options are:
     jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=True
     skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
     shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
-    residual=1|0|T|F    have the model produce residual images
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
@@ -357,9 +359,9 @@ if __name__ == '__main__':
     import Modules.models as models
 
     if model_type.lower() == 'all':
-        model_list = models.models
+        model_list = models.MODELS
     elif model_type.lower() == 'test':
-        model_list = models.testmodels
+        model_list = models.TESTMODELS
     else:
         model_list = [model_type]
 
@@ -396,7 +398,7 @@ if __name__ == '__main__':
 
         # Create and fit model (best model state will be automatically saved)
 
-        sr = models.models[model](io, verbose=verbose, bargraph=bargraph)
+        sr = models.MODELS[model](io, verbose=verbose, bargraph=bargraph)
 
         # If no initial_lr is specified, the default of 0.0 means that the
         # model's default learning rate will be used
@@ -408,7 +410,7 @@ if __name__ == '__main__':
         config = sr.get_config()
         print('Model configuration:')
         for key in config:
-            print('{:>18s} : {}'.format(key,config[key]))
+            print('{:>18s} : {}'.format(key, config[key]))
 
         # PU: Cannot adjust ending epoch number until we load the model state,
         # which does not happen until we fit(). So we have to pass both

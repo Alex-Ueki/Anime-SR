@@ -1,3 +1,5 @@
+# pylint: disable=C0301
+# Line too long
 """
     ModelIO class
     Handles all model IO (data generators, etc)
@@ -7,7 +9,6 @@
 import os
 
 import numpy as np
-from scipy.misc import imsave, imread, imresize
 
 import __main__
 import Modules.frameops as frameops
@@ -18,6 +19,11 @@ import Modules.frameops as frameops
 
 
 class ModelIO():
+    """
+        ModelIO class
+        Handles all model IO (data generators, etc)
+        Uses default paths in Data directory if a path is not specified
+    """
 
     def __init__(self,
                  model_type='BasicSR',
@@ -38,7 +44,7 @@ class ModelIO():
                  paths={},
                  epochs=10,
                  lr=0.001,
-                 ):
+                ):
 
         self.model_type = model_type
         self.image_width, self.image_height = image_width, image_height
@@ -109,65 +115,75 @@ class ModelIO():
         self.alpha = 'Alpha'
         self.beta = 'Beta'
 
-    # Check the image counts of important directories. Adjusts for the number of tiles we will get
 
     def train_images_count(self):
-
-        # We may have the list of files, otherwise go fetch it
-
-        files = self.paths['training.alpha'] if 'training.alpha' in self.paths else frameops.image_files(
-            os.path.join(self.training_path, self.alpha))
+        """ Check the image counts of important directories. Adjusts for quality parameter """
 
         # files will (hopefully) be a single element list containing a list of all the filenames.
         # Adjust count by quality fraction; we only apply quality to training images, not to
         # other image types.
 
-        return int(self.tiles_per_image * len(files[0]) * self.quality)
+        return int(self._images_count('training', self.training_path) * self.quality)
 
     def val_images_count(self):
+        """ Count of files in validation alpha folder """
 
-        files = self.paths['validation.alpha'] if 'validation.alpha' in self.paths else frameops.image_files(
-            os.path.join(self.validation_path, self.alpha))
-        return self.tiles_per_image * len(files[0])
+        return self._images_count('validation', self.validation_path)
 
     def eval_images_count(self):
-        files = self.paths['evaluation.alpha'] if 'evaluation.alpha' in self.paths else frameops.image_files(
-            os.path.join(self.evaluation_path, self.alpha))
-        return self.tiles_per_image * len(files[0])
+        """ Count of files in evaluation alpha folder """
+
+        return self._images_count('evaluation', self.evaluation_path)
 
     def predict_images_count(self):
-        files = self.paths['predict.alpha'] if 'predict.alpha' in self.paths else frameops.image_files(
-            os.path.join(self.predict_path, self.alpha))
-        return self.tiles_per_image * len(files[0])
+        """ Count of files in predict alpha folder """
+
+        return self._images_count('predict', self.predict_path)
 
     # PU: not currently used -- obsolete?
 
     def input_images_count(self):
-        files = self.paths['input.alpha'] if 'input.alpha' in self.paths else frameops.image_files(
-            os.path.join(self.input_path, self.alpha))
+        """ Count of files in images alpha folder """
+
+        return self._images_count('input', self.input_path)
+
+    def _images_count(self, path_code, path_name):
+        """ Return number of image files in a path's alpha directory, checking for cached info """
+
+        path_code += '.alpha'
+        files = self.paths[path_code] if path_code in self.paths else frameops.image_files(
+            os.path.join(path_name, self.alpha))
         return self.tiles_per_image * len(files[0])
 
-    # Data generators
+
+    # Data generators generate matched pairs of tiles from the appropriate alpha and beta
+    # folders.
 
     def training_data_generator(self):
+        """ Training tile generator; use a subset if quality < 1.0 """
+
         return self._image_generator_frameops(self.training_path, self.jitter, self.shuffle, self.skip, self.quality)
 
-    # Validation generator uses all the tiles, not just the best ones.
-
     def validation_data_generator(self):
+        """ Validation tile generator uses all tiles regardless of quality setting """
+
         return self._image_generator_frameops(self.validation_path, False, self.shuffle, self.skip, 1.0)
 
-    # Evaluation and Prediction generators will never shuffle, jitter, skip or use just the best tiles.
-
     def evaluation_data_generator(self):
+        """ Generate tile pairs for evaluation; will not shuffle, jitter, skip or exclude tiles """
+
         return self._image_generator_frameops(self.evaluation_path, False, False, False, 1.0)
 
+
     def prediction_data_generator(self):
-        return self._predict_image_generator_frameops(self.predict_path, False, False, False, 1.0)
+        """ Prediction tile generator generates single tiles, not tile pairs """
+
+        return self._predict_image_generator_frameops(self.predict_path, False, False, False)
 
     # Frameops versions of image generators
 
     def _image_generator_frameops(self, directory, shuffle, jitter, skip, quality):
+        """ Generate batches of pairs of tiles """
 
         # frameops.image_files returns a list with an element for each image file type,
         # but at this point, we'll only ever have one...
@@ -201,6 +217,7 @@ class ModelIO():
                     yield (alpha_tiles, beta_tiles)
 
     def _predict_image_generator_frameops(self, directory, shuffle, jitter, skip):
+        """ Generate batches of tiles """
 
         alpha_paths = frameops.image_files(
             os.path.join(directory, self.alpha), deep=True)[0]
@@ -217,18 +234,19 @@ class ModelIO():
                     black_level=self.black_level, border_mode=self.border_mode,
                     trim_left=self.trim_left, trim_right=self.trim_right,
                     trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality,
+                    shuffle=shuffle, jitter=jitter, skip=skip, quality=1.0,
                     theano=self.theano):
 
                 alpha_tiles[batch_index] = alpha_tile
                 batch_index += 1
                 if batch_index >= self.batch_size:
                     batch_index = 0
-                    yield (alpha_tiles)
+                    yield alpha_tiles
 
-    # Create dictionary of parameters
+    #
 
     def asdict(self):
+        """ Create dictionary of parameters """
 
         return {'image_width': self.image_width,
                 'image_height': self.image_height,
@@ -262,4 +280,4 @@ class ModelIO():
                 'epochs': self.epochs,
                 'lr': self.lr,
                 'paths': self.paths
-                }
+               }
