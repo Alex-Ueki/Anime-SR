@@ -194,6 +194,7 @@ def predict():
                             shuffle=False,
                             skip=False,
                             quality=1.0,
+                            residual=iostate['residual'],
                             img_suffix=iostate['img_suffix'],
                             paths={})
 
@@ -257,7 +258,6 @@ def predict():
         for idx, tile in enumerate(tiles):
             tile_batch[idx] = tile
 
-        # Debug code to confirm what we are doing
 
         if DEBUG:
             fname = os.path.basename(img_path)
@@ -279,6 +279,15 @@ def predict():
         # Predict the new tiles
 
         predicted_tiles = sr_model.model.predict(tile_batch, tiles_per_img)
+
+        # GPU : Just using this to debug, uncomment to print section to see results for yourself
+        # debugging: if residual, then the np.mean of tile_batch should be a
+        # near zero numbers. Testing supports a mean around 0.0003
+        # Without residual, mean is usually higher
+        # print('Debug: Residual {} Mean {}'.format(io.residual==1, np.mean(predicted_tiles)))
+
+        if io_config.residual:
+            predicted_tiles += tile_batch
 
         # Merge the tiles back into a single image
 

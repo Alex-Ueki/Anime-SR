@@ -213,7 +213,7 @@ def tesselate(file_paths, tile_width, tile_height, border, black_level=0.0, bord
 
 def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, black_level=0.0, border_mode='constant',
                    trim_top=0, trim_bottom=0, trim_left=0, trim_right=0, shuffle=True, jitter=False, skip=False,
-                   expected_width=1920, expected_height=1080, quality=1.0, theano=False):
+                   expected_width=1920, expected_height=1080, quality=1.0, theano=False, residual=False):
     """ This version tesellates matched pairs of images, with identical shuffling behavior. Used for model training """
 
     # Convert non-lists to lists
@@ -276,11 +276,13 @@ def tesselate_pair(alpha_paths, beta_paths, tile_width, tile_height, border, bla
             for tile_index in tiles_list:
                 if skip_count <= 0:
                     skip_count = random.randint(0, 4) if skip else 0
-                    yield (alpha_tiles[tile_index], beta_tiles[tile_index])
+                    # GPU : PU please check this
+                    if residual: # returns the difference between beta-alpha
+                        yield (alpha_tiles[tile_index], beta_tiles[tile_index] - alpha_tiles[tile_index])
+                    else:
+                        yield (alpha_tiles[tile_index], beta_tiles[tile_index])
                 else:
                     skip_count -= 1
-
-#
 
 
 def update_cache_quality(path, tiles, quality, indexes=None):
@@ -552,7 +554,7 @@ def batch_generator(tile_generator, image_shape, batch_size):
             bnum += 1
             yield tiles
 
-    # Ouput residual tiles
+    # Output residual tiles
 
     if batch_index > 0:
         tiles = tiles[:batch_index]

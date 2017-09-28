@@ -29,6 +29,7 @@ Options are:
     jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=True
     skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
     shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
+    residual=1|0|T|F    have the model produce residual images
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
@@ -65,7 +66,7 @@ if __name__ == '__main__':
     tile_width, tile_height, tile_border, epochs, run_epochs = 60, 60, 2, 100, -1
     trim_left, trim_right, trim_top, trim_bottom = 240, 240, 0, 0
     black_level, quality = -1.0, 1.0
-    jitter, shuffle, skip = 1, 1, 1
+    jitter, shuffle, skip, residual = 1, 1, 1, 0
     initial_lr = -1.0 # PU: if no learning rate manually specified, model default will be used
     verbose, bargraph = True, True
     paths = {}
@@ -77,7 +78,7 @@ if __name__ == '__main__':
                       'validation', 'model', 'data', 'state', 'black',
                       'jitter', 'shuffle', 'skip', 'lr', 'quality',
                       'trimleft', 'trimright', 'trimtop', 'trimbottom',
-                      'epochs', 'epochs+', 'verbose', 'bargraph'])
+                      'epochs', 'epochs+', 'verbose', 'bargraph', 'residual'])
 
     errors = False
 
@@ -168,6 +169,10 @@ if __name__ == '__main__':
             shuffle, errors = validate(
                 errors, vnum, vnum != 0 and vnum != 1,
                 'Shuffle value invalid ({}). Must be 0, 1, T, F.', option)
+        elif op == 'residual':
+            residual, errors = validate(
+                errors, vnum, vnum != 0 and vnum != 1,
+                'Residual value invalid ({}). Must be 0, 1, T, F.', option)
         elif op == 'verbose':
             verbose = vnum
             errors = oops(errors, vnum != 0 and vnum != 1,
@@ -213,7 +218,7 @@ if __name__ == '__main__':
 
     image_paths = ['training', 'validation']
     sub_folders = ['Alpha', 'Beta']
-    image_info = [[None, None], [None, None]]
+    image_info = [[[], []], [[], []]]
 
     for fc, f in enumerate(image_paths):
         for sc, s in enumerate(sub_folders):
@@ -315,12 +320,12 @@ if __name__ == '__main__':
     # Only at this point can we set default model and state filenames because that depends on image type
 
     if 'model' not in paths:
-        paths['model'] = os.path.abspath(os.path.join(
-            dpath, 'models', '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
+        name = '{}-{}-{}-{}-{}.h5'.format(model_type, tile_width, tile_height, tile_border, img_suffix)
+        paths['model'] = os.path.abspath(os.path.join(dpath, 'models', name))
 
     if 'state' not in paths:
-        paths['state'] = os.path.abspath(os.path.join(
-            dpath, 'models', '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix)))
+        name = '{}-{}-{}-{}-{}_state.json'.format(model_type, tile_width, tile_height, tile_border, img_suffix)
+        paths['state'] = os.path.abspath(os.path.join(dpath, 'models', name))
 
     tpath = os.path.dirname(paths['state'])
     errors = oops(errors, not os.path.exists(tpath),
@@ -342,6 +347,7 @@ if __name__ == '__main__':
     print('            Jitter : {}'.format(jitter == 1))
     print('           Shuffle : {}'.format(shuffle == 1))
     print('              Skip : {}'.format(skip == 1))
+    print('          Residual : {}'.format(residual == 1))
     print('           Quality : {}'.format(quality))
     print('')
 
@@ -383,6 +389,7 @@ if __name__ == '__main__':
                      trim_top=trim_top, trim_bottom=trim_bottom,
                      trim_left=trim_left, trim_right=trim_right,
                      jitter=jitter, shuffle=shuffle, skip=skip,
+                     residual=residual,
                      quality=quality,
                      img_suffix=img_suffix,
                      paths=paths)

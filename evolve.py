@@ -397,6 +397,7 @@ if __name__ == '__main__':
         jitter = io['jitter']
         shuffle = io['shuffle']
         skip = io['skip']
+        residual = io['residual']
         quality = io['quality']
         epochs = io['epochs']
         lr = io['lr']
@@ -416,6 +417,7 @@ if __name__ == '__main__':
                  trim_left=trim_left, trim_right=trim_right,
                  jitter=jitter, shuffle=shuffle, skip=skip,
                  quality=quality,
+                 residual=residual,
                  img_suffix=img_suffix,
                  paths=paths,
                  epochs=EPOCHS,
@@ -444,6 +446,7 @@ if __name__ == '__main__':
     print('            Jitter : {}'.format(jitter == 1))
     print('           Shuffle : {}'.format(shuffle == 1))
     print('              Skip : {}'.format(skip == 1))
+    print('          Residual : {}'.format(residual == 1))
     print('           Quality : {}'.format(quality))
     print('')
 
