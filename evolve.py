@@ -385,7 +385,7 @@ if __name__ == '__main__':
     # Over-ride defaults/options with contents of genepool.json, if any...
 
         io = genepool['io']
-        
+
         tile_height = io['base_tile_height']
         border = io['border']
         border_mode = io['border_mode']
