@@ -47,26 +47,14 @@ Options are:
     you could specify epochs+=25 to limit the current training run to 25 epochs.
 """
 
-from Modules.misc import oops, validate, terminate, set_docstring
-
-import numpy as np
 import sys
 import os
 
+import numpy as np
+
+from Modules.misc import oops, validate, terminate, set_docstring
+
 set_docstring(__doc__)
-
-# Sanitize input, return a new_value, error tuple
-
-def sanitize(old_value, error_state, new_value, is_error, msg, error_value=None, end_run=False):
-
-    if is_error:
-        if error_value == None:
-            error_value = new_value
-        error_state = oops(error_state, is_error, msg, error_value, end_run)
-        return (old_value, error_state)
-    else:
-        return (new_value, error_state)
-
 
 if __name__ == '__main__':
 

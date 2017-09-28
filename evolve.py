@@ -41,14 +41,14 @@ Options are:
 
 """
 
-from Modules.misc import oops, validate, terminate, set_docstring, printlog
-
-import numpy as np
 import sys
 import os
 import json
 import random
-import itertools
+
+import numpy as np
+
+from Modules.misc import oops, validate, terminate, set_docstring, printlog
 
 set_docstring(__doc__)
 
@@ -262,7 +262,7 @@ if __name__ == '__main__':
 
     image_paths = ['training', 'validation']
     sub_folders = ['Alpha', 'Beta']
-    image_info = [[None, None], [None, None]]
+    image_info = [[[], []], [[], []]]
 
     for fc, f in enumerate(image_paths):
         for sc, s in enumerate(sub_folders):
@@ -384,6 +384,8 @@ if __name__ == '__main__':
 
     # Over-ride defaults/options with contents of genepool.json, if any...
 
+        io = genepool['io']
+        
         tile_height = io['base_tile_height']
         border = io['border']
         border_mode = io['border_mode']

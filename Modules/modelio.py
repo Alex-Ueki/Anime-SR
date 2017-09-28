@@ -4,14 +4,14 @@
     Uses default paths in Data directory if a path is not specified
 """
 
-#from __future__ import print_function, division, absolute_import
+import os
+
+import numpy as np
+from scipy.misc import imsave, imread, imresize
 
 import __main__
 import Modules.frameops as frameops
 
-import numpy as np
-from scipy.misc import imsave, imread, imresize
-import os
 
 
 # Model parameter class

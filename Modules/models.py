@@ -1,10 +1,13 @@
-from abc import ABCMeta, abstractmethod
+"""
+Anime-SR core models
+"""
 
-import numpy as np
 import os
 import time
 import json
+from abc import ABCMeta, abstractmethod
 
+import numpy as np
 from keras.models import Sequential, Model, load_model
 from keras.layers import Concatenate, Add, Average, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
 from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D, Conv2DTranspose

@@ -1,3 +1,6 @@
+# pylint: disable=C0301, W0603
+# (line_too_long, used_globals disabled)
+
 """
 Based on:
 
@@ -30,128 +33,16 @@ THE SOFTWARE.
 
 import struct
 import numpy as np
-import sys
 
 # Cache of DPX header information that we set whenever we read a file;
-# used to write a file in the same format.
+# used to write a file in the same format. Warning: Mutable globals!
 
-dpx_meta = None
-dpx_header = None
+DPX_META = None
+DPX_HEADER = None
 
-"""
-orientations = {
-    0: 'Left to Right, Top to Bottom',
-    1: 'Right to Left, Top to Bottom',
-    2: 'Left to Right, Bottom to Top',
-    3: 'Right to Left, Bottom to Top',
-    4: 'Top to Bottom, Left to Right',
-    5: 'Top to Bottom, Right to Left',
-    6: 'Bottom to Top, Left to Right',
-    7: 'Bottom to Top, Right to Left'
-}
-
-descriptors = {
-    1: 'Red',
-    2: 'Green',
-    3: 'Blue',
-    4: 'Alpha',
-    6: 'Luma (Y)',
-    7: 'Color Difference',
-    8: 'Depth (Z)',
-    9: 'Composite Video',
-    50: 'RGB',
-    51: 'RGBA',
-    52: 'ABGR',
-    100: 'Cb, Y, Cr, Y (4:2:2)',
-    102: 'Cb, Y, Cr (4:4:4)',
-    103: 'Cb, Y, Cr, A (4:4:4:4)'
-}
-
-packings = {
-    0: 'Packed into 32-bit words',
-    1: 'Filled to 32-bit words, Padding First',
-    2: 'Filled to 32-bit words, Padding Last'
-}
-
-encodings = {
-    0: 'No encoding',
-    1: 'Run Length Encoding'
-}
-
-transfers = {
-    1: 'Printing Density',
-    2: 'Linear',
-    3: 'Logarithmic',
-    4: 'Unspecified Video',
-    5: 'SMPTE 274M',
-    6: 'ITU-R 709-4',
-    7: 'ITU-R 601-5 system B or G',
-    8: 'ITU-R 601-5 system M',
-    9: 'Composite Video (NTSC)',
-    10: 'Composite Video (PAL)',
-    11: 'Z (Linear Depth)',
-    12: 'Z (Homogenous Depth)'
-}
-
-colorimetries = {
-    1: 'Printing Density',
-    4: 'Unspecified Video',
-    5: 'SMPTE 274M',
-    6: 'ITU-R 709-4',
-    7: 'ITU-R 601-5 system B or G',
-    8: 'ITU-R 601-5 system M',
-    9: 'Composite Video (NTSC)',
-    10: 'Composite Video (PAL)'
-}
-
-propertymap = [
-
-    #(field name, offset, length, type)
-
-    ('magic', 0, 4, 'magic'),
-    ('offset', 4, 4, 'I'),
-    ('dpx_version', 8, 8, 'utf8'),
-    ('file_size', 16, 4, 'I'),
-    ('ditto', 20, 4, 'I'),
-    ('filename', 36, 100, 'utf8'),
-    ('timestamp', 136, 24, 'utf8'),
-    ('creator', 160, 100, 'utf8'),
-    ('project_name', 260, 200, 'utf8'),
-    ('copyright', 460, 200, 'utf8'),
-    ('encryption_key', 660, 4, 'I'),
-
-    ('orientation', 768, 2, 'H'),
-    ('image_element_count', 770, 2, 'H'),
-    ('width', 772, 4, 'I'),
-    ('height', 776, 4, 'I'),
-
-    ('data_sign', 780, 4, 'I'),
-    ('descriptor', 800, 1, 'B'),
-    ('transfer_characteristic', 801, 1, 'B'),
-    ('colorimetry', 802, 1, 'B'),
-    ('depth', 803, 1, 'B'),
-    ('packing', 804, 2, 'H'),
-    ('encoding', 806, 2, 'H'),
-    ('line_padding', 812, 4, 'I'),
-    ('image_padding', 816, 4, 'I'),
-    ('image_element_description', 820, 32, 'utf8'),
-
-    ('input_device_name', 1556, 32, 'utf8'),
-    ('input_device_sn', 1588, 32, 'utf8'),
-
-    ('gamma', 1948, 4, 'f'),
-    ('black_level', 1952, 4, 'f'),
-    ('black_gain', 1956, 4, 'f'),
-    ('break_point', 1960, 4, 'f'),
-    ('white_level', 1964, 4, 'f')
-
-]
-"""
-
-# Just what we actually need
 # More extensive propertymap can be found in dpxderex.py
 
-simple_propertymap = [
+SIMPLE_PROPERTYMAP = [
 
     # These elements are the ones that we have to mung.
     # They MUST appear in this position and in this order,
@@ -165,7 +56,6 @@ simple_propertymap = [
 
     # Other elements that we reference, but do not alter.
 
-#    ('magic', 0, 4, 'magic'),
     ('offset', 4, 4, 'I'),
 
     ('descriptor', 800, 1, 'B'),
@@ -175,99 +65,18 @@ simple_propertymap = [
 
 ]
 
-"""
-def readDPXMetaData(f):
-    f.seek(0)
-    bytes = f.read(4)
-    magic = bytes.decode(encoding='UTF-8')
-    if magic != 'SDPX' and magic != 'XPDS':
-        return None
-    endianness = '>' if magic == 'SDPX' else '<'
 
-    meta = {}
+def read(dpxfile):
 
-    for p in propertymap:
-        f.seek(p[1])
-        bytes = f.read(p[2])
-        if p[3] == 'magic':
-            meta[p[0]] = bytes.decode(encoding='UTF-8')
-            meta['endianness'] = 'be' if magic == 'SDPX' else 'le'
-        elif p[3] == 'utf8':
-            meta[p[0]] = bytes.decode(encoding='UTF-8')
-        elif p[3] == 'B':
-            meta[p[0]] = struct.unpack(endianness + 'B', bytes)[0]
-        elif p[3] == 'H':
-            meta[p[0]] = struct.unpack(endianness + 'H', bytes)[0]
-        elif p[3] == 'I':
-            meta[p[0]] = struct.unpack(endianness + 'I', bytes)[0]
-        elif p[3] == 'f':
-            meta[p[0]] = struct.unpack(endianness + 'f', bytes)[0]
+    """ Read a DPX file and return an img. Stash the header and meta information in a global for use when writing. """
 
-    return meta
-
-
-def readDPXImageData(f, meta):
-    if meta['depth'] != 10 or meta['packing'] != 1 or meta['encoding'] != 0 or meta['descriptor'] != 50:
-        return None
-
-    width = meta['width']
-    height = meta['height']
-    image = np.empty((height, width, 3), dtype=float)
-
-    f.seek(meta['offset'])
-    raw = np.fromfile(f, dtype=np.dtype(np.int32),
-                      count=width * height, sep='')
-    raw = raw.reshape((height, width))
-
-    if meta['endianness'] == 'be':
-        raw = raw.byteswap()
-
-    # extract and normalize color channel values to 0..1 inclusive.
-
-    image[:, :, 0] = ((raw >> 22) & 0x000003FF) / 1023.0
-    image[:, :, 1] = ((raw >> 12) & 0x000003FF) / 1023.0
-    image[:, :, 2] = ((raw >> 2) & 0x000003FF) / 1023.0
-
-    return image
-
-def writeDPX(f, image, meta):
-    endianness = '>' if meta['endianness'] == 'be' else '<'
-    for p in propertymap:
-        if p[0] in meta:
-            f.seek(p[1])
-            if p[3] == 'magic':
-                bytes = ('SDPX' if meta['endianness'] ==
-                         'be' else 'XPDS').encode(encoding='UTF-8')
-            elif p[3] == 'utf8':
-                bytes = meta[p[0]].encode(encoding='UTF-8')
-            else:
-                bytes = struct.pack(endianness + p[3], meta[p[0]])
-            f.write(bytes)
-
-    raw = ((((image[:, :, 0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
-           | (((image[:, :, 1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
-           | (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
-           )
-
-    if meta['endianness'] == 'be':
-        raw = raw.byteswap()
-
-    f.seek(meta['offset'])
-    raw.tofile(f, sep='')
-"""
-
-# Read a DPX file and return an img. Stash the header and meta information in a
-# gobal for use when writing.
-
-def DPXread(f):
-
-    global dpx_meta
-    global dpx_header
+    global DPX_META
+    global DPX_HEADER
 
     # Figure out the byte order of the file
 
-    f.seek(0)
-    magic = f.read(4)
+    dpxfile.seek(0)
+    magic = dpxfile.read(4)
     magic = magic.decode(encoding='UTF-8')
     if magic != 'SDPX' and magic != 'XPDS':
         return None
@@ -275,46 +84,47 @@ def DPXread(f):
 
     # Read the header values we need
 
-    dpx_meta = { 'endianness': dpx_endian }
+    DPX_META = {'endianness': dpx_endian}
 
-    for p in simple_propertymap:
-        f.seek(p[1])
-        bytes = f.read(p[2])
-        if p[3] == 'utf8':
-            dpx_meta[p[0]] = bytes.decode(encoding='UTF-8')
-        elif p[3] == 'B':
-            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'B', bytes)[0]
-        elif p[3] == 'H':
-            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'H', bytes)[0]
-        elif p[3] == 'I':
-            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'I', bytes)[0]
-        elif p[3] == 'f':
-            dpx_meta[p[0]] = struct.unpack(dpx_endian + 'f', bytes)[0]
+    for prop in SIMPLE_PROPERTYMAP:
+        dpxfile.seek(prop[1])
+        rawbytes = dpxfile.read(prop[2])
+        if prop[3] == 'utf8':
+            DPX_META[prop[0]] = rawbytes.decode(encoding='UTF-8')
+        elif prop[3] == 'B':
+            DPX_META[prop[0]] = struct.unpack(dpx_endian + 'B', rawbytes)[0]
+        elif prop[3] == 'H':
+            DPX_META[prop[0]] = struct.unpack(dpx_endian + 'H', rawbytes)[0]
+        elif prop[3] == 'I':
+            DPX_META[prop[0]] = struct.unpack(dpx_endian + 'I', rawbytes)[0]
+        elif prop[3] == 'f':
+            DPX_META[prop[0]] = struct.unpack(dpx_endian + 'f', rawbytes)[0]
 
     # Grab a copy of the whole header
 
-    f.seek(0)
-    dpx_header = f.read(dpx_meta['offset'])
+    dpxfile.seek(0)
+    DPX_HEADER = dpxfile.read(DPX_META['offset'])
 
     # If the format is not what we expect, don't proceed
 
-    if dpx_meta['depth'] != 10 or dpx_meta['packing'] != 1 or dpx_meta['encoding'] != 0 or dpx_meta['descriptor'] != 50:
+    if DPX_META['depth'] != 10 or DPX_META['packing'] != 1 or DPX_META['encoding'] != 0 or DPX_META['descriptor'] != 50:
         return None
 
     # Read and decode the image
 
-    width = dpx_meta['width']
-    height = dpx_meta['height']
+    width = DPX_META['width']
+    height = DPX_META['height']
     image = np.empty((height, width, 3), dtype=float)
 
-    f.seek(dpx_meta['offset'])
-    raw = np.fromfile(f, dtype=np.dtype(np.int32),
+    dpxfile.seek(DPX_META['offset'])
+    raw = np.fromfile(dpxfile, dtype=np.dtype(np.int32),
                       count=width * height, sep='')
 
     raw = raw.reshape((height, width))
-    #GPU : Some of the .zip images didn't transfer correctly
-    #I put this try-block to catch these bad images and warn me if I lost one
-    #If you get an error like the following, uncomment this
+
+    # GPU : Some of the .zip images didn't transfer correctly
+    # I put this try-block to catch these bad images and warn me if I lost one
+    # If you get an error like the following, uncomment this
     #    raw = raw.reshape((height, width))
     #    ValueError: cannot reshape array of size 0 into shape (1080,1920)
     """
@@ -338,22 +148,20 @@ def DPXread(f):
 
     return image
 
-# Use cached header and meta information if not explicitly specified. While we can
-# rewrite the header to handle image size changes, there may be situations where
-# cloning the header/meta information may be more appropriate.
 
-def DPXsave(f, image, meta=None, header=None):
+def save(dpxfile, image, meta=None, header=None):
+    """ Use cached header and meta information if not explicitly specified. While we can
+        rewrite the header to handle image size changes, there may be situations where
+        cloning the header/meta information may be more appropriate.
+    """
 
-    global dpx_header
-    global dpx_meta
-
-    header = dpx_header if header == None else header
-    meta = dpx_meta if meta == None else meta
+    header = DPX_HEADER if header is None else header
+    meta = DPX_META if meta is None else meta
 
     # Write the cached header
 
-    f.seek(0)
-    f.write(header)
+    dpxfile.seek(0)
+    dpxfile.write(header)
 
     # Now we have to get a little clever. If the image size does not match the size
     # recorded in our cached dpx header, we need to tweak those values. This will
@@ -365,24 +173,24 @@ def DPXsave(f, image, meta=None, header=None):
 
     if shape[0] != meta['height'] or shape[1] != meta['width']:
 
-        # Write updated header records. Depends on fields in simple_propertymap
+        # Write updated header records. Depends on fields in SIMPLE_PROPERTYMAP
         # being in the correct order.
 
-        for i,v in enumerate([shape[0], shape[1], shape[0], shape[1], meta['offset'] + (shape[0] * shape[1] * 4)]):
-            p = simple_propertymap[i]
-            f.seek(p[1])
-            bytes = struct.pack(dpx_endian + p[3], v)
-            f.write(bytes)
+        for idx, val in enumerate([shape[0], shape[1], shape[0], shape[1], meta['offset'] + (shape[0] * shape[1] * 4)]):
+            prop = SIMPLE_PROPERTYMAP[idx]
+            dpxfile.seek(prop[1])
+            rawbytes = struct.pack(dpx_endian + prop[3], val)
+            dpxfile.write(rawbytes)
 
     # Write the image data
 
     raw = ((((image[:, :, 0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
            | (((image[:, :, 1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
            | (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
-           )
+          )
 
     if dpx_endian == '>':
         raw = raw.byteswap()
 
-    f.seek(meta['offset'])
-    raw.tofile(f, sep='')
+    dpxfile.seek(meta['offset'])
+    raw.tofile(dpxfile, sep='')
