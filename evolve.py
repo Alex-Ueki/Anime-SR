@@ -460,7 +460,7 @@ if __name__ == '__main__':
         # good genome during training.
 
         best_fitness = population[0][1] if type(population[0]) is list else 0.0
-        worst_fitness = max([best_fitness] + [p[1] for p in population if p is list])
+        worst_fitness = max([p[1] if type(p) is list else best_fitness for p in population])
 
         # Train all the untrained genomes in the population
 
