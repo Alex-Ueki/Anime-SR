@@ -504,7 +504,7 @@ class GPUSR(BaseSRCNNModel):
         model.add(Conv2D(64, (3, 3), activation='elu',
                          padding='same', input_shape=self.io.image_shape))
         for i in range(19):
-            model.add(Conv2D(32, (3, 3), activation='elu', padding='same'))
+            model.add(Conv2D(64, (3, 3), activation='elu', padding='same'))
 
         model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
@@ -681,7 +681,7 @@ class ELUVDSR(BaseSRCNNModel):
         model.add(Conv2D(64, (3, 3), activation='elu',
                          padding='same', input_shape=self.io.image_shape))
         for i in range(19):
-            model.add(Conv2D(32, (3, 3), activation='elu', padding='same'))
+            model.add(Conv2D(64, (3, 3), activation='elu', padding='same'))
 
         model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
