@@ -35,20 +35,20 @@ class ModelState(callbacks.Callback):
         self.io = io
         self.verbose = verbose
 
-        if os.path.isfile(io.state_path):
+        if os.path.isfile(io.paths['state']):
             if self.verbose:
                 print('Loading existing .json state')
-            with open(io.state_path, 'r') as jsonfile:
+            with open(io.paths['state'], 'r') as jsonfile:
                 self.state = json.load(jsonfile)
 
             # Update state with current run information
 
-            self.state['io'] = io.asdict()
+            self.state['io'] = io.config
         else:
             self.state = {'epoch_count': 0,
                           'best_values': {},
                           'best_epoch': {},
-                          'io': io.asdict()
+                          'io': io.config
                          }
 
     def on_train_begin(self, logs=None):
@@ -67,7 +67,7 @@ class ModelState(callbacks.Callback):
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
 
-        with open(self.io.state_path, 'w') as jsonfile:
+        with open(self.io.paths['state'], 'w') as jsonfile:
             json.dump(self.state, jsonfile, indent=4)
 
         if self.verbose:
@@ -163,14 +163,14 @@ class BaseSRCNNModel(object):
         self.io = io
         self.lf = lf
         self.val_lf = 'val_' + lf
-        self.evaluation_function = LOSS_FUNCTIONS[lf](io.border)
+        self.evaluation_function = LOSS_FUNCTIONS[lf](io.config['border'])
         self.verbose = verbose
         self.bargraph = bargraph
 
-        if os.path.isfile(io.model_path):
+        if os.path.isfile(io.paths['model']):
             if self.verbose:
                 print('Loading existing .h5 model')
-            self.model = load_model(io.model_path, custom_objects={lf: self.evaluation_function})
+            self.model = load_model(io.paths['model'], custom_objects={lf: self.evaluation_function})
         else:
             if self.verbose:
                 print('Creating new untrained model')
@@ -201,8 +201,8 @@ class BaseSRCNNModel(object):
 
     def fit(self, max_epochs=255, run_epochs=0):
         """ Train a model.
-            Uses images in self.io.training_path for Training
-            Uses images in self.io.validation_path for Validation
+            Uses images in self.io.paths['training'] for Training
+            Uses images in self.io.paths['validation'] for Validation
         """
 
         samples_per_epoch = self.io.train_images_count()
@@ -218,7 +218,7 @@ class BaseSRCNNModel(object):
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
 
-        model_checkpoint = callbacks.ModelCheckpoint(self.io.model_path,
+        model_checkpoint = callbacks.ModelCheckpoint(self.io.paths['model'],
                                                      monitor=self.val_lf,
                                                      save_best_only=True,
                                                      verbose=self.verbose,
@@ -244,7 +244,7 @@ class BaseSRCNNModel(object):
                          model_state]
 
         if self.verbose:
-            print('Training model : {}'.format(self.io.model_type))
+            print('Training model : {}'.format(self.io.config['model']))
 
         # Offset epoch counts if we are resuming training.
 
@@ -256,12 +256,12 @@ class BaseSRCNNModel(object):
         # model. It reports that it happened in the previous epoch.
 
         self.model.fit_generator(self.io.training_data_generator(),
-                                 steps_per_epoch=samples_per_epoch // self.io.batch_size,
+                                 steps_per_epoch=samples_per_epoch // self.io.config['batch_size'],
                                  epochs=epochs,
                                  callbacks=callback_list,
                                  verbose=self.bargraph,
                                  validation_data=self.io.validation_data_generator(),
-                                 validation_steps=val_count // self.io.batch_size,
+                                 validation_steps=val_count // self.io.config['batch_size'],
                                  initial_epoch=initial_epoch)
 
         if self.verbose:
@@ -307,7 +307,7 @@ class BaseSRCNNModel(object):
         print('Validating %s model' % self.name)
 
         results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
-                                                steps=self.io.eval_images_count() // self.io.batch_size)
+                                                steps=self.io.eval_images_count() // self.io.config['batch_size'])
         print("Loss = %.5f, PeekSignalToNoiseRatio = %.5f" % (results[0], results[1]))
 
 
@@ -316,7 +316,7 @@ class BaseSRCNNModel(object):
     def save(self, path=None):
         """ Save the model to a .h5 file """
 
-        self.model.save(self.io.model_path if path == None else path)
+        self.model.save(self.io.paths['model'] if path is None else path)
 
 #----------------------------------------------------------------------------------
 # BaseSRCNNModel Subclasses (add your custom models here)
@@ -345,7 +345,7 @@ class BasicSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -385,7 +385,7 @@ class ExpansionSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -437,7 +437,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -470,7 +470,7 @@ class VDSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -499,7 +499,7 @@ class PUPSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -536,7 +536,7 @@ class GPUSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -562,7 +562,7 @@ MODELS = {'BasicSR': BasicSR,
     ELUBasicSR : Loss = 0.00032 | PeekSignalToNoiseRatio = -44.32544
 """
 class ELUBasicSR(BaseSRCNNModel):
-
+    """ Test model """
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
         super(ELUBasicSR, self).__init__('BasicSR', io, lf, verbose, bargraph)
@@ -583,7 +583,7 @@ class ELUBasicSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -594,6 +594,7 @@ class ELUBasicSR(BaseSRCNNModel):
        ExpansionSR : Loss = 0.00043 | PeekSignalToNoiseRatio = -41.49931
 """
 class ELUExpansionSR(BaseSRCNNModel):
+    """ Test Model """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -627,7 +628,7 @@ class ELUExpansionSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -638,7 +639,7 @@ class ELUExpansionSR(BaseSRCNNModel):
        DeepDenoiseSR : Loss = 0.00044 | PeekSignalToNoiseRatio = -42.58665
 """
 class ELUDeepDenoiseSR(BaseSRCNNModel):
-
+    """ Test Model """
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
         super(ELUDeepDenoiseSR, self).__init__('DeepDenoiseSR', io, lf, verbose, bargraph)
@@ -682,7 +683,7 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model
@@ -693,6 +694,7 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
        VDSR : Loss = 0.01211 | PeekSignalToNoiseRatio = -19.73214
 """
 class ELUVDSR(BaseSRCNNModel):
+    """ Test Model """
 
     def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
 
@@ -713,7 +715,7 @@ class ELUVDSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.model_path)
+            model.load_weights(self.io.paths['model'])
 
         self.model = model
         return model

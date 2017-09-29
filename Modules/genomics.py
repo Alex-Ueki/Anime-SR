@@ -8,12 +8,9 @@ import datetime
 import itertools
 from copy import deepcopy
 
-from keras.models import Sequential, Model, load_model
-from keras.layers import Concatenate, Add, Average, Multiply, Maximum, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
+from keras.models import Model
+from keras.layers import Add, Average, Multiply, Maximum, Input
 from keras.layers.convolutional import Conv2D
-from keras import backend as K
-from keras.utils.np_utils import to_categorical
-import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
 from Modules.models import BaseSRCNNModel
@@ -51,16 +48,23 @@ mergers = {'add': Add(), 'avg': Average(), 'mult': Multiply(), 'max': Maximum()}
 # Autogenerate composite codons. We have some restrictions; for example, the filter
 # size of all the convolutions must be the same.
 
-composites = {}
-for m in mergers:
-    for f in filters:
-        for a in acts:
-            for d in depths:
-                for k in itertools.combinations(kernels, d):
-                    cname = '{}_f{}_k{}_d{}_{}'.format(m, f, ''.join([str(x) for x in k]), d, a)
-                    flist = [convolutions['conv_f{}_k{}_{}'.format(f, n, a)] for n in k] + [mergers[m]]
-                    composites[cname] = flist
+def _make_composites():
+    """ Make composite codons """
 
+    codons = {}
+
+    for m in mergers:
+        for f in filters:
+            for a in acts:
+                for d in depths:
+                    for k in itertools.combinations(kernels, d):
+                        cname = '{}_f{}_k{}_d{}_{}'.format(m, f, ''.join([str(x) for x in k]), d, a)
+                        flist = [convolutions['conv_f{}_k{}_{}'.format(f, n, a)] for n in k] + [mergers[m]]
+                        codons[cname] = flist
+
+    return codons
+
+composites = _make_composites()
 
 # The output layer is always a convolution layer that generates 3 channels
 
@@ -74,18 +78,20 @@ all_codons = {**convolutions, **composites, **outputs, **mergers}
 
 mutable_codons = [convolutions, composites]
 
-# Build and compile a keras model from an expressed sequence of codons.
-# Returns the model or None if the compile failed in some way
-#
-# genome    list of codon names (if string, will be converted)
-# shape     shape of model input
-# lr        initial learning rate
-# metrics   callbacks
 
 
-def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=[]):
 
-    if type(genome) is not list:
+def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=None):
+    """ Build and compile a keras model from an expressed sequence of codons.
+        Returns the model or None if the compile failed in some way
+
+        genome    list of codon names (if string, will be converted)
+        shape     shape of model input
+        lr        initial learning rate
+        metrics   callbacks
+    """
+
+    if not isinstance(genome, list):
         genome = genome.split('-')
 
     # Get the wiring hookups for the sequence, and preface them with an
@@ -130,7 +136,7 @@ def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=[]):
 
         if _DEBUG:
             for i,layer in enumerate(all_layers):
-                print('Layer',i, layer.name, layer, layer._consumers)
+                print('Layer', i, layer.name, layer, layer._consumers)
             print('')
 
         # Create and compile the model
@@ -138,6 +144,8 @@ def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=[]):
         model = Model(codons[0], codons[-1])
 
         adam = optimizers.Adam(lr=lr, clipvalue=(1.0 / .001), epsilon=0.001)
+
+        metrics = {} if metrics is None else metrics
 
         model.compile(optimizer=adam, loss='mse', metrics=metrics)
 
@@ -152,28 +160,30 @@ def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=[]):
     except:
         printlog('Cannot compile: {}'.format(sys.exc_info()[1]))
         raise
-        return None
 
-# Mutate a model. There are 5 possible mutations that can occur:
-#
-# point     point mutation of a parameter of a codon
-# insert    insert a new codon
-# delete    delete a codon
-# transpose move a codon somewhere else in the genome
-# conjugate replace codons with codons in another genome
-#
-# Parameters:
-#
-# parent        parental genome (list of codons; if string will be converted)
-# conjugate     parental genome (only used for conjugation)
-# min_len       minimum length of the resulting genome
-# max_len       maximum length of the resulting genome
-# odds          list of *cumulative* odds of point, insert, delete, transpose, conjugate
-# best_fitness  the fitness of the best genome found so far.
-# statistics    dictionary of codon statistics for guiding evolotion
-# viable        viability function; takes a codon list, returns true if it is acceptable
 
-def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 8, 9), best_fitness=0.0, statistics={}, viable=None):
+
+def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 8, 9), best_fitness=0.0, statistics=None, viable=None):
+
+    """ Mutate a model. There are 5 possible mutations that can occur:
+
+        point     point mutation of a parameter of a codon
+        insert    insert a new codon
+        delete    delete a codon
+        transpose move a codon somewhere else in the genome
+        conjugate replace codons with codons in another genome
+
+        Parameters:
+
+        parent        parental genome (list of codons; if string will be converted)
+        conjugate     parental genome (only used for conjugation)
+        min_len       minimum length of the resulting genome
+        max_len       maximum length of the resulting genome
+        odds          list of *cumulative* odds of point, insert, delete, transpose, conjugate
+        best_fitness  the fitness of the best genome found so far.
+        statistics    dictionary of codon statistics for guiding evolotion
+        viable        viability function; takes a codon list, returns true if it is acceptable
+    """
 
     # a codon is "fit enough" if it is *not* in the statistics dictionary or
     # if it passes a dice roll based on how close its mean fitness is to the
@@ -234,7 +244,7 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 8, 9), best_
             elif basepair == 0:
                 # choose new codon type (only if a merge-type codon)
                 if codons[0] in mergers:
-                    new_codon = random.choice(list(mergers.keys())) + codons[0][1:]
+                    new_codon = random.choice(list(mergers.keys()))
                 else:
                     new_codon = codons[0]
             else:
@@ -253,7 +263,7 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 8, 9), best_
                 elif base == 'f':
                     param = random.choice(filters)
                 else:
-                    printlog('Unknown parameter base {} in {}'.format(base, mother[locus]))
+                    printlog('Unknown parameter base {} in {}'.format(base, original_locus))
                     param = 'XXX'
                 new_codon = base + str(param)
             if fit_enough(new_codon):
@@ -339,6 +349,8 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 8, 9), best_
     if type(conjugate) is not list:
         conjugate = conjugate.split('-')
 
+    statistics = {} if statistics is None else statistics
+
     if _DEBUG:
         print('   Mutation parent','-'.join(parent))
         print('Mutation conjugate','-'.join(conjugate))
@@ -370,14 +382,16 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 8, 9), best_
 
     return child
 
-# Slice and dice a genome and generate statistics for analysis. Statistics
-# is a dictionary; for each genetic fragment, it contains a (best, mean,
-# worst, count) tuple
 
 
-def ligate(statistics, genome, fitness):
 
-    if type(genome) is not list:
+def ligate(statistics, genome, new_fitness):
+    """ Slice and dice a genome and generate statistics for analysis. Statistics
+        is a dictionary; for each genetic fragment, it contains a (best, mean,
+        worst, count) tuple
+    """
+
+    if not isinstance(genome, list):
         genome = genome.split('-')
 
     # compute the list of codons and subparts taken 1 to n at a time, where
@@ -396,13 +410,13 @@ def ligate(statistics, genome, fitness):
     for f in fragments:
         f = '_'.join(f)
         if f not in statistics:
-            statistics[f] = (fitness, fitness, fitness, 1)
+            statistics[f] = (new_fitness, new_fitness, new_fitness, 1)
         else:
             best, mean, worst, count = statistics[f]
 
-            best = min(best, fitness)
-            worst = max(worst, fitness)
-            mean = (mean * count + fitness) / (count + 1)
+            best = min(best, new_fitness)
+            worst = max(worst, new_fitness)
+            mean = (mean * count + new_fitness) / (count + 1)
             count += 1
 
             statistics[f] = (best, mean, worst, count)
@@ -427,12 +441,12 @@ def fitness(genome, io, apoptosis=None):
 
     printlog('Testing fitness of {}'.format(organism))
 
-    io.model_type = organism
+    io.config['model'] = organism
 
     m = BaseSRCNNModel(organism, io, verbose=False, bargraph=False)
 
     model = build_model(genome, shape=io.image_shape,
-                        lr=io.lr, metrics=[m.evaluation_function])
+                        lr=io.config['lr'], metrics=[m.evaluation_function])
 
     if model == None:
         return 0.0
@@ -448,13 +462,14 @@ def fitness(genome, io, apoptosis=None):
         results = m.fit(max_epochs=1)
         etime = datetime.datetime.now()
 
-        halfway = io.epochs // 2
+        epochs = io.config['epochs']
+        halfway = epochs // 2
 
         eta = etime + (etime - stime) * (halfway - 1)
         printlog(
             'After 1 epoch: fitness={}, will be halfway @ {:%I:%M:%S %p}'.format(results, eta))
 
-        if apoptosis != None and apoptosis(results, 1, io.epochs):
+        if apoptosis != None and apoptosis(results, 1, epochs):
             printlog('Apoptosis triggered!')
             return results
 
@@ -467,12 +482,12 @@ def fitness(genome, io, apoptosis=None):
         printlog('After {} epochs: fitness={}, will complete @ {:%I:%M:%S %p}'.format(
             halfway, results, eta))
 
-        if apoptosis != None and apoptosis(results, halfway, io.epochs, last_fitness=prev_results):
+        if apoptosis != None and apoptosis(results, halfway, epochs, last_fitness=prev_results):
             printlog('Apoptosis triggered!')
             return results
 
-        results = m.fit(max_epochs=io.epochs)
-        printlog('After {} epochs: fitness={}'.format(io.epochs, results))
+        results = m.fit(max_epochs=epochs)
+        printlog('After {} epochs: fitness={}'.format(epochs, results))
 
     except KeyboardInterrupt:
 
@@ -481,7 +496,7 @@ def fitness(genome, io, apoptosis=None):
     except:
         printlog('Cannot fit: {}'.format(sys.exc_info()[1]))
         raise
-        results = 0.0
+
 
     printlog('Fitness: {}'.format(results))
     return results

@@ -176,27 +176,19 @@ def predict():
 
         terminate(errors, False)
 
-        io_config = ModelIO(model_type=model_type,
-                            image_width=iostate['image_width'],
-                            image_height=iostate['image_height'],
-                            base_tile_width=iostate['base_tile_width'],
-                            base_tile_height=iostate['base_tile_height'],
-                            channels=iostate['channels'],
-                            border=iostate['border'],
-                            border_mode=iostate['border_mode'],
-                            batch_size=iostate['batch_size'],
-                            black_level=iostate['black_level'],
-                            trim_top=iostate['trim_top'],
-                            trim_bottom=iostate['trim_bottom'],
-                            trim_left=iostate['trim_left'],
-                            trim_right=iostate['trim_left'],
-                            jitter=False,
-                            shuffle=False,
-                            skip=False,
-                            quality=1.0,
-                            residual=iostate['residual'],
-                            img_suffix=iostate['img_suffix'],
-                            paths={})
+        # Update iostate with configurable parameters
+
+        iostate['paths'] = paths
+        iostate['jitter'] = False
+        iostate['shuffle'] = False
+        iostate['skip'] = False
+        iostate['quality'] = 1.0
+        iostate['model_type'] = model_type
+
+        print(iostate)
+        print(type(iostate))
+        
+        io_config = ModelIO(iostate)
 
         return (image_info, io_config)
 
@@ -213,10 +205,8 @@ def predict():
 
     # Compute some handy information
 
-    row_width = (io_config.image_width - io_config.trim_left -
-                 io_config.trim_right) // io_config.base_tile_width
-    row_height = (io_config.image_height - io_config.trim_top -
-                  io_config.trim_bottom) // io_config.base_tile_height
+    row_width = io_config.tiles_across
+    row_height = io_config.tiles_down
     tiles_per_img = row_width * row_height
 
     print('tiles per image', tiles_per_img)
@@ -238,19 +228,19 @@ def predict():
         # the tiles in the default order.
 
         tiles = frameops.tesselate(file_paths=img_path,
-                                   tile_width=io_config.base_tile_width,
-                                   tile_height=io_config.base_tile_height,
-                                   border=io_config.border,
-                                   black_level=io_config.black_level,
-                                   trim_top=io_config.trim_top,
-                                   trim_bottom=io_config.trim_bottom,
-                                   trim_left=io_config.trim_left,
-                                   trim_right=io_config.trim_right,
+                                   tile_width=io_config.config['base_tile_width'],
+                                   tile_height=io_config.config['base_tile_height'],
+                                   border=io_config.config['border'],
+                                   black_level=io_config.config['black_level'],
+                                   trim_top=io_config.config['trim_top'],
+                                   trim_bottom=io_config.config['trim_bottom'],
+                                   trim_left=io_config.config['trim_left'],
+                                   trim_right=io_config.config['trim_right'],
                                    shuffle=False,
                                    jitter=False,
                                    skip=False,
                                    quality=1.0,
-                                   theano=io_config.theano)
+                                   theano=io_config.config['theano'])
 
         # Create a batch with all the tiles
 
@@ -265,14 +255,14 @@ def predict():
                 frameops.imsave(os.path.join(
                     'Temp', 'PNG', fname[:-4] + '-' + str(i) + '-IN.png'), tile_batch[i])
             input_image = frameops.grout(tile_batch,
-                                         border=io_config.border,
+                                         border=io_config.config['border'],
                                          row_width=row_width,
-                                         black_level=io_config.black_level,
-                                         pad_top=io_config.trim_top,
-                                         pad_bottom=io_config.trim_bottom,
-                                         pad_left=io_config.trim_left,
-                                         pad_right=io_config.trim_right,
-                                         theano=io_config.theano)
+                                         black_level=io_config.config['black_level'],
+                                         pad_top=io_config.config['trim_top'],
+                                         pad_bottom=io_config.config['trim_bottom'],
+                                         pad_left=io_config.config['trim_left'],
+                                         pad_right=io_config.config['trim_right'],
+                                         theano=io_config.config['theano'])
             frameops.imsave(os.path.join('Temp', 'PNG', os.path.basename(
                 img_path)[:-4] + '-IN.png'), input_image)
 
@@ -286,20 +276,20 @@ def predict():
         # Without residual, mean is usually higher
         # print('Debug: Residual {} Mean {}'.format(io.residual==1, np.mean(predicted_tiles)))
 
-        if io_config.residual:
+        if io_config.config['residual']:
             predicted_tiles += tile_batch
 
         # Merge the tiles back into a single image
 
         predicted_image = frameops.grout(predicted_tiles,
-                                         border=io_config.border,
+                                         border=io_config.config['border'],
                                          row_width=row_width,
-                                         black_level=io_config.black_level,
-                                         pad_top=io_config.trim_top,
-                                         pad_bottom=io_config.trim_bottom,
-                                         pad_left=io_config.trim_left,
-                                         pad_right=io_config.trim_right,
-                                         theano=io_config.theano)
+                                         black_level=io_config.config['black_level'],
+                                         pad_top=io_config.config['trim_top'],
+                                         pad_bottom=io_config.config['trim_bottom'],
+                                         pad_left=io_config.config['trim_left'],
+                                         pad_right=io_config.config['trim_right'],
+                                         theano=io_config.config['theano'])
 
         # Save the image
 

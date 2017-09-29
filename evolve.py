@@ -389,72 +389,67 @@ def evolve():
         print('Initializing statistics...')
         statistics = {}
 
-    # Over-ride defaults/options with contents of genepool.json, if any...
+    # Genepool.json overrides anything we specify, but we may not have any data,
+    # so try to set some defaults.
 
     io = genepool['io']
 
-    tile_height = io['base_tile_height']
-    border = io['border']
-    border_mode = io['border_mode']
-    black_level = io['black_level']
-    trim_top = io['trim_top']
-    trim_bottom = io['trim_bottom']
-    trim_left = io['trim_left']
-    trim_right = io['trim_right']
-    jitter = io['jitter']
-    shuffle = io['shuffle']
-    skip = io['skip']
-    residual = io['residual']
-    quality = io['quality']
-    epochs = io['epochs']
-    lr = io['lr']
-    paths = io['paths']
+    io['model_type'] = 'Darwinian'
+
+    io.setdefault('base_tile_height', tile_height)
+    io.setdefault('border', tile_border)
+    io.setdefault('border_mode', 'edge')
+    io.setdefault('black_level', black_level)
+    io.setdefault('trim_top', trim_top)
+    io.setdefault('trim_bottom', trim_bottom)
+    io.setdefault('trim_left', trim_left)
+    io.setdefault('trim_right', trim_right)
+    io.setdefault('jitter', jitter)
+    io.setdefault('shuffle', shuffle)
+    io.setdefault('skip', skip)
+    io.setdefault('residual', residual)
+    io.setdefault('quality', quality)
+    io.setdefault('epochs', epochs)
+    io.setdefault('lr', lr)
+    io.setdefault('paths', paths)
+    io.setdefault('epochs', EPOCHS)
+    io.setdefault('channels', 3)
+    io.setdefault('batch_size', 16)
+    io.setdefault('image_width', image_width)
+    io.setdefault('image_height', image_height)
+    io.setdefault('base_tile_width', tile_width)
+    io.setdefault('base_tile_height', tile_height)
+    io.setdefault('img_suffix', img_suffix)
+    io.setdefault('paths', paths)
 
     # Initialize ModelIO structure
 
-    io = ModelIO(model_type='Darwinian',
-                 image_width=image_width, image_height=image_height,
-                 base_tile_width=tile_width, base_tile_height=tile_height,
-                 channels=3,
-                 border=tile_border,
-                 border_mode='edge',
-                 batch_size=16,
-                 black_level=black_level,
-                 trim_top=trim_top, trim_bottom=trim_bottom,
-                 trim_left=trim_left, trim_right=trim_right,
-                 jitter=jitter, shuffle=shuffle, skip=skip,
-                 quality=quality,
-                 residual=residual,
-                 img_suffix=img_suffix,
-                 paths=paths,
-                 epochs=EPOCHS,
-                 lr=lr
-                )
+    io = ModelIO(io)
 
     # Remind user what we're about to do.
 
     print('          Genepool : {}'.format(paths['genepool']))
-    print('        Tile Width : {}'.format(tile_width))
-    print('       Tile Height : {}'.format(tile_height))
-    print('       Tile Border : {}'.format(tile_border))
+    print('        Tile Width : {}'.format(io.config['base_tile_width']))
+    print('       Tile Height : {}'.format(io.config['base_tile_height']))
+    print('       Tile Border : {}'.format(io.config['border']))
     print('    Min Population : {}'.format(MIN_POPULATION))
     print('    Max Population : {}'.format(MAX_POPULATION))
-    print('   Epochs to train : {}'.format(EPOCHS))
-    print('    Data root path : {}'.format(paths['data']))
-    print('   Training Images : {}'.format(paths['training']))
-    print(' Validation Images : {}'.format(paths['validation']))
+    print('   Epochs to train : {}'.format(io.config['epochs']))
+    print('    Data root path : {}'.format(io.paths['data']))
+    print('   Training Images : {}'.format(io.paths['training']))
+    print(' Validation Images : {}'.format(io.paths['validation']))
     print('  Input Image Size : {} x {}'.format(s1[1], s1[0]))
     print('          Trimming : Top={}, Bottom={}, Left={}, Right={}'.format(
-        trim_top, trim_bottom, trim_left, trim_right))
-    print(' Output Image Size : {} x {}'.format(trimmed_width, trimmed_height))
+        io.config['trim_top'], io.config['trim_bottom'], io.config['trim_left'], io.config['trim_right']))
+    print(' Output Image Size : {} x {}'.format(io.config['trimmed_width'], io.config['trimmed_height']))
     print(' Training Set Size : {}'.format(len(image_info[0][0][0])))
     print('   Valid. Set Size : {}'.format(len(image_info[1][0][0])))
-    print('       Black level : {}'.format(black_level))
-    print('            Jitter : {}'.format(jitter == 1))
-    print('           Shuffle : {}'.format(shuffle == 1))
-    print('              Skip : {}'.format(skip == 1))
-    print('          Residual : {}'.format(residual == 1))
-    print('           Quality : {}'.format(quality))
+    print('       Black level : {}'.format(io.config['black_level']))
+    print('            Jitter : {}'.format(io.config['jitter'] == 1))
+    print('           Shuffle : {}'.format(io.config['shuffle'] == 1))
+    print('              Skip : {}'.format(io.config['skip'] == 1))
+    print('          Residual : {}'.format(io.config['residual'] == 1))
+    print('           Quality : {}'.format(io.config['quality']))
     print(residual)
     print('')
 
@@ -480,7 +475,7 @@ def evolve():
             if type(genome) is not list:
                 # Delete the model and state files (if any) so we start with
                 # a fresh slate
-                for p in (io.model_path, io.state_path):
+                for p in (io.paths['model'], io.paths['state']):
                     if os.path.isfile(p):
                         os.remove(p)
 
