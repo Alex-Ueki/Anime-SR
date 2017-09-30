@@ -12,7 +12,7 @@ import os
 import json
 import datetime
 
-from Modules.misc import set_docstring, clear_screen, bcolors
+from Modules.misc import set_docstring, clear_screen, BCOLORS
 
 set_docstring(__doc__)
 
@@ -32,7 +32,6 @@ MODELS = os.path.join('Data', 'models')
 
 
 def fitstr(wide_str, other=0, max_width=SWIDTH):
-
     """ Truncate or cut the middle out of a string to conform it to
         max_width - other.
     """
@@ -58,7 +57,7 @@ def endash(genome, max_width=0, dashit=DASHIT):
     padding = ' ' * max(0, max_width - len(genome))
 
     if dashit:
-        genome = genome.replace('-', bcolors.HEADER + '-' + bcolors.ENDC)
+        genome = genome.replace('-', BCOLORS.HEADER + '-' + BCOLORS.ENDC)
 
     return genome + padding
 

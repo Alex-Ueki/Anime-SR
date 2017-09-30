@@ -10,33 +10,34 @@ import datetime
 # Will be set by module that imports us - used by terminate() to display
 # appropriate help.
 
-owner_docstring = ''
+_DOCSTRING = ''
 
 
 def set_docstring(docstring):
+    """ Set the stored docstring; called by outermost scope """
 
-    global owner_docstring
-    owner_docstring = docstring
+    global _DOCSTRING
+    _DOCSTRING = docstring
 
-# Clear the screen
 
 
 def clear_screen():
+    """ Clear the screen """
 
     os.system('cls' if platform.system().lower() == 'windows' else 'clear')
 
-# Print with timestamp
-
 
 def printlog(*s):
+    """ Print with timestamp """
 
     print('{:%Y-%m-%d %H:%M:%S.%f}:'.format(datetime.datetime.now()), *s)
 
-# ANSI terminal color escapes
-# https://stackoverflow.com/questions/287871/print-in-terminal-with-colors-using-python
+""" ANSI terminal color escapes
+    https://stackoverflow.com/questions/287871/print-in-terminal-with-colors-using-python
+"""
 
-
-class bcolors:
+class BCOLORS():
+    """ List of ANSI terminal color escapes """
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
@@ -46,27 +47,27 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-# Setup default directories
-
-
 def setup_default(paths):
-    for key, value in path.iteritems():
-        if not os.path.exists(value):
-            os.makedirs(value)
+    """ Create default directories -- PU not needed? """
 
-# If is_error is true, display message and optionally end the run.
-# return updated error_state. error_value may be a tuple of
-# arguments for format().
+    for path in paths:
+        if not os.path.exists(path):
+            os.makedirs(path)
+
 
 
 def oops(error_state, is_error, msg, error_value=0, end_run=False):
+    """ If is_error is true, display message and optionally end the run.
+        return updated error_state. error_value may be a tuple of
+        arguments for format().
+    """
 
     if is_error:
         # Have to handle the single/multiple argument case.
         # if we pass format a simple string using *value it
         # gets treated as a list of individual characters.
 
-        print('Error: ' + (msg.format(*error_value) if type(error_value) in (list, tuple) else
+        print('Error: ' + (msg.format(*error_value) if isinstance(error_value, (list, tuple)) else
                            msg.format(error_value)))
 
         if end_run:
@@ -74,35 +75,133 @@ def oops(error_state, is_error, msg, error_value=0, end_run=False):
 
     return error_state or is_error
 
-# Validate input, return a new_value, error tuple. Since we will never use the
-# new_value if error_state ever becomes True, it's ok to blindly return it.
 #
-# error_state   Current validation error state
-# new_value     The new value of the current option
-# is_error      Is the new_value of the current option bad?
-# msg           Error message format() string
-# error_value   Value to display in error message; may be tuple.
-#               (if None, use the new_value)
-# end_run       Immediately terminate if we get an error?
 
 
 def validate(error_state, new_value, is_error, msg, error_value=None, end_run=False):
+    """ Validate input, return a new_value, error tuple. Since we will never use the
+        new_value if error_state ever becomes True, it's ok to blindly return it.
+
+        error_state   Current validation error state
+        new_value     The new value of the current option
+        is_error      Is the new_value of the current option bad?
+        msg           Error message format() string
+        error_value   Value to display in error message; may be tuple.
+                      (if None, use the new_value)
+        end_run       Immediately terminate if we get an error?
+    """
 
     if is_error:
-        if error_value == None:
+        if error_value is None:
             error_value = new_value
         error_state = oops(error_state, is_error, msg, error_value, end_run)
 
     return (new_value, error_state)
 
 
-# Terminate run if errors have been encountered.
-# Parental Unit has already done penance for this joke.
+
 
 
 def terminate(sarah_connor, verbose=True):
+    """ Terminate run if errors have been encountered.
+        Parental Unit has already done penance for this joke.
+    """
+
     if sarah_connor:
         if verbose:
-            print(owner_docstring)
+            print(_DOCSTRING)
         print('')
         sys.exit(1)
+
+def opcheck(option, oldvalue, newvalue, errors):
+    """ Check option for validity, return new value if OK. Option is a tuple of
+        (config key, type, validation function (if true, error!), error string)
+    """
+
+    # Convert type of newvalue.
+
+    original_value = newvalue
+
+    if option[1] == str:
+        newvalue = str(newvalue)
+    elif option[1] == bool:
+        newvalue = '1' if 'true'.startswith(newvalue.lower()) else newvalue
+        newvalue = '0' if 'false'.startswith(newvalue.lower()) else newvalue
+        try:
+            newvalue = bool(newvalue)
+        except ValueError:
+            newvalue = -1
+    elif option[1] == int:
+        try:
+            newvalue = int(newvalue)
+        except ValueError:
+            newvalue = -1
+    elif option[1] == float:
+        try:
+            newvalue = float(newvalue)
+        except ValueError:
+            newvalue = -1.0
+
+    if option[2](newvalue):
+        errors = True
+        print(option[3].format(original_value))
+        newvalue = oldvalue
+
+    return (errors, newvalue)
+
+def parse_options(opcodes):
+    """ Parse options. Takes a dictionary of options, each element is a tuple
+        containing 4 elements:
+
+        config_name     the ModelIO element name
+        type            type of the option
+        invalid_func    func that returns True if option is out of bounds
+        format_string   message to display if there is a problem with {}
+    """
+
+    options = {}
+
+    # Option names must be sorted because some options can be substrings of others
+
+    option_names = sorted(list(opcodes.keys()))
+
+    errors = False
+
+    for param in sys.argv[1:]:
+
+        opvalue = param.split('=', maxsplit=1)
+
+        if len(opvalue) == 1:
+            errors = oops(errors, True, 'Invalid option ({})', param)
+            continue
+
+        option, value = opvalue[0].lower(), opvalue[1]
+
+        # Match option, make sure it isn't ambiguous.
+
+        opmatch = [s for s in option_names if s.startswith(option)]
+
+        if not opmatch or len(opmatch) > 1 and opmatch[0] != option:
+            errors = oops(errors, True, '{} option ({})',
+                          ('Ambiguous' if opmatch else 'Unknown', option))
+            continue
+
+        opcode = opcodes[opmatch[0]]
+        opname = opcode[0]
+
+        if opname not in options:
+            options[opname] = None
+
+        errors, options[opname] = opcheck(opcode, options[opname], value, errors)
+
+    terminate(errors)
+
+    # Move _paths temp configs into options['paths']
+
+    temp_paths = [path for path in options if path.endswith('_path')]
+    options['paths'] = {}
+    for path in temp_paths:
+        options['paths'][path.split('_path')[0]] = options[path]
+        del options[path]
+
+    return options
