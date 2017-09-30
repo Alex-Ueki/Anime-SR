@@ -20,7 +20,6 @@ def set_docstring(docstring):
     _DOCSTRING = docstring
 
 
-
 def clear_screen():
     """ Clear the screen """
 
@@ -32,9 +31,11 @@ def printlog(*s):
 
     print('{:%Y-%m-%d %H:%M:%S.%f}:'.format(datetime.datetime.now()), *s)
 
+
 """ ANSI terminal color escapes
     https://stackoverflow.com/questions/287871/print-in-terminal-with-colors-using-python
 """
+
 
 class BCOLORS():
     """ List of ANSI terminal color escapes """
@@ -47,13 +48,13 @@ class BCOLORS():
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
 def setup_default(paths):
     """ Create default directories -- PU not needed? """
 
     for path in paths:
         if not os.path.exists(path):
             os.makedirs(path)
-
 
 
 def oops(error_state, is_error, msg, error_value=0, end_run=False):
@@ -74,8 +75,6 @@ def oops(error_state, is_error, msg, error_value=0, end_run=False):
             terminate(True)
 
     return error_state or is_error
-
-#
 
 
 def validate(error_state, new_value, is_error, msg, error_value=None, end_run=False):
@@ -99,9 +98,6 @@ def validate(error_state, new_value, is_error, msg, error_value=None, end_run=Fa
     return (new_value, error_state)
 
 
-
-
-
 def terminate(sarah_connor, verbose=True):
     """ Terminate run if errors have been encountered.
         Parental Unit has already done penance for this joke.
@@ -112,6 +108,7 @@ def terminate(sarah_connor, verbose=True):
             print(_DOCSTRING)
         print('')
         sys.exit(1)
+
 
 def opcheck(option, oldvalue, newvalue, errors):
     """ Check option for validity, return new value if OK. Option is a tuple of
@@ -148,6 +145,7 @@ def opcheck(option, oldvalue, newvalue, errors):
         newvalue = oldvalue
 
     return (errors, newvalue)
+
 
 def parse_options(opcodes):
     """ Parse options. Takes a dictionary of options, each element is a tuple

@@ -92,14 +92,14 @@ ALL_CODONS = {**CONVOLUTIONS, **COMPOSITES, **OUTPUTS, **MERGERS}
 MUTABLE_CODONS = [CONVOLUTIONS, COMPOSITES]
 
 
-def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=None):
+def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
     """ Build and compile a keras model from an expressed sequence of codons.
         Returns the model or None if the compile failed in some way
 
-        genome    list of codon names (if string, will be converted)
-        shape     shape of model input
-        lr        initial learning rate
-        metrics   callbacks
+        genome      list of codon names (if string, will be converted)
+        shape       shape of model input
+        learning_rate  initial learning rate
+        metrics     callbacks
     """
 
     if not isinstance(genome, list):
@@ -154,15 +154,15 @@ def build_model(genome, shape=(64, 64, 3), lr=0.001, metrics=None):
 
         model = Model(codons[0], codons[-1])
 
-        adam = optimizers.Adam(lr=lr, clipvalue=(1.0 / .001), epsilon=0.001)
+        adam = optimizers.Adam(lr=learning_rate, clipvalue=(1.0 / .001), epsilon=0.001)
 
         metrics = {} if metrics is None else metrics
 
         model.compile(optimizer=adam, loss='mse', metrics=metrics)
 
         if _DEBUG:
-            print('Compiled model: shape={}, lr={}, metrics={}'.format(
-                shape, lr, metrics))
+            print('Compiled model: shape={}, learning rate={}, metrics={}'.format(
+                shape, learning_rate, metrics))
         return model
 
     except KeyboardInterrupt:
@@ -196,7 +196,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
         viable        viability function; takes a codon list, returns true if it is acceptable
     """
 
-
     def fit_enough(codon):
         """ A codon is "fit enough" if it is *not* in the statistics dictionary or
             if it passes a dice roll based on how close its mean fitness is to the
@@ -211,7 +210,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
         return codon_fitness >= 0 or random.random() >= codon_fitness / best_fitness
 
-    #
 
     def random_codon():
         """ Choose a random codon from mutable_codons, with suitable fitness """
@@ -229,7 +227,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
                 break
 
         return codon
-
 
     def point_mutation(child, _):
         """ Make a point mutation in a codon. Codon will always be in the format
@@ -290,7 +287,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
         return child
 
-
     def insertion(child, _):
         """ Insertion mutation - never insert after output codon """
 
@@ -308,8 +304,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
         return child
 
-
-
     def deletion(child, _):
         """ Deletion mutation - never delete output codon! """
 
@@ -325,8 +319,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
         return child
 
-
-
     def conjugation(child, conjugate):
         """ Conjugate two genomes - always at least one codon from each contributor """
 
@@ -337,7 +329,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
             print('       Conjugation')
 
         return child
-
 
     def transposition(child, _):
         """ Transposition mutation - never transpose output codon """
@@ -449,9 +440,7 @@ def ligate(statistics, genome, new_fitness):
     return statistics
 
 
-
-
-def fitness(genome, config, best_fitness=0, apoptosis=None):
+def fitness(genome, config, best_fitness=0.0, apoptosis=None):
     """ Determine the fitness of an organism by creating its model and running it.
 
         organism      string or list with genetic code to be tested
@@ -469,10 +458,9 @@ def fitness(genome, config, best_fitness=0, apoptosis=None):
 
     config.config['model'] = organism
 
-    cell = BaseSRCNNModel(organism, config, verbose=False, bargraph=False)
+    cell = BaseSRCNNModel(organism, config)
 
-    model = build_model(genome, shape=config.image_shape,
-                        lr=config.config['lr'], metrics=[cell.evaluation_function])
+    model = build_model(genome, shape=config.image_shape, learning_rate=config.learning_rate, metrics=[cell.evaluation_function])
 
     if model is None:
         return 0.0

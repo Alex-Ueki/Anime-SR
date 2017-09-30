@@ -5,7 +5,7 @@
 """
 
 import os
-
+import copy
 import numpy as np
 
 import Modules.frameops as frameops
@@ -28,9 +28,17 @@ class ModelIO():
 
         from keras import backend as K
 
-        # Create config dictionary if needed
+        # Make a deep copy of the input, since we are going to be
+        # changing it.
 
-        config = {} if config is None else config
+        config = {} if config is None else copy.deepcopy(config)
+
+        # Backwards compatibility hack
+
+        if 'lr' in config:
+            if 'learning_rate' not in config:
+                config['learning_rate'] = config['lr']
+            del config['lr']
 
         # Initialize with defaults
 
@@ -57,8 +65,10 @@ class ModelIO():
         config.setdefault('paths', {})
         config.setdefault('epochs', 10)
         config.setdefault('run_epochs', 0)
-        config.setdefault('lr', 0.001)
+        config.setdefault('learning_rate', 0.001)
         config.setdefault('theano', K.image_dim_ordering() == 'th')
+        config.setdefault('verbose', True)
+        config.setdefault('bargraph', True)
 
         # Copy into instance variables
 
@@ -85,8 +95,10 @@ class ModelIO():
         self.paths = config['paths']
         self.epochs = config['epochs']
         self.run_epochs = config['run_epochs']
-        self.lr = config['lr']
+        self.learning_rate = config['learning_rate']
         self.theano = config['theano']
+        self.verbose = config['verbose']
+        self.bargraph = config['bargraph']
 
         # Compute some more defaults from the basic defaults
 
@@ -122,11 +134,9 @@ class ModelIO():
         # Set image shape
 
         if config['theano']:
-            config['image_shape'] = (
-                config['channels'], config['tile_width'], config['tile_height'])
+            config['image_shape'] = (config['channels'], config['tile_width'], config['tile_height'])
         else:
-            config['image_shape'] = (
-                config['tile_width'], config['tile_height'], config['channels'])
+            config['image_shape'] = (config['tile_width'], config['tile_height'], config['channels'])
 
         self.image_shape = config['image_shape']
 

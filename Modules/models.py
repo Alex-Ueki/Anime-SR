@@ -25,35 +25,34 @@ class ModelState(callbacks.Callback):
         { "epoch_count": nnnn,
           "best_values": { dictionary of logs values },
           "best_epoch": { dictionary of logs values },
-          "io" : { dictionary of io class state values }
+          "config" : { dictionary of ModelIO state values }
         }
     """
-    def __init__(self, io, verbose=True):
+    def __init__(self, config):
 
         super().__init__()
 
-        self.io = io
-        self.verbose = verbose
+        self.config = config
 
-        if os.path.isfile(io.paths['state']):
-            if self.verbose:
+        if os.path.isfile(config.paths['state']):
+            if config.verbose:
                 print('Loading existing .json state')
-            with open(io.paths['state'], 'r') as jsonfile:
+            with open(config.paths['state'], 'r') as jsonfile:
                 self.state = json.load(jsonfile)
 
             # Update state with current run information
 
-            self.state['io'] = io.config
+            self.state['config'] = config.config
         else:
             self.state = {'epoch_count': 0,
                           'best_values': {},
                           'best_epoch': {},
-                          'io': io.config
+                          'config': config.config
                          }
 
     def on_train_begin(self, logs=None):
 
-        if self.verbose:
+        if self.config.verbose:
             print('Training commences...')
 
     def on_epoch_end(self, epoch, logs=None):
@@ -67,10 +66,10 @@ class ModelState(callbacks.Callback):
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
 
-        with open(self.io.paths['state'], 'w') as jsonfile:
+        with open(self.config.paths['state'], 'w') as jsonfile:
             json.dump(self.state, jsonfile, indent=4)
 
-        if self.verbose:
+        if self.config.verbose:
             print('Completed epoch', self.state['epoch_count'])
 
 # GPU : Untested, but may be needed for VDSR
@@ -83,24 +82,24 @@ class AdjustableGradient(callbacks.Callback):
         super().__init__()
 
         self.optimizer = optimizer
-        self.lr = optimizer.lr.get_value()
+        self.learning_rate = optimizer.lr.get_value()
         self.theta = theta
         self.verbose = verbose
 
     def on_train_begin(self, logs=None):
 
         if self.verbose:
-            print('Starting Gradient Clipping Value: %f' % (self.theta/self.lr))
-        self.optimizer.clipvalue.set_value(self.theta/self.lr)
+            print('Starting Gradient Clipping Value: %f' % (self.theta/self.learning_rate))
+        self.optimizer.clipvalue.set_value(self.theta/self.learning_rate)
 
     def on_epoch_end(self, epoch, logs=None):
 
         # Get current LR
-        if self.lr != self.optimizer.lr.get_value():
-            self.lr = self.optimizer.lr.get_value()
-            self.optimizer.clipvalue.set_value(self.theta/self.lr)
+        if self.learning_rate != self.optimizer.lr.get_value():
+            self.learning_rate = self.optimizer.lr.get_value()
+            self.optimizer.clipvalue.set_value(self.theta/self.learning_rate)
             if self.verbose:
-                print('Changed Gradient Clipping Value: %f' % (self.theta/self.lr))
+                print('Changed Gradient Clipping Value: %f' % (self.theta/self.learning_rate))
 
 
 
@@ -154,25 +153,22 @@ class BaseSRCNNModel(object):
     __metaclass__ = ABCMeta
 
     # io is a modelio.ModelIO handler class; it deals with all the file io,
-    # tiling, image generators, etc. lf is the name of the
-    # loss function to use.
+    # tiling, image generators, etc.
 
-    def __init__(self, name, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, name, config, loss_function='PeakSignaltoNoiseRatio'):
 
         self.name = name
-        self.io = io
-        self.lf = lf
-        self.val_lf = 'val_' + lf
-        self.evaluation_function = LOSS_FUNCTIONS[lf](io.config['border'])
-        self.verbose = verbose
-        self.bargraph = bargraph
+        self.config = config
+        self.loss_function = loss_function
+        self.val_loss_function = 'val_' + loss_function
+        self.evaluation_function = LOSS_FUNCTIONS[loss_function](config.border)
 
-        if os.path.isfile(io.paths['model']):
-            if self.verbose:
+        if os.path.isfile(config.paths['model']):
+            if self.config.verbose:
                 print('Loading existing .h5 model')
-            self.model = load_model(io.paths['model'], custom_objects={lf: self.evaluation_function})
+            self.model = load_model(config.paths['model'], custom_objects={loss_function: self.evaluation_function})
         else:
-            if self.verbose:
+            if self.config.verbose:
                 print('Creating new untrained model')
             self.model = self.create_model(load_weights=False)
 
@@ -201,50 +197,50 @@ class BaseSRCNNModel(object):
 
     def fit(self, max_epochs=255, run_epochs=0):
         """ Train a model.
-            Uses images in self.io.paths['training'] for Training
-            Uses images in self.io.paths['validation'] for Validation
+            Uses images in self.config.paths['training'] for Training
+            Uses images in self.config.paths['validation'] for Validation
         """
 
-        samples_per_epoch = self.io.train_images_count()
-        val_count = self.io.val_images_count()
+        samples_per_epoch = self.config.train_images_count()
+        val_count = self.config.val_images_count()
 
-        learning_rate = callbacks.ReduceLROnPlateau(monitor=self.val_lf,
+        learning_rate = callbacks.ReduceLROnPlateau(monitor=self.val_loss_function,
                                                     mode='min',
                                                     factor=0.9,
                                                     min_lr=0.0002,
                                                     patience=10,
-                                                    verbose=self.verbose)
+                                                    verbose=self.config.verbose)
 
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
 
-        model_checkpoint = callbacks.ModelCheckpoint(self.io.paths['model'],
-                                                     monitor=self.val_lf,
+        model_checkpoint = callbacks.ModelCheckpoint(self.config.paths['model'],
+                                                     monitor=self.val_loss_function,
                                                      save_best_only=True,
-                                                     verbose=self.verbose,
+                                                     verbose=self.config.verbose,
                                                      mode='min',
                                                      save_weights_only=False)
 
         # Set up the model state. Can potentially load saved state.
 
-        model_state = ModelState(self.io, verbose=self.verbose)
+        model_state = ModelState(self.config)
 
         # If we have trained previously, set up the model checkpoint so it won't save
         # until it finds something better. Otherwise, it would always save the results
         # of the first epoch.
 
-        if 'best_values' in model_state.state and self.val_lf in model_state.state['best_values']:
-            model_checkpoint.best = model_state.state['best_values'][self.val_lf]
+        if 'best_values' in model_state.state and self.val_loss_function in model_state.state['best_values']:
+            model_checkpoint.best = model_state.state['best_values'][self.val_loss_function]
 
-        if self.verbose:
-            print('Best {} found so far: {}'.format(self.val_lf, model_checkpoint.best))
+        if self.config.verbose:
+            print('Best {} found so far: {}'.format(self.val_loss_function, model_checkpoint.best))
 
         callback_list = [model_checkpoint,
                          learning_rate,
                          model_state]
 
-        if self.verbose:
-            print('Training model : {}'.format(self.io.config['model']))
+        if self.config.verbose:
+            print('Training model : {}'.format(self.config.config['model_type']))
 
         # Offset epoch counts if we are resuming training.
 
@@ -255,21 +251,21 @@ class BaseSRCNNModel(object):
         # PU: There is an inconsistency when Keras prints that it has saved an improved
         # model. It reports that it happened in the previous epoch.
 
-        self.model.fit_generator(self.io.training_data_generator(),
-                                 steps_per_epoch=samples_per_epoch // self.io.config['batch_size'],
+        self.model.fit_generator(self.config.training_data_generator(),
+                                 steps_per_epoch=samples_per_epoch // self.config.batch_size,
                                  epochs=epochs,
                                  callbacks=callback_list,
-                                 verbose=self.bargraph,
-                                 validation_data=self.io.validation_data_generator(),
-                                 validation_steps=val_count // self.io.config['batch_size'],
+                                 verbose=self.config.bargraph,
+                                 validation_data=self.config.validation_data_generator(),
+                                 validation_steps=val_count // self.config.config.batch_size,
                                  initial_epoch=initial_epoch)
 
-        if self.verbose:
-            if self.bargraph:
+        if self.config.verbose:
+            if self.config.bargraph:
                 print('')
             print('          Training results for : {}'.format(self.name))
 
-            for key in ['loss', self.lf]:
+            for key in ['loss', self.loss_function]:
                 if key in model_state.state['best_values']:
                     print('{0:>30} : {1:16.10f} @ epoch {2}'.format(
                         key, model_state.state['best_values'][key], model_state.state['best_epoch'][key]))
@@ -280,7 +276,7 @@ class BaseSRCNNModel(object):
 
         # PU: Changed to return the best validation results
 
-        return model_state.state['best_values']['val_' + self.lf]
+        return model_state.state['best_values']['val_' + self.loss_function]
 
 
 
@@ -291,7 +287,7 @@ class BaseSRCNNModel(object):
 
         result = self.model.predict_generator(generator=tile_generator,
                                               steps=batches,
-                                              verbose=self.verbose)
+                                              verbose=self.config.verbose)
 
         # Deprocess patches
         if K.image_dim_ordering() == 'th':
@@ -306,8 +302,8 @@ class BaseSRCNNModel(object):
 
         print('Validating %s model' % self.name)
 
-        results = self.model.evaluate_generator(self.io.evaluation_data_generator(),
-                                                steps=self.io.eval_images_count() // self.io.config['batch_size'])
+        results = self.model.evaluate_generator(self.config.evaluation_data_generator(),
+                                                steps=self.config.eval_images_count() // self.config.batch_size)
         print("Loss = %.5f, PeekSignalToNoiseRatio = %.5f" % (results[0], results[1]))
 
 
@@ -316,7 +312,7 @@ class BaseSRCNNModel(object):
     def save(self, path=None):
         """ Save the model to a .h5 file """
 
-        self.model.save(self.io.paths['model'] if path is None else path)
+        self.model.save(self.config.paths['model'] if path is None else path)
 
 #----------------------------------------------------------------------------------
 # BaseSRCNNModel Subclasses (add your custom models here)
@@ -325,27 +321,25 @@ class BaseSRCNNModel(object):
 class BasicSR(BaseSRCNNModel):
     """ Basic SuperResolution """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(BasicSR, self).__init__('BasicSR', io, lf, verbose, bargraph)
+        super(BasicSR, self).__init__('BasicSR', config, loss_function)
 
     # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
         model = Sequential()
 
-        model.add(Conv2D(64, (9, 9), activation='relu',
-                         padding='same', input_shape=self.io.image_shape))
+        model.add(Conv2D(64, (9, 9), activation='relu', padding='same', input_shape=self.config.image_shape))
         model.add(Conv2D(32, (1, 1), activation='relu', padding='same'))
-        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
+        model.add(Conv2D(self.config.channels, (5, 5), padding='same'))
 
         adam = optimizers.Adam(lr=.001)
 
-        model.compile(optimizer=adam, loss='mse',
-                      metrics=[self.evaluation_function])
+        model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -353,29 +347,24 @@ class BasicSR(BaseSRCNNModel):
 class ExpansionSR(BaseSRCNNModel):
     """ Expansion SuperResolution """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(ExpansionSR, self).__init__('ExpansionSR', io, lf, verbose, bargraph)
+        super(ExpansionSR, self).__init__('ExpansionSR', config, loss_function)
 
     # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.io.image_shape)
-        x = Conv2D(64, (9, 9), activation='relu',
-                   padding='same', name='level1')(init)
+        init = Input(shape=self.config.image_shape)
+        layer1 = Conv2D(64, (9, 9), activation='relu', padding='same', name='level1')(init)
 
-        x1 = Conv2D(32, (1, 1), activation='relu',
-                    padding='same', name='lavel1_1')(x)
-        x2 = Conv2D(32, (3, 3), activation='relu',
-                    padding='same', name='lavel1_2')(x)
-        x3 = Conv2D(32, (5, 5), activation='relu',
-                    padding='same', name='lavel1_3')(x)
+        layer2a = Conv2D(32, (1, 1), activation='relu', padding='same', name='lavel1_1')(layer1)
+        layer2b = Conv2D(32, (3, 3), activation='relu', padding='same', name='lavel1_2')(layer1)
+        layer2c = Conv2D(32, (5, 5), activation='relu', padding='same', name='lavel1_3')(layer1)
 
-        x = Average()([x1, x2, x3])
+        layer3 = Average()([layer2a, layer2b, layer2c])
 
-        out = Conv2D(self.io.channels, (5, 5), activation='relu',
-                     padding='same', name='output')(x)
+        out = Conv2D(self.config.channels, (5, 5), activation='relu', padding='same', name='output')(layer3)
 
         model = Model(init, out)
 
@@ -385,7 +374,7 @@ class ExpansionSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -394,40 +383,39 @@ class ExpansionSR(BaseSRCNNModel):
 class DeepDenoiseSR(BaseSRCNNModel):
     """ Deep Noise Reduction """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', io, lf, verbose, bargraph)
+        super(DeepDenoiseSR, self).__init__('DeepDenoiseSR', config, loss_function)
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.io.image_shape)
-        c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
-        c1 = Conv2D(64, (3, 3), activation='relu', padding='same')(c1)
+        init = Input(shape=self.config.image_shape)
+        conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
+        conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv1)
 
-        x = MaxPooling2D((2, 2))(c1)
+        mix = MaxPooling2D((2, 2))(conv1)
 
-        c2 = Conv2D(128, (3, 3), activation='relu', padding='same')(x)
-        c2 = Conv2D(128, (3, 3), activation='relu', padding='same')(c2)
+        conv2 = Conv2D(128, (3, 3), activation='relu', padding='same')(mix)
+        conv2 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv2)
 
-        x = MaxPooling2D((2, 2))(c2)
+        mix = MaxPooling2D((2, 2))(conv2)
 
-        c3 = Conv2D(256, (3, 3), activation='relu', padding='same')(x)
+        conv3 = Conv2D(256, (3, 3), activation='relu', padding='same')(mix)
 
-        x = UpSampling2D()(c3)
+        mix = UpSampling2D()(conv3)
 
-        c2_2 = Conv2D(128, (3, 3), activation='relu', padding='same')(x)
-        c2_2 = Conv2D(128, (3, 3), activation='relu', padding='same')(c2_2)
+        conv2_2 = Conv2D(128, (3, 3), activation='relu', padding='same')(mix)
+        conv2_2 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv2_2)
 
-        m1 = Add()([c2, c2_2])
-        m1 = UpSampling2D()(m1)
+        mix1 = Add()([conv2, conv2_2])
+        mix1 = UpSampling2D()(mix1)
 
-        c1_2 = Conv2D(64, (3, 3), activation='relu', padding='same')(m1)
-        c1_2 = Conv2D(64, (3, 3), activation='relu', padding='same')(c1_2)
+        conv1_2 = Conv2D(64, (3, 3), activation='relu', padding='same')(mix1)
+        conv1_2 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv1_2)
 
-        m2 = Add()([c1, c1_2])
+        mix2 = Add()([conv1, conv1_2])
 
-        decoded = Conv2D(self.io.channels, (5, 5), activation='linear',
-                         padding='same')(m2)
+        decoded = Conv2D(self.config.channels, (5, 5), activation='linear', padding='same')(mix2)
 
         model = Model(init, decoded)
 
@@ -437,7 +425,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -447,20 +435,20 @@ class VDSR(BaseSRCNNModel):
 
     """ Very Deep Super Resolution """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(VDSR, self).__init__('VDSR', io, lf, verbose, bargraph)
+        super(VDSR, self).__init__('VDSR', config, loss_function)
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.io.image_shape)
+        init = Input(shape=self.config.image_shape)
 
-        x = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
+        mix = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
 
         for _ in range(0, 19):
-            x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+            mix = Conv2D(64, (3, 3), activation='relu', padding='same')(mix)
 
-        decode = Conv2D(self.io.channels, (3, 3), activation='linear', padding='same')(x)
+        decode = Conv2D(self.config.channels, (3, 3), activation='linear', padding='same')(mix)
 
         model = Model(init, decode)
         adam = optimizers.Adam(lr=0.01, beta_1=0.9,
@@ -470,7 +458,7 @@ class VDSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -479,19 +467,19 @@ class VDSR(BaseSRCNNModel):
 class PUPSR(BaseSRCNNModel):
     """ Parental Unit Pathetic Super-Resolution Model (elu vs. relu test) """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(PUPSR, self).__init__('PUPSR', io, lf, verbose, bargraph)
+        super(PUPSR, self).__init__('PUPSR', config, loss_function)
 
     # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
 
-        a = Input(shape=self.io.image_shape)
-        b = Conv2D(64, (9, 9), activation='elu', padding='same')(a)
-        c = Conv2D(32, (1, 1), activation='elu', padding='same')(b)
-        d = Conv2D(self.io.channels, (5, 5), padding='same')(c)
-        model = Model(a, d)
+        base = Input(shape=self.config.image_shape)
+        conv1 = Conv2D(64, (9, 9), activation='elu', padding='same')(base)
+        conv2 = Conv2D(32, (1, 1), activation='elu', padding='same')(conv1)
+        end = Conv2D(self.config.channels, (5, 5), padding='same')(conv2)
+        model = Model(base, end)
 
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
@@ -499,7 +487,7 @@ class PUPSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -514,9 +502,9 @@ class GPUSR(BaseSRCNNModel):
         TO-DO Residuals
     """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(GPUSR, self).__init__('GPUSR', io, lf, verbose, bargraph)
+        super(GPUSR, self).__init__('GPUSR', config, loss_function)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -525,18 +513,18 @@ class GPUSR(BaseSRCNNModel):
         model = Sequential()
 
         model.add(Conv2D(64, (3, 3), activation='elu',
-                         padding='same', input_shape=self.io.image_shape))
+                         padding='same', input_shape=self.config.image_shape))
         for _ in range(19):
             model.add(Conv2D(64, (3, 3), activation='elu', padding='same'))
 
-        model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
+        model.add(Conv2D(self.config.channels, (3, 3), padding='same'))
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -563,9 +551,9 @@ MODELS = {'BasicSR': BasicSR,
 """
 class ELUBasicSR(BaseSRCNNModel):
     """ Test model """
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(ELUBasicSR, self).__init__('BasicSR', io, lf, verbose, bargraph)
+        super(ELUBasicSR, self).__init__('BasicSR', config, loss_function)
 
     # Create a model to be used to sharpen images of specific height and width.
 
@@ -573,9 +561,9 @@ class ELUBasicSR(BaseSRCNNModel):
         model = Sequential()
 
         model.add(Conv2D(64, (9, 9), activation='elu',
-                         padding='same', input_shape=self.io.image_shape))
+                         padding='same', input_shape=self.config.image_shape))
         model.add(Conv2D(32, (1, 1), activation='elu', padding='same'))
-        model.add(Conv2D(self.io.channels, (5, 5), padding='same'))
+        model.add(Conv2D(self.config.channels, (5, 5), padding='same'))
 
         adam = optimizers.Adam(lr=.001)
 
@@ -583,7 +571,7 @@ class ELUBasicSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -596,29 +584,24 @@ class ELUBasicSR(BaseSRCNNModel):
 class ELUExpansionSR(BaseSRCNNModel):
     """ Test Model """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(ELUExpansionSR, self).__init__('ExpansionSR', io, lf, verbose, bargraph)
+        super(ELUExpansionSR, self).__init__('ExpansionSR', config, loss_function)
 
     # Create a model to be used to sharpen images of specific height and width.
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.io.image_shape)
-        x = Conv2D(64, (9, 9), activation='elu',
-                   padding='same', name='level1')(init)
+        init = Input(shape=self.config.image_shape)
+        mix = Conv2D(64, (9, 9), activation='elu', padding='same', name='level1')(init)
 
-        x1 = Conv2D(32, (1, 1), activation='elu',
-                    padding='same', name='level1_1')(x)
-        x2 = Conv2D(32, (3, 3), activation='elu',
-                    padding='same', name='level1_2')(x)
-        x3 = Conv2D(32, (5, 5), activation='elu',
-                    padding='same', name='level1_3')(x)
+        conv1 = Conv2D(32, (1, 1), activation='elu', padding='same', name='level1_1')(mix)
+        conv2 = Conv2D(32, (3, 3), activation='elu', padding='same', name='level1_2')(mix)
+        conv3 = Conv2D(32, (5, 5), activation='elu', padding='same', name='level1_3')(mix)
 
-        x = Average()([x1, x2, x3])
+        mix = Average()([conv1, conv2, conv3])
 
-        out = Conv2D(self.io.channels, (5, 5), activation='elu',
-                     padding='same', name='output')(x)
+        out = Conv2D(self.config.channels, (5, 5), activation='elu', padding='same', name='output')(mix)
 
         model = Model(init, out)
 
@@ -628,7 +611,7 @@ class ELUExpansionSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -640,40 +623,40 @@ class ELUExpansionSR(BaseSRCNNModel):
 """
 class ELUDeepDenoiseSR(BaseSRCNNModel):
     """ Test Model """
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(ELUDeepDenoiseSR, self).__init__('DeepDenoiseSR', io, lf, verbose, bargraph)
+        super(ELUDeepDenoiseSR, self).__init__('DeepDenoiseSR', config, loss_function)
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.io.image_shape)
-        c1 = Conv2D(64, (3, 3), activation='elu', padding='same')(init)
-        c1 = Conv2D(64, (3, 3), activation='elu', padding='same')(c1)
+        init = Input(shape=self.config.image_shape)
+        conv1 = Conv2D(64, (3, 3), activation='elu', padding='same')(init)
+        conv1 = Conv2D(64, (3, 3), activation='elu', padding='same')(conv1)
 
-        x = MaxPooling2D((2, 2))(c1)
+        mix = MaxPooling2D((2, 2))(conv1)
 
-        c2 = Conv2D(128, (3, 3), activation='elu', padding='same')(x)
-        c2 = Conv2D(128, (3, 3), activation='elu', padding='same')(c2)
+        conv2 = Conv2D(128, (3, 3), activation='elu', padding='same')(mix)
+        conv2 = Conv2D(128, (3, 3), activation='elu', padding='same')(conv2)
 
-        x = MaxPooling2D((2, 2))(c2)
+        mix = MaxPooling2D((2, 2))(conv2)
 
-        c3 = Conv2D(256, (3, 3), activation='elu', padding='same')(x)
+        conv3 = Conv2D(256, (3, 3), activation='elu', padding='same')(mix)
 
-        x = UpSampling2D()(c3)
+        mix = UpSampling2D()(conv3)
 
-        c2_2 = Conv2D(128, (3, 3), activation='elu', padding='same')(x)
-        c2_2 = Conv2D(128, (3, 3), activation='elu', padding='same')(c2_2)
+        conv2_2 = Conv2D(128, (3, 3), activation='elu', padding='same')(mix)
+        conv2_2 = Conv2D(128, (3, 3), activation='elu', padding='same')(conv2_2)
 
-        m1 = Add()([c2, c2_2])
-        m1 = UpSampling2D()(m1)
+        mix1 = Add()([conv2, conv2_2])
+        mix1 = UpSampling2D()(mix1)
 
-        c1_2 = Conv2D(64, (3, 3), activation='elu', padding='same')(m1)
-        c1_2 = Conv2D(64, (3, 3), activation='elu', padding='same')(c1_2)
+        conv1_2 = Conv2D(64, (3, 3), activation='elu', padding='same')(mix1)
+        conv1_2 = Conv2D(64, (3, 3), activation='elu', padding='same')(conv1_2)
 
-        m2 = Add()([c1, c1_2])
+        mix2 = Add()([conv1, conv1_2])
 
-        decoded = Conv2D(self.io.channels, (5, 5), activation='linear',
-                         padding='same')(m2)
+        decoded = Conv2D(self.config.channels, (5, 5), activation='linear',
+                         padding='same')(mix2)
 
         model = Model(init, decoded)
 
@@ -683,7 +666,7 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model
@@ -696,26 +679,26 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
 class ELUVDSR(BaseSRCNNModel):
     """ Test Model """
 
-    def __init__(self, io, lf='PeakSignaltoNoiseRatio', verbose=True, bargraph=True):
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
-        super(ELUVDSR, self).__init__('VDSR', io, lf, verbose, bargraph)
+        super(ELUVDSR, self).__init__('VDSR', config, loss_function)
 
     def create_model(self, load_weights):
         model = Sequential()
 
         model.add(Conv2D(64, (3, 3), activation='elu',
-                         padding='same', input_shape=self.io.image_shape))
+                         padding='same', input_shape=self.config.image_shape))
         for _ in range(19):
             model.add(Conv2D(64, (3, 3), activation='elu', padding='same'))
 
-        model.add(Conv2D(self.io.channels, (3, 3), padding='same'))
+        model.add(Conv2D(self.config.channels, (3, 3), padding='same'))
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
         model.compile(optimizer=adam, loss='mse',
                       metrics=[self.evaluation_function])
 
         if load_weights:
-            model.load_weights(self.io.paths['model'])
+            model.load_weights(self.config.paths['model'])
 
         self.model = model
         return model

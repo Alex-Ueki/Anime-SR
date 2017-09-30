@@ -44,7 +44,6 @@ Options are:
 
 """
 
-import sys
 import os
 import json
 import random
@@ -112,6 +111,7 @@ def setup(options):
 
     errors = False
     genepool = {}
+    options['paths'].setdefault('genepool', os.path.join('Data', 'genepool.json'))
     poolpath = options['paths']['genepool']
 
     if os.path.exists(poolpath):
@@ -143,12 +143,7 @@ def setup(options):
     # Genepool settings override config, so we need to update them
 
     for setting in genepool['config']:
-        if setting in options:
-            if options[setting] != genepool['config'][setting]:
-                print('Genepool override: {} : {} -> {}'.format(setting,
-                                                                options[setting], genepool['config'][setting]))
-                options[setting] = genepool['config'][setting]
-        else:
+        if setting not in options or options[setting] != genepool['config'][setting]:
             options[setting] = genepool['config'][setting]
 
     # Reload config with possibly changed settings
@@ -407,7 +402,7 @@ if __name__ == '__main__':
         'height': ('base_tile_height', int, lambda x: x <= 0, 'Tile height invalid ({})'),
         'border': ('border', int, lambda x: x <= 0, 'Tile border invalid ({})'),
         'black': ('black_level', float, lambda x: False, 'Black level invalid ({})'),
-        'lr': ('lr', float, lambda x: x <= 0.0 or x > 0.01, 'Learning rate should be 0 > and <= 0.01 ({})'),
+        'lr': ('learning_rate', float, lambda x: x <= 0.0 or x > 0.01, 'Learning rate should be 0 > and <= 0.01 ({})'),
         'quality': ('quality', float, lambda x: x <= 0.0 or x > 1.0, 'Quality should be 0 > and <= 1.0 ({})'),
         'trimleft': ('trim_left', int, lambda x: x <= 0, 'Left trim value invalid ({})'),
         'trimright': ('trim_right', int, lambda x: x <= 0, 'Right trim value invalid ({})'),

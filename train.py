@@ -50,9 +50,8 @@ Options are:
     you could specify epochs+=25 to limit the current training run to 25 epochs.
 """
 
-import sys
 import os
-
+import json
 import numpy as np
 
 from Modules.misc import oops, terminate, set_docstring, parse_options
@@ -63,18 +62,6 @@ set_docstring(__doc__)
 
 def setup(options):
     """ Create model configuration """
-
-    # Remind user what we're about to do.
-
-    print('             Model : {}'.format(options['model_type']))
-    print('        Tile Width : {}'.format(options['width']))
-    print('       Tile Height : {}'.format(options['height']))
-    print('       Tile Border : {}'.format(options['border']))
-    print('        Max Epochs : {}'.format(options['epochs']))
-    print('        Run Epochs : {}'.format(options['epochs+']))
-    print('    Data root path : {}'.format(options.paths['data']))
-    print('   Training Images : {}'.format(options.paths['training']))
-    print(' Validation Images : {}'.format(options.paths['validation']))
 
     # set up our initial state
 
@@ -91,7 +78,7 @@ def setup(options):
 
     for fcnt, fpath in enumerate(image_paths):
         for scnt, spath in enumerate(sub_folders):
-            image_info[fcnt][scnt] = frameops.image_files(os.path.join(options.paths[fpath], spath), True)
+            image_info[fcnt][scnt] = frameops.image_files(os.path.join(config.paths[fpath], spath), True)
 
     for fcnt in [0, 1]:
         for scnt in [0, 1]:
@@ -201,14 +188,7 @@ def setup(options):
         config.paths['model'] = os.path.abspath(os.path.join(config.paths['data'], 'models', name))
 
     if 'state' not in config.paths:
-        name = '{}{}-{}-{}-{}-{}_state.json'.format(
-            config.model_type,
-            '-R' if config.residual else '',
-            config.tile_width,
-            config.tile_height,
-            config.border,
-            config.img_suffix)
-        config.paths['state'] = os.path.abspath(os.path.join(config.paths['data'], 'models', name))
+        config.paths['state'] = config.paths['model'][:-3] + '.json'
 
     tpath = os.path.dirname(config.paths['state'])
     errors = oops(errors, not os.path.exists(tpath), 'Model state path ({}) does not exist'.format(tpath))
@@ -216,8 +196,58 @@ def setup(options):
     tpath = os.path.dirname(config.paths['model'])
     errors = oops(errors, not os.path.exists(tpath), 'Model path ({}) does not exist'.format(tpath))
 
+    # If we do have an existing json state, load it and override
+
+    statepath = config.paths['state']
+    print(statepath)
+    if os.path.exists(statepath):
+        print('exists')
+        if os.path.isfile(statepath):
+            print('Loading existing Model state')
+            try:
+                with open(statepath, 'r') as jsonfile:
+                    state = json.load(jsonfile)
+
+                    # PU: Temp hack to change 'io' key to 'config'
+
+                    if 'io' in state:
+                        state['config'] = state['io']
+                        del state['io']
+
+            except json.decoder.JSONDecodeError:
+                print(
+                    'Could not parse json. Did you edit state and forget to delete a trailing comma?')
+                errors = True
+        else:
+            errors = oops(
+                errors, True, 'Model state path is not a reference to a file ({})', statepath)
+
+        for setting in state['config']:
+            if setting not in config.config or config.config[setting] != state['config'][setting]:
+                config.config[setting] = state['config'][setting]
+
+        # There are a couple of options that override saved configurations.
+
+        config.config['run_epochs'] = options['run_epochs'] if 'run_epochs' in options else config.config['run_epochs']
+        config.config['learning_rate'] = options['learning_rate'] if 'learning_rate' in options else config.config['learning_rate']
+
+        # Reload config with possibly changed settings
+
+        config = ModelIO(config.config)
+
     terminate(errors, False)
 
+    # Remind user what we're about to do.
+
+    print('             Model : {}'.format(config.model_type))
+    print('        Tile Width : {}'.format(config.base_tile_width))
+    print('       Tile Height : {}'.format(config.base_tile_height))
+    print('       Tile Border : {}'.format(config.border))
+    print('        Max Epochs : {}'.format(config.epochs))
+    print('        Run Epochs : {}'.format(config.run_epochs))
+    print('    Data root path : {}'.format(config.paths['data']))
+    print('   Training Images : {}'.format(config.paths['training']))
+    print(' Validation Images : {}'.format(config.paths['validation']))
     print('        Model File : {}'.format(config.paths['model']))
     print('  Model State File : {}'.format(config.paths['state']))
     print('  Image dimensions : {} x {}'.format(config.image_width, config.image_height))
@@ -229,13 +259,14 @@ def setup(options):
     print('           Shuffle : {}'.format(config.shuffle == 1))
     print('              Skip : {}'.format(config.skip == 1))
     print('          Residual : {}'.format(config.residual == 1))
+    print('     Learning Rate : {}'.format(config.learning_rate))
     print('           Quality : {}'.format(config.quality))
     print('')
 
     return config
 
-def train(config):
-    # Train the model
+def train(config, options):
+    """ Train the model """
 
     import Modules.models as models
 
@@ -261,18 +292,24 @@ def train(config):
 
         # Create and fit model (best model state will be automatically saved)
 
-        sr = models.MODELS[model](config)
+        cur_model = models.MODELS[model](config)
 
-        sr_config = sr.get_config()
+        cur_config = cur_model.get_config()
         print('Model configuration:')
-        for key in config:
-            print('{:>18s} : {}'.format(key, sr_config[key]))
+        for key in cur_config:
+            print('{:>18s} : {}'.format(key, cur_config[key]))
+
+        # If learning rate explicitly specified in options, reset it.
+
+        if 'learning_rate' in options:
+            print('Learning Rate reset to {}'.format(options['learning_rate']))
+            cur_model.set_lr(options['learning_rate'])
 
         # PU: Cannot adjust ending epoch number until we load the model state,
         # which does not happen until we fit(). So we have to pass both
         # the max epoch and the run # of epochs.
 
-        sr.fit(max_epochs=config.epochs, run_epochs=config.run_epochs)
+        cur_model.fit(max_epochs=config.epochs, run_epochs=config.run_epochs)
 
     print('')
     print('Training completed...')
@@ -287,10 +324,10 @@ if __name__ == '__main__':
         'height': ('base_tile_height', int, lambda x: x <= 0, 'Tile height invalid ({})'),
         'border': ('border', int, lambda x: x <= 0, 'Tile border invalid ({})'),
         'black': ('black_level', float, lambda x: False, 'Black level invalid ({})'),
-        'lr': ('lr', float, lambda x: x <= 0.0 or x > 0.01, 'Learning rate should be 0 > and <= 0.01 ({})'),
+        'lr': ('learning_rate', float, lambda x: x <= 0.0 or x > 0.01, 'Learning rate should be 0 > and <= 0.01 ({})'),
         'quality': ('quality', float, lambda x: x <= 0.0 or x > 1.0, 'Quality should be 0 > and <= 1.0 ({})'),
         'epochs': ('epochs', int, lambda x: x <= 0, 'Max epoch count invalid ({})'),
-        'epochs': ('run_epochs', int, lambda x: x <= 0, 'Run epoch count invalid ({})'),
+        'epochs+': ('run_epochs', int, lambda x: x <= 0, 'Run epoch count invalid ({})'),
         'trimleft': ('trim_left', int, lambda x: x <= 0, 'Left trim value invalid ({})'),
         'trimright': ('trim_right', int, lambda x: x <= 0, 'Right trim value invalid ({})'),
         'trimtop': ('trim_top', int, lambda x: x <= 0, 'Top trim value invalid ({})'),
@@ -314,4 +351,4 @@ if __name__ == '__main__':
 
     OPTIONS = parse_options(OPCODES)
     CONFIG = setup(OPTIONS)
-    train(CONFIG)
+    train(CONFIG, OPTIONS)
