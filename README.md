@@ -169,7 +169,7 @@ Options are:
 ## Miscellaneous Tools
 
 #### Tools/sdcopy.sh {src folder} {from folder} {dest folder}
-```
+````
     For each file in {src folder}, copy the file with the same name from {from folder}
     to {dest folder}. Handy for creating matched training / validation file sets. This
     is a bash shell script.
@@ -181,7 +181,7 @@ Options are:
 #### Tools/dpxinfo.py {dpx file path}
 ````
     Dumps DPX header info.
-```
+````
 
 ## TODOS
 
