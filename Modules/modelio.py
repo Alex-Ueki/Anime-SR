@@ -128,8 +128,6 @@ class ModelIO():
 
         self.tiles_per_image = config['tiles_per_image']
 
-        print('tiles per image initialized to ', self.tiles_per_image, config['tiles_per_image'])
-
         # Set image shape
 
         if config['theano']:
@@ -144,7 +142,6 @@ class ModelIO():
         self.paths = config['paths']
 
         self.paths.setdefault('data', 'Data')
-        self.paths.setdefault('input', os.path.join(self.paths['data'], 'input_images'))
         self.paths.setdefault('training', os.path.join(self.paths['data'], 'train_images', 'training'))
         self.paths.setdefault('validation', os.path.join(self.paths['data'], 'train_images', 'validation'))
         self.paths.setdefault('evaluation', os.path.join(self.paths['data'], 'eval_images'))
@@ -202,13 +199,6 @@ class ModelIO():
         """ Count of files in predict alpha folder """
 
         return self._images_count('predict', self.paths['predict'])
-
-    # PU: not currently used -- obsolete?
-
-    def input_images_count(self):
-        """ Count of files in images alpha folder """
-
-        return self._images_count('input', self.paths['input'])
 
     def _images_count(self, path_code, path_name):
         """ Return number of image files in a path's alpha directory, checking for cached info """

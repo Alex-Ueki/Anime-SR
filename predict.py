@@ -4,15 +4,6 @@
 """
 Usage: predict.py [option(s)] ...
 
-    Predicts images by applying model. The available models are:
-
-        BasicSR
-        ExpansionSR
-        DeepDenoiseSR
-        VDSR
-        PUPSR (Testing)
-        GPUSR (Testing)
-
 Options are:
 
     data=path           path to the main data folder, default = Data
@@ -28,13 +19,12 @@ Options are:
 """
 
 
-import sys
 import os
 import json
 
 import numpy as np
 
-from Modules.misc import oops, terminate, set_docstring, opcheck
+from Modules.misc import oops, terminate, set_docstring, parse_options
 import Modules.frameops as frameops
 from Modules.modelio import ModelIO
 import Modules.models as models
@@ -46,104 +36,47 @@ set_docstring(__doc__)
 
 DEBUG = True
 
-def parse_options():
-    """ Parse the command line options """
-
-    # Fetch the path options, if any
-
-    options = {}
-
-    # For each parameter option, a tuple of the config entry it affects, its type, an invalid
-    # function (returns true if the value is out of bounds), and a format() string for reporting
-    # the error.
-
-    opcodes = {
-        'data': ('data', str, lambda x: False, ''),
-        'images': ('predict', str, lambda x: False, ''),
-        'model': ('model', str, lambda x: False, ''),
-    }
-
-    # Order of options in this list can be important; if one option is a substring
-    # of the other, the smaller one must come first.
-
-    option_names = sorted(list(opcodes.keys()))
-
-    # Parse options
-
-    errors = False
-
-    for param in sys.argv[1:]:
-
-        opvalue = param.split('=', maxsplit=1)
-
-        if len(opvalue) == 1:
-            errors = oops(errors, True, 'Invalid option ({})', param)
-            continue
-
-        option, value = opvalue[0].lower(), opvalue[1]
-
-        # Match option, make sure it isn't ambiguous.
-
-        opmatch = [s for s in option_names if s.startswith(option)]
-
-        if not opmatch or len(opmatch) > 1 and opmatch[0] != option:
-            errors = oops(errors, True, '{} option ({})',
-                          ('Ambiguous' if opmatch else 'Unknown', option))
-            continue
-
-        opcode = opcodes[opmatch[0]]
-        opname = opcode[0]
-
-        if opname not in options:
-            options[opname] = None
-
-        errors, options[opname] = opcheck(opcode, options[opname], value, errors)
-
-    terminate(errors)
-
-    return options
-
-def setup(basepaths):
+def setup(options):
     """Set up configuration """
 
-    # Set remaining basepaths
+    # Set remaining options
 
-    basepaths.setdefault('data', 'Data')
-    dpath = basepaths['data']
+    options.setdefault('data', 'Data')
+    dpath = options['data']
 
-    basepaths.setdefault('model', os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5'))
-    basepaths.setdefault('predict', os.path.join(dpath, 'predict_images'))
+    options.setdefault('model', os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5'))
+    options.setdefault('predict', os.path.join(dpath, 'predict_images'))
 
-    model_split = os.path.splitext(basepaths['model'])
+    model_split = os.path.splitext(options['model'])
     if model_split[1] == '':
-        basepaths['model'] = basepaths['model'] + '.h5'
-    if os.path.dirname(basepaths['model']) == '':
-        basepaths['model'] = os.path.join(dpath, 'models', basepaths['model'])
+        options['model'] = options['model'] + '.h5'
+    if os.path.dirname(options['model']) == '':
+        options['model'] = os.path.join(dpath, 'models', options['model'])
 
-    basepaths['state'] = os.path.splitext(basepaths['model'])[0] + '_state.json'
+    options['state'] = os.path.splitext(options['model'])[0] + '_state.json'
 
-    model_type = os.path.basename(basepaths['model']).split('-')[0]
+    model_type = os.path.basename(options['model']).split('-')[0]
 
     # Remind user what we're about to do.
 
-    print('             Data : {}'.format(basepaths['data']))
-    print('   Predict Images : {}'.format(basepaths['predict']))
-    print('            Model : {}'.format(basepaths['model']))
-    print('            State : {}'.format(basepaths['state']))
+    print('             Data : {}'.format(options['data']))
+    print('   Predict Images : {}'.format(options['predict']))
+    print('            Model : {}'.format(options['model']))
+    print('            State : {}'.format(options['state']))
     print('       Model Type : {}'.format(model_type))
     print('')
 
     # Validation and error checking
 
-    for path in basepaths:
+    for path in options:
         errors = oops(False, not os.path.exists(
-            basepaths[path]), 'Path to {} is not valid ({})'.format(path, basepaths[path]))
+            options[path]), 'Path to {} is not valid ({})'.format(path, options[path]))
 
     terminate(errors, False)
 
     # Load the actual model state
 
-    with open(basepaths['state'], 'r') as jsonfile:
+    with open(options['state'], 'r') as jsonfile:
         state = json.load(jsonfile)
 
     # Grab the config data (backwards compatible)
@@ -153,7 +86,7 @@ def setup(basepaths):
     # Create real config with configurable parameters. In particular we disable options like
     # jitter, shuffle, skip and quality.
 
-    config['paths'] = basepaths
+    config['paths'] = options
     config['jitter'] = False
     config['shuffle'] = False
     config['skip'] = False
@@ -193,7 +126,7 @@ def predict(config, image_info):
     # make to the definition of the models in models.py, old model files will still
     # work.
 
-    sr_model = models.BaseSRCNNModel(name=config.model_type, io=config, verbose=False, bargraph=False)
+    sr_model = models.BaseSRCNNModel(name=config.model_type, config=config)
 
     # Need to use unjittered tiles_per_imag
 
@@ -269,6 +202,11 @@ def predict(config, image_info):
 
 
 if __name__ == '__main__':
-    OPTIONS = parse_options()
+    OPCODES = {
+        'data': ('data', str, lambda x: False, ''),
+        'images': ('predict', str, lambda x: False, ''),
+        'model': ('model', str, lambda x: False, '')}
+
+    OPTIONS = parse_options(OPCODES)
     CONFIG, IMAGE_INFO = setup(OPTIONS)
     predict(CONFIG, IMAGE_INFO)

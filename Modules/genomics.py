@@ -7,7 +7,6 @@ Toolkit for evolving Keras models
 
 import random
 import sys
-import datetime
 import itertools
 from copy import deepcopy
 
@@ -440,13 +439,12 @@ def ligate(statistics, genome, new_fitness):
     return statistics
 
 
-def fitness(genome, config, best_fitness=0.0, apoptosis=None):
-    """ Determine the fitness of an organism by creating its model and running it.
+def train(genome, config, epochs=1):
+    """ Train a model for 1 or more epochs
 
         organism      string or list with genetic code to be tested
         config        ModelIO configuration
-        best_fitness  Best fitness in the gene pool
-        apoptosis     Function that returns True if we should quit early
+        epochs        How many epochs to run
     """
 
     if not isinstance(genome, list):
@@ -454,81 +452,7 @@ def fitness(genome, config, best_fitness=0.0, apoptosis=None):
 
     organism = '-'.join(genome)
 
-    printlog('Testing fitness of {}'.format(organism))
-
-    config.config['model'] = organism
-
-    cell = BaseSRCNNModel(organism, config)
-
-    model = build_model(genome, shape=config.image_shape, learning_rate=config.learning_rate, metrics=[cell.evaluation_function])
-
-    if model is None:
-        return 0.0
-
-    cell.model = model
-
-    # Now we have a compiled model, execute it - or at least try to, there are still some
-    # models that may bomb out.
-
-    try:
-
-        stime = datetime.datetime.now()
-        results = cell.fit(max_epochs=1)
-        etime = datetime.datetime.now()
-
-        epochs = config.epochs
-        halfway = epochs // 2
-
-        eta = etime + (etime - stime) * (halfway - 1)
-        printlog(
-            'After 1 epoch: fitness={}, will be halfway @ {:%I:%M:%S %p}'.format(results, eta))
-
-        if apoptosis != None and apoptosis(results, 1, epochs, best_fitness=best_fitness, last_fitness=None):
-            printlog('Apoptosis triggered!')
-            return results
-
-        prev_results = results
-        stime = datetime.datetime.now()
-        results = cell.fit(max_epochs=halfway)
-        etime = datetime.datetime.now()
-
-        eta = etime + (etime - stime) * halfway / (halfway - 1)
-        printlog('After {} epochs: fitness={}, will complete @ {:%I:%M:%S %p}'.format(
-            halfway, results, eta))
-
-        if apoptosis != None and apoptosis(results, halfway, epochs, best_fitness=best_fitness, last_fitness=prev_results):
-            printlog('Apoptosis triggered!')
-            return results
-
-        results = cell.fit(max_epochs=epochs)
-        printlog('After {} epochs: fitness={}'.format(epochs, results))
-
-    except KeyboardInterrupt:
-
-        raise
-
-    except:
-        printlog('Cannot fit: {}'.format(sys.exc_info()[1]))
-        raise
-
-    printlog('Fitness: {}'.format(results))
-    return results
-
-def one_epoch(genome, config):
-    """ Train a model by 1 epoch
-
-        organism      string or list with genetic code to be tested
-        config        ModelIO configuration
-        best_fitness  Best fitness in the gene pool
-        apoptosis     Function that returns True if we should quit early
-    """
-
-    if not isinstance(genome, list):
-        genome = genome.split('-')
-
-    organism = '-'.join(genome)
-
-    printlog('Training for one epoch : {}'.format(organism))
+    printlog('Training for {} epoch{} : {}'.format(epochs, 's' if epochs > 0 else '', organism))
 
     cell = BaseSRCNNModel(organism, config)
 
@@ -548,7 +472,7 @@ def one_epoch(genome, config):
 
     try:
 
-        results = cell.fit(max_epochs=999, run_epochs=1)
+        results = cell.fit(run_epochs=epochs)
 
     except KeyboardInterrupt:
 

@@ -210,7 +210,7 @@ class BaseSRCNNModel(object):
             if key != 'paths':
                 print(key, self.config.config[key])
         """
-        
+
         samples_per_epoch = self.config.train_images_count()
         val_count = self.config.val_images_count()
 

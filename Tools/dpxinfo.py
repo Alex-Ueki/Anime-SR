@@ -1,7 +1,9 @@
+# pylint: disable=C0301
+# (line_too_long disabled)
 """
-python3 dpxinfo.py {filepath}
+python3 dpxinfo.py {source file}
 
-Displays file info
+Displays information about DPX file headers
 
 Based on:
 
@@ -13,6 +15,8 @@ Copyright (c) 2016 Jack Doerner
 
 Tweaked to also work in Python 2 (fixed normalization code to ensure floating
 point division) -- RJW 08/19/17
+
+Hacked to brute-force copy the header information -- RJW 09/04/17
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -33,23 +37,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import sys
+import os
 import struct
 import numpy as np
-from skimage import transform as tf
-import os
-import sys
-
-VERBOSE = False
 
 # Cache of DPX header information that we set when we read a file;
 # used to write a file in the same format.
 
-dpx_header = None
-dpx_endian = None
-dpx_meta = None
-dpx_offset = -1
+DPX_HEADER = None
+DPX_ENDIAN = None
+DPX_META = None
+DPX_OFFSET = -1
 
-orientations = {
+ORIENTATIONS = {
     0: "Left to Right, Top to Bottom",
     1: "Right to Left, Top to Bottom",
     2: "Left to Right, Bottom to Top",
@@ -60,7 +61,7 @@ orientations = {
     7: "Bottom to Top, Right to Left"
 }
 
-descriptors = {
+DESCRIPTORS = {
     1: "Red",
     2: "Green",
     3: "Blue",
@@ -77,18 +78,18 @@ descriptors = {
     103: "Cb, Y, Cr, A (4:4:4:4)"
 }
 
-packings = {
+PACKINGS = {
     0: "Packed into 32-bit words",
     1: "Filled to 32-bit words, Padding First",
     2: "Filled to 32-bit words, Padding Last"
 }
 
-encodings = {
+ENCODINGS = {
     0: "No encoding",
     1: "Run Length Encoding"
 }
 
-transfers = {
+TRANSFERS = {
     1: "Printing Density",
     2: "Linear",
     3: "Logarithmic",
@@ -103,7 +104,7 @@ transfers = {
     12: "Z (Homogenous Depth)"
 }
 
-colorimetries = {
+COLORIMETRIES = {
     1: "Printing Density",
     4: "Unspecified Video",
     5: "SMPTE 274M",
@@ -116,7 +117,7 @@ colorimetries = {
 
 # (field name, offset, length, type)
 
-propertymap = [
+PROPERTYMAP = [
 
     # Generic Header
 
@@ -207,144 +208,154 @@ propertymap = [
 
 ]
 
-def readDPXMetaData(f):
+def read_dpx_metadata(dpxfile):
+    """ Read dpx file metadata """
 
-    global dpx_header
-    global dpx_endian
-    global dpx_offset
-    global dpx_meta
+    global DPX_HEADER
+    global DPX_ENDIAN
+    global DPX_OFFSET
+    global DPX_META
 
-    f.seek(0)
-    bytes = f.read(4)
-    magic = bytes.decode(encoding='UTF-8')
+    dpxfile.seek(0)
+    rawbytes = dpxfile.read(4)
+    magic = rawbytes.decode(encoding='UTF-8')
     if magic != "SDPX" and magic != "XPDS":
         return None
     endianness = ">" if magic == "SDPX" else "<"
 
-    meta = {}
+    metadata = {}
 
-    for p in propertymap:
-        f.seek(p[1])
-        bytes = f.read(p[2])
-        if p[0] in meta:
-            print('Duplicate map field',p[0])
-        if p[3] == 'magic':
-            meta[p[0]] = bytes.decode(encoding='UTF-8')
-            meta['endianness'] = "be" if magic == "SDPX" else "le"
-        elif p[3] == 'utf8':
-            meta[p[0]] = bytes.decode(encoding='UTF-8')
-        elif p[3] == 'B':
-            meta[p[0]] = struct.unpack(endianness + 'B', bytes)[0]
-        elif p[3] == 'H':
-            meta[p[0]] = struct.unpack(endianness + 'H', bytes)[0]
-        elif p[3] == 'I':
-            meta[p[0]] = struct.unpack(endianness + 'I', bytes)[0]
-        elif p[3] == 'f':
-            meta[p[0]] = struct.unpack(endianness + 'f', bytes)[0]
-        elif p[3] == 's':
-            meta[p[0]] = struct.unpack(endianness + str(p[2]) + 's', bytes)[0]
+    for prop in PROPERTYMAP:
+        dpxfile.seek(prop[1])
+        rawbytes = dpxfile.read(prop[2])
+        if prop[0] in metadata:
+            print('Duplicate map field', prop[0])
+        if prop[3] == 'magic':
+            metadata[prop[0]] = rawbytes.decode(encoding='UTF-8')
+            metadata['endianness'] = "be" if magic == "SDPX" else "le"
+        elif prop[3] == 'utf8':
+            metadata[prop[0]] = rawbytes.decode(encoding='UTF-8')
+        elif prop[3] == 'B':
+            metadata[prop[0]] = struct.unpack(endianness + 'B', rawbytes)[0]
+        elif prop[3] == 'H':
+            metadata[prop[0]] = struct.unpack(endianness + 'H', rawbytes)[0]
+        elif prop[3] == 'I':
+            metadata[prop[0]] = struct.unpack(endianness + 'I', rawbytes)[0]
+        elif prop[3] == 'f':
+            metadata[prop[0]] = struct.unpack(endianness + 'f', rawbytes)[0]
+        elif prop[3] == 's':
+            metadata[prop[0]] = struct.unpack(endianness + str(prop[2]) + 's', rawbytes)[0]
 
     # Save header values
 
-    dpx_endian = endianness
-    dpx_offset = meta['offset']
-    f.seek(0)
-    dpx_header = f.read(dpx_offset)
-    dpx_meta = meta
+    DPX_ENDIAN = endianness
+    DPX_OFFSET = metadata['offset']
+    dpxfile.seek(0)
+    DPX_HEADER = dpxfile.read(DPX_OFFSET)
+    DPX_META = metadata
 
-    return meta
+    return metadata
 
-def readDPXImageData(f, meta):
-    if meta['depth'] != 10 or meta['packing'] != 1 or meta['encoding'] != 0 or meta['descriptor'] != 50:
+def read_dpx_imagedata(fname, metadata):
+    """ Read image data from DPX """
+
+    if metadata['depth'] != 10 or metadata['packing'] != 1 or metadata['encoding'] != 0 or metadata['descriptor'] != 50:
         return None
 
-    width = meta['width']
-    height = meta['height']
+    width = metadata['width']
+    height = metadata['height']
     image = np.empty((height, width, 3), dtype=float)
 
-    f.seek(meta['offset'])
-    raw = np.fromfile(f, dtype=np.dtype(np.int32), count=width*height, sep="")
-    raw = raw.reshape((height,width))
+    fname.seek(metadata['offset'])
+    raw = np.fromfile(fname, dtype=np.dtype(np.int32), count=width*height, sep="")
+    raw = raw.reshape((height, width))
 
-    if meta['endianness'] == 'be':
+    if metadata['endianness'] == 'be':
         raw = raw.byteswap()
 
     # extract and normalize color channel values to 0..1 inclusive.
 
-    image[:,:,0] = ((raw >> 22) & 0x000003FF) / 1023.0
-    image[:,:,1] = ((raw >> 12) & 0x000003FF) / 1023.0
-    image[:,:,2] = ((raw >> 2) & 0x000003FF) / 1023.0
+    image[:, :, 0] = ((raw >> 22) & 0x000003FF) / 1023.0
+    image[:, :, 1] = ((raw >> 12) & 0x000003FF) / 1023.0
+    image[:, :, 2] = ((raw >> 2) & 0x000003FF) / 1023.0
 
     return image
 
-# Assumes a file has already been read, so dpx_header has been initialized
+# Assumes a file has already been read, so DPX_HEADER has been initialized
 
-def writeDPX(f, image):
+def write_dpx_image(fname, image):
+    """ write dpx image to file """
 
-    global dpx_header
-    global dpx_endian
-    global dpx_offset
+    global DPX_HEADER
+    global DPX_ENDIAN
+    global DPX_OFFSET
 
-    f.seek(0)
-    f.write(dpx_header)
+    fname.seek(0)
+    fname.write(DPX_HEADER)
 
-    raw = ((((image[:,:,0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22)
-            | (((image[:,:,1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12)
-            | (((image[:,:,2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2)
-            )
+    raw = ((((image[:, :, 0] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 22) |
+           (((image[:, :, 1] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 12) |
+           (((image[:, :, 2] * 1023.0).astype(np.dtype(np.int32)) & 0x000003FF) << 2))
 
-    if dpx_endian == 'be':
+    if DPX_ENDIAN == 'be':
         raw = raw.byteswap()
 
-    f.seek(dpx_offset)
-    raw.tofile(f, sep="")
+    fname.seek(DPX_OFFSET)
+    raw.tofile(fname, sep="")
 
-if __name__ == "__main__":
-    filename = sys.argv[1]
+def info():
+    """ Display info about DPX images """
 
-    with open(filename, "rb") as f:
-        meta = readDPXMetaData(f)
-        if meta is None:
-            print("Invalid File")
-        else:
-            import binascii
-            print("\nFILE INFORMATION HEADER")
+    filepath = sys.argv[1]
 
-            print("Endianness:","Big Endian" if meta['endianness'] == ">" else "Little Endian")
-            print("Image Offset (Bytes):",meta['offset'])
-            print("DPX Version:",meta['dpx_version'])
-            print("File Size (Bytes):",meta['file_size'])
-            print("Ditto Flag:","New Frame" if meta['ditto'] else "Same as Previous Frame")
-            print("Image Filename:",meta['filename'])
-            print("Creation Timestamp:",meta['timestamp'])
-            print("Creator:",meta['creator'])
-            print("Project Name:",meta['project_name'])
-            print("Copyright:",meta['copyright'])
-            print("Encryption Key:","Unencrypted" if meta['encryption_key'] == 0xFFFFFFFF else binascii.hexlify(bin(meta['encryption_key'])))
+    if not os.path.exists(filepath):
+        print("File not found:", filepath)
+    else:
+        print("Examining:", filepath)
+        with open(filepath, "rb") as fname:
+            metadata = read_dpx_metadata(fname)
+            if metadata is None:
+                print("Invalid File")
+            else:
+                import binascii
+                print("\nFILE INFORMATION HEADER")
+
+                print("Endianness:", "Big Endian" if metadata['endianness'] == ">" else "Little Endian")
+                print("Image Offset (Bytes):", metadata['offset'])
+                print("DPX Version:", metadata['dpx_version'])
+                print("File Size (Bytes):", metadata['file_size'])
+                print("Ditto Flag:", "New Frame" if metadata['ditto'] else "Same as Previous Frame")
+                print("Image Filename:", metadata['filename'])
+                print("Creation Timestamp:", metadata['timestamp'])
+                print("Creator:", metadata['creator'])
+                print("Project Name:", metadata['project_name'])
+                print("Copyright:", metadata['copyright'])
+                print("Encryption Key:", "Unencrypted" if metadata['encryption_key'] == 0xFFFFFFFF else binascii.hexlify(bin(metadata['encryption_key'])))
 
 
-            print("\nIMAGE INFORMATION HEADER")
-            print("Orientation:", orientations[meta['orientation']] if meta['orientation'] in orientations else "unknown")
-            print("Image Element Count:", meta['image_element_count'])
-            print("Width:", meta['width'])
-            print("Height:", meta['height'])
+                print("\nIMAGE INFORMATION HEADER")
+                print("Orientation:", ORIENTATIONS[metadata['orientation']] if metadata['orientation'] in ORIENTATIONS else "unknown")
+                print("Image Element Count:", metadata['image_element_count'])
+                print("Width:", metadata['width'])
+                print("Height:", metadata['height'])
 
-            print("\nIMAGE ELEMENT 1")
-            print("Data Sign:", "signed" if meta['data_sign'] == 1 else "unsigned")
-            print("Descriptor:", descriptors[meta['descriptor']] if meta['descriptor'] in descriptors else "unknown")
-            print("Transfer:",transfers[meta['transfer_characteristic']] if meta['transfer_characteristic'] in transfers else "unknown")
-            print("Colorimetry:",colorimetries[meta['colorimetry']] if meta['colorimetry'] in colorimetries else "unknown")
-            print("Bit Depth:",meta['depth'])
-            print("Packing:",packings[meta['packing']] if meta['packing'] in packings else "unknown")
-            print("Encoding:",encodings[meta['encoding']] if meta['encoding'] in encodings else "unknown")
-            print("End of Line Padding:",meta['line_padding'])
-            print("End of Image Padding:",meta['image_padding'])
-            print("Image Element Description:",meta['image_element_description'])
+                print("\nIMAGE ELEMENT 1")
+                print("Data Sign:", "signed" if metadata['data_sign'] == 1 else "unsigned")
+                print("Descriptor:", DESCRIPTORS[metadata['descriptor']] if metadata['descriptor'] in DESCRIPTORS else "unknown")
+                print("Transfer:", TRANSFERS[metadata['transfer_characteristic']] if metadata['transfer_characteristic'] in TRANSFERS else "unknown")
+                print("Colorimetry:", COLORIMETRIES[metadata['colorimetry']] if metadata['colorimetry'] in COLORIMETRIES else "unknown")
+                print("Bit Depth:", metadata['depth'])
+                print("Packing:", PACKINGS[metadata['packing']] if metadata['packing'] in PACKINGS else "unknown")
+                print("Encoding:", ENCODINGS[metadata['encoding']] if metadata['encoding'] in ENCODINGS else "unknown")
+                print("End of Line Padding:", metadata['line_padding'])
+                print("End of Image Padding:", metadata['image_padding'])
+                print("Image Element Description:", metadata['image_element_description'])
 
-            print("\nIMAGE SOURCE INFORMATION HEADER")
-            print("Input Device Name:",meta['input_device_name'])
-            print("Input Device Serial Number:",meta['input_device_sn'])
-            print("\nAll fields:\n\n")
-            metasorted = sorted([m for m in meta])
-            for m in metasorted:
-                print(m,':',meta[m])
+                print("\nIMAGE SOURCE INFORMATION HEADER")
+                print("Input Device Name:", metadata['input_device_name'])
+                print("Input Device Serial Number:", metadata['input_device_sn'])
+
+                print("\n")
+
+if __name__ == '__main__':
+    info()

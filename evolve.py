@@ -55,29 +55,6 @@ MAX_POPULATION = 20         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
 EPOCHS = 10                 # Number of epochs to train
 
-# Fitness heuristic function, returns True if training should be aborted
-# early.
-
-
-def grim_reaper(fitness, current_epoch, max_epochs, best_fitness=0.0, last_fitness=None):
-    """ Return true if the model should be killed before training is complete """
-
-    if best_fitness >= 0:
-        return False
-
-    # if last_fitness is a value, our current fitness must be an improvement
-
-    if last_fitness != None and fitness >= last_fitness:
-        return True
-
-    fitness = fitness / best_fitness
-
-    # First epoch must be at least 75% as good, halfway we need about 87.5%, and
-    # so on.
-
-    requirement = 1.0 - 0.25 * (max_epochs - current_epoch) / (max_epochs - 1)
-
-    return fitness < requirement
 
 # Checkpoint state to genepool.json file
 
@@ -335,7 +312,7 @@ def evolve(config, genepool, image_info):
                     config.epochs = 0
                     config.run_epochs = 1
 
-                    population[i] = [genome, genomics.one_epoch(genome, config), least_evolved + 1]
+                    population[i] = [genome, genomics.train(genome, config, epochs=1), least_evolved + 1]
                     checkpoint(poolpath, population, graveyard, statistics, config)
 
             population.sort(key=lambda o: o[1])
@@ -346,7 +323,9 @@ def evolve(config, genepool, image_info):
             statistics = genomics.ligate(statistics, population[-1][0], population[-1][1])
             del population[-1]
 
-            # What organism need handling in the next iteration?
+            checkpoint(poolpath, population, graveyard, statistics, config)
+
+            # What organisms need handling in the next iteration?
 
             least_evolved = min([p[2] for p in population])
 

@@ -22,9 +22,6 @@ Data
     eval_images/    
         Alpha/    
         Beta/   
-    input_images/   
-        Alpha/    
-        Beta/   
     predict_images/         Images to predict
         Alpha/                  Source images
         Beta/                   Predicted images
@@ -199,11 +196,8 @@ Tools/dpxderez.py {source folder} {destination folder}
     - Test current models
     - Pythonate sdcopy.sh
     - Improve Documentation
-    - DPX->PNG automation
 
 - Gene-Perpetuation Unit
-    - Clean up contents of Scripts folder
-    - Implement a function that takes images from input_images and divides them into train_images (for training and validation) and eval_images (for evaluation)
     - New, better models
     - Random Brilliance
 

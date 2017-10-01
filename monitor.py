@@ -51,7 +51,6 @@ def fitstr(wide_str, other=0, max_width=SWIDTH):
 
 
 def endash(genome, max_width=0, dashit=DASHIT):
-
     """ Hilight dash marks and/or right-pad string (which will be a genome). """
 
     padding = ' ' * max(0, max_width - len(genome))
@@ -62,9 +61,7 @@ def endash(genome, max_width=0, dashit=DASHIT):
     return genome + padding
 
 
-
 def mod_time(path, suffix='.json'):
-
     """ Get the last modified time of a path (which may be a folder or file).
         Filter files by suffix.
     """
@@ -72,15 +69,14 @@ def mod_time(path, suffix='.json'):
     if os.path.isfile(path) and path.endswith(suffix):
         return os.path.getmtime(path)
 
-    times = 0.0
-    for (root, _, files) in os.walk(path):
-        times = max([times] + [os.path.getmtime(os.path.join(root, f))
-                               for f in files if f.endswith(suffix)])
-    return times
+    times = [os.path.getmtime(os.path.join(root, f))
+             for (root, _, files) in os.walk(path)
+             for f in files if f.endswith(suffix)]
+
+    return max(times) if times else 0.0
 
 
 def state_files(path, suffix='_state.json'):
-
     """ Extract the json in all files in the path and return them in a list.
         Filter files by suffix.
     """
@@ -88,56 +84,41 @@ def state_files(path, suffix='_state.json'):
     if os.path.isfile(path) and path.endswith(suffix):
         return json.load(open(path, 'r'))
 
-    jsons = []
-    for (root, _, files) in os.walk(path):
-        jsons.extend([json.load(open(os.path.join(root, f), 'r'))
-                      for f in files if f.endswith(suffix)])
-    return jsons
-
-#
+    return [json.load(open(os.path.join(root, f), 'r'))
+            for (root, _, files) in os.walk(path)
+            for f in files if f.endswith(suffix)]
 
 
 def genepool_display(data, codon_filter=None, last_mod=None):
-
     """ Display current status overviews of a genepool.json file """
 
-    def population_display(info):
-
+    def population_display(info, timestamp):
         """ Display the current evolver population """
 
-        trained = [[fitstr(p[0], 14), p[1]]
-                   for p in info if isinstance(p, list)]
-        untrained = [fitstr(p, 4) for p in info if not isinstance(p, list)]
+        info = [p if isinstance(p, list) else [p, 0.0, 0] for p in info]  # legacy format conversion
+        info = [[fitstr(p[0], 21), p[1], p[2]] for p in info]
 
-        print('Current Population{}\n'.format(timestamp))
-        trained.sort(key=lambda x: x[1])
-        max_width = max([12] + [len(p[0]) for p in trained])
-        print('{} {:>9s}'.format('Trained Genomes:'.ljust(max_width + 4), 'PSNR'))
-        print('{} {:>9s}'.format('-' * (max_width + 4), '-' * 9))
-        for model in trained:
+        print('Current Genepool{}\n'.format(timestamp))
+        info.sort(key=lambda x: x[1])
+        max_width = max([12] + [len(p[0]) for p in info])
+        print('{} {:>6s} {:>9s}'.format('Genomes'.ljust(max_width + 4), 'Epochs', 'PSNR'))
+        print('{} {:>6s} {:>9s}'.format('-' * (max_width + 4), '-' * 6, '-' * 9))
+        for model in info:
+            if model[2] > 0:
+                print('    {} {:>6d} {:9.4f}'.format(endash(model[0], max_width), model[2], model[1]))
+            else:
+                print('    {}'.format(endash(model[0], max_width)))
 
-            print('    {} {:9.4f}'.format(
-                endash(model[0], max_width), model[1]))
-
-        if untrained:
-            max_width = max([len(p) for p in untrained])
-            print('\nUntrained Genomes:\n{}'.format('-' * (max_width + 4)))
-            for model in untrained:
-                print('    {}'.format(endash(model)))
-
-    def graveyard_display(info):
-
+    def graveyard_display(info, timestamp):
         """ Display contents of the graveyard """
 
         info = [fitstr(p, 4) for p in info]
         max_width = max([15] + [len(p) for p in info])
-        print('Genepool graveyard{}\n{}'.format(
-            timestamp, '-' * (max_width + 4)))
+        print('Genepool graveyard{}\n{}'.format(timestamp, '-' * (max_width + 4)))
         for model in info:
             print('    {}'.format(endash(model)))
 
-    def statistics_display(info):
-
+    def statistics_display(info, timestamp):
         """" Display evolutionary statistics (with possible filtering) """
 
         print('Genepool statistics{}\n'.format(timestamp))
@@ -157,8 +138,10 @@ def genepool_display(data, codon_filter=None, last_mod=None):
 
         if codon_filter is None:
             title = 'Complete codons (Count >= 5):'
-            codons = [c for c in info if c[4] >= 5 and any(c[0].startswith(
-                x) for x in layers) and any(c[0].endswith(y) for y in acts) and c[0].count('_') > 1]
+            codons = [c for c in info if c[4] >= 5 and
+                      any(c[0].startswith(x) for x in layers) and
+                      any(c[0].endswith(y) for y in acts) and
+                      c[0].count('_') > 1]
         else:
             title = 'Filtered codons ({})'.format(codon_filter.pattern)
             codons = [c for c in info if codon_filter.search(c[0])]
@@ -170,12 +153,10 @@ def genepool_display(data, codon_filter=None, last_mod=None):
             '-' * (max_width + 4), '-' * 9, '-' * 9, '-' * 9, '-' * 6))
         for codon in codons:
             print('    {} {:9.4f} {:9.4f} {:9.4f} {:6d}'.format(
-                endash(codon[0], max_width), codon[1], codon[2], codon[3], codon[4]))
+                endash(codon[0], max_width), *codon[1:]))
 
-    def io_display(info):
-
+    def io_display(info, timestamp):
         """ Display IO values for evolver """
-
 
         for k in info['paths'].keys():
             info['paths[\'{}\']'.format(k)] = info['paths'][k]
@@ -186,7 +167,6 @@ def genepool_display(data, codon_filter=None, last_mod=None):
         max_width = max([len(k) for k in keys])
         for key in sorted(info.keys()):
             print('    {} : {}'.format(key.ljust(max_width), info[key]))
-
 
     #---------------------------------
     # genepool_display() function body
@@ -205,21 +185,20 @@ def genepool_display(data, codon_filter=None, last_mod=None):
     select = {'population': population_display,
               'graveyard': graveyard_display,
               'statistics': statistics_display,
-              'io': io_display
-             }
+              'io': io_display}
 
     if data in select:
-        select[data](info)
+        select[data](info, timestamp)
     else:
         print('Unknown genepool selector [{}]'.format(data))
 
 
 def models_display(states, last_mod=None):
-
     """ Display the current models """
 
-    timestamp = '' if last_mod is None else ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(
-        datetime.datetime.fromtimestamp(last_mod))
+    timestamp = '' if last_mod is None else \
+                ' (last change {:%Y-%m-%d %I:%M:%S %p})'.format(
+                    datetime.datetime.fromtimestamp(last_mod))
 
     # Gather the info we need from the state files
 
@@ -248,7 +227,6 @@ def models_display(states, last_mod=None):
 
 
 def monitor():
-
     """ Monitor the status of training """
 
     # Config info for the commands. Tuples contain the path to the data the
@@ -260,8 +238,7 @@ def monitor():
                 'F': (GENEPOOL, 'statistics'),
                 'I': (GENEPOOL, 'io'),
                 'M': (MODELS, None),
-                'Q': (GENEPOOL, None)
-               }
+                'Q': (GENEPOOL, None)}
 
     # Default command
 
@@ -277,7 +254,8 @@ def monitor():
             last_mod = mod_time(cmd_info[cmd][0])
 
             if cmd == 'F':
-                print('\nEnter Stats Filter regular expression, then press ENTER. Leave blank to display best genomes.\n')
+                print('\nEnter Stats Filter regular expression, then press ENTER.' +
+                      ' Leave blank to display best genomes.\n')
                 try:
                     codon_filter = input('Filter >')
                     if codon_filter == '':
@@ -297,11 +275,13 @@ def monitor():
 
         # Get user command, then loop back and process it.
 
-        key = input('\n{:%I:%M:%S %p} : M)odels, Genepool P)opulation, G)raveyard, S)tats, Set F)ilter, I)O, Q)uit [ENTER to refresh] >'.format(
-            datetime.datetime.now()))
+        key = input('\n{:%I:%M:%S %p}'.format(datetime.datetime.now()) +
+                    ' : M)odels, Genepool P)opulation, G)raveyard,' +
+                    ' S)tats, Set F)ilter, I)O, Q)uit [ENTER to refresh] >')
 
         if key != '':
             cmd = key[0].upper()
+
 
 if __name__ == '__main__':
     monitor()
