@@ -4,7 +4,9 @@
 Usage: evolve.py [option(s)] ...
 
     Evolves (hopefully) improved models. In each generation, the 5 best models
-    are retained, and then 15 new models are evolved from them.
+    are retained, and then 15 new models are evolved from them. Progressively
+    trains the new models one epoch at a time for 10 epochs, discarding the
+    worst performer in each iteration.
 
 Options are:
 
@@ -14,7 +16,7 @@ Options are:
     border=nnn          border size, default=2
     lr=.nnn             set initial learning rate. Should be 0.001 or less. Default = 0.001
     quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
-    residual=1|0|T|F    have the model train using residual images. Default is false.
+    residual=1|0|T|F    have the model train using residual images. Default=True.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240; can also use left=nnn
     trimright=nnn       pixels to trim on image right edge, default = 240; can also use right=nnn
@@ -233,8 +235,8 @@ def evolve(config, genepool, image_info):
     else:
         print('Initializing population...')
         population = [
-            "conv_f64_k9_elu-conv_f32_k1_elu-out_k5_elu",
-            "conv_f64_k9_elu-conv_f32_k1_elu-avg_f32_k135_d3_elu-out_k5_elu",
+            ["conv_f64_k9_elu-conv_f32_k1_elu-out_k5_elu", 0.0, 0],
+            ["conv_f64_k9_elu-conv_f32_k1_elu-avg_f32_k135_d3_elu-out_k5_elu", 0.0, 0]
         ]
 
     if 'graveyard' in genepool:
@@ -319,9 +321,10 @@ def evolve(config, genepool, image_info):
 
             # Remove a genome -- grab stats on it
 
-            print('Removing {} @ {}'.format(population[-1][0], population[-1][1]))
-            statistics = genomics.ligate(statistics, population[-1][0], population[-1][1])
-            del population[-1]
+            if len(population) >= EPOCHS - least_evolved:
+                print('Removing {} @ {}'.format(population[-1][0], population[-1][1]))
+                statistics = genomics.ligate(statistics, population[-1][0], population[-1][1])
+                del population[-1]
 
             checkpoint(poolpath, population, graveyard, statistics, config)
 
@@ -329,15 +332,18 @@ def evolve(config, genepool, image_info):
 
             least_evolved = min([p[2] for p in population])
 
-        # Gather statistics on the genomes that are about to be culled
+        # Cull excess population
 
-        for organism in population[MIN_POPULATION:]:
-            statistics = genomics.ligate(statistics, organism[0], organism[1])
+        if len(population) > MIN_POPULATION:
+            # Gather statistics on the genomes that are about to be culled
 
-        # Cull the population
+            for organism in population[MIN_POPULATION:]:
+                statistics = genomics.ligate(statistics, organism[0], organism[1])
 
-        population = population[:MIN_POPULATION]
-        checkpoint(poolpath, population, graveyard, statistics, config)
+            # Cull the population
+
+            population = population[:MIN_POPULATION]
+            checkpoint(poolpath, population, graveyard, statistics, config)
 
         # Expand the population to the maximum size.
 

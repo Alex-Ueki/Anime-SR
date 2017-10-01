@@ -3,6 +3,8 @@
 """
 Usage: evaluate.py [option(s)] ...
 
+    Evaluates quality of a model.
+
 Options are:
 
     data=path           path to the main data folder, default = Data

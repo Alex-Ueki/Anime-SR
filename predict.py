@@ -4,6 +4,8 @@
 """
 Usage: predict.py [option(s)] ...
 
+    Predicts images using a model.
+
 Options are:
 
     data=path           path to the main data folder, default = Data

@@ -3,19 +3,11 @@
 """
 Usage: train.py [option(s)] ...
 
-    Trains a model. The available models are:
-
-        BasicSR
-        ExpansionSR
-        DeepDenoiseSR
-        VDSR
-        PUPSR
-        GPUSR
-        TestModels : Currently ELU versions of all models
+    Trains a model. See Modules/models.py for sample model types.
 
 Options are:
 
-    type=model          model type, default is BasicSR
+    type=model          model type, default is BasicSR.
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
