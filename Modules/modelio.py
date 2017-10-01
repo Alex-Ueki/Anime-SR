@@ -104,32 +104,31 @@ class ModelIO():
 
         # The actual internal tile size includes the overlap borders
 
-        config.setdefault('tile_width', self.base_tile_width + 2 * self.border)
-        config.setdefault('tile_height', self.base_tile_height + 2 * self.border)
+        config['tile_width'] = self.base_tile_width + 2 * self.border
+        config['tile_height'] = self.base_tile_height + 2 * self.border
 
         self.tile_width = config['tile_width']
         self.tile_height = config['tile_height']
 
         # How many tiles will we get out of each image? If we are jittering, then account for that
 
-        config.setdefault('trimmed_width', self.image_width - (self.trim_left + self.trim_right))
-        config.setdefault('trimmed_height', self.image_height - (self.trim_top + self.trim_bottom))
+        config['trimmed_width'] = self.image_width - (self.trim_left + self.trim_right)
+        config['trimmed_height'] = self.image_height - (self.trim_top + self.trim_bottom)
 
         self.trimmed_width = config['trimmed_width']
         self.trimmed_height = config['trimmed_height']
 
-        config.setdefault('tiles_across', self.trimmed_width // self.base_tile_width)
-        config.setdefault('tiles_down', self.trimmed_height // self.base_tile_height)
+        config['tiles_across'] = self.trimmed_width // self.base_tile_width
+        config['tiles_down'] = self.trimmed_height // self.base_tile_height
 
         self.tiles_across = config['tiles_across']
         self.tiles_down = config['tiles_down']
 
-        config.setdefault('tiles_per_image', self.tiles_across * self.tiles_down)
-        if config['jitter'] == 1:
-            config['tiles_per_image'] += (self.tiles_across - 1) * \
-                (self.tiles_down - 1)
+        config['tiles_per_image'] = self.tiles_across * self.tiles_down + (self.tiles_across - 1) * (self.tiles_down - 1) if self.jitter else 0
 
         self.tiles_per_image = config['tiles_per_image']
+
+        print('tiles per image initialized to ', self.tiles_per_image, config['tiles_per_image'])
 
         # Set image shape
 
@@ -273,15 +272,6 @@ class ModelIO():
 
         while True:
             for alpha_tile, beta_tile in frameops.tesselate_pair(alpha_paths, beta_paths, temp_config):
-                """
-                    self.base_tile_width, self.base_tile_height, self.border,
-                    black_level=self.black_level,
-                    border_mode=self.border_mode,
-                    trim_left=self.trim_left, trim_right=self.trim_right,
-                    trim_top=self.trim_top, trim_bottom=self.trim_bottom,
-                    shuffle=shuffle, jitter=jitter, skip=skip, quality=quality,
-                    theano=self.theano, residual=self.residual):
-                """
                 alpha_tiles[batch_index] = alpha_tile
                 beta_tiles[batch_index] = beta_tile
                 batch_index += 1

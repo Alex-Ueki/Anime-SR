@@ -6,6 +6,7 @@ Anime-SR core models
 
 import os
 import json
+import copy
 from abc import ABCMeta, abstractmethod
 
 from keras.models import Sequential, Model, load_model
@@ -32,18 +33,20 @@ class ModelState(callbacks.Callback):
 
         super().__init__()
 
-        self.config = config
+        self.verbose = config.verbose
+        self.path = config.paths['state']
 
-        if os.path.isfile(config.paths['state']):
+        if os.path.isfile(self.path):
             if config.verbose:
                 print('Loading existing .json state')
-            with open(config.paths['state'], 'r') as jsonfile:
+            with open(self.path, 'r') as jsonfile:
                 self.state = json.load(jsonfile)
 
             # Update state with current run information
 
             self.state['config'] = config.config
         else:
+            print('Initializing new model')
             self.state = {'epoch_count': 0,
                           'best_values': {},
                           'best_epoch': {},
@@ -52,7 +55,7 @@ class ModelState(callbacks.Callback):
 
     def on_train_begin(self, logs=None):
 
-        if self.config.verbose:
+        if self.verbose:
             print('Training commences...')
 
     def on_epoch_end(self, epoch, logs=None):
@@ -66,10 +69,10 @@ class ModelState(callbacks.Callback):
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
 
-        with open(self.config.paths['state'], 'w') as jsonfile:
+        with open(self.path, 'w') as jsonfile:
             json.dump(self.state, jsonfile, indent=4)
 
-        if self.config.verbose:
+        if self.verbose:
             print('Completed epoch', self.state['epoch_count'])
 
 # GPU : Untested, but may be needed for VDSR
@@ -158,7 +161,7 @@ class BaseSRCNNModel(object):
     def __init__(self, name, config, loss_function='PeakSignaltoNoiseRatio'):
 
         self.name = name
-        self.config = config
+        self.config = copy.deepcopy(config)
         self.loss_function = loss_function
         self.val_loss_function = 'val_' + loss_function
         self.evaluation_function = LOSS_FUNCTIONS[loss_function](config.border)
@@ -201,6 +204,13 @@ class BaseSRCNNModel(object):
             Uses images in self.config.paths['validation'] for Validation
         """
 
+        """
+        print('fit')
+        for key in self.config.config:
+            if key != 'paths':
+                print(key, self.config.config[key])
+        """
+        
         samples_per_epoch = self.config.train_images_count()
         val_count = self.config.val_images_count()
 
@@ -257,7 +267,7 @@ class BaseSRCNNModel(object):
                                  callbacks=callback_list,
                                  verbose=self.config.bargraph,
                                  validation_data=self.config.validation_data_generator(),
-                                 validation_steps=val_count // self.config.config.batch_size,
+                                 validation_steps=val_count // self.config.batch_size,
                                  initial_epoch=initial_epoch)
 
         if self.config.verbose:

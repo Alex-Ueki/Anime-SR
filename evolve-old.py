@@ -312,53 +312,60 @@ def evolve(config, genepool, image_info):
     best_fitness = 0
 
     while True:
+        # Get the best fitness value so far to use as a training goal, and
+        # the worst fitness so we can trigger a repopulation if we get a
+        # good genome during training.
 
-        # Legacy fix to clean up population
+        best_fitness = population[0][1] if isinstance(
+            population[0], list) else 0.0
+        worst_fitness = max([p[1] if isinstance(p, list)
+                             else best_fitness for p in population])
 
-        population = [p if isinstance(p, list) else [p, 0.0, 0] for p in population]
-        population = [p if len(p) == 3 else p + [10] for p in population]
+        # Train all the untrained genomes in the population
 
-        # While there are some genomes with less than EPOCHS epochs of fitting,
-        # evolve them 1 epoch and remove the worst performer
+        for i, genome in enumerate(population):
+            if not isinstance(genome, list):
+                # Set model and state paths so models get saved appropriately.
 
-        least_evolved = min([p[2] for p in population])
-        while least_evolved < EPOCHS:
-            print('Processing Epoch', least_evolved)
-            for i, organism in enumerate(population):
-                if organism[2] == least_evolved:
-                    genome = organism[0]
-                    config.paths['model'] = os.path.join(config.paths['genebank'], genome + '.h5')
-                    config.paths['state'] = os.path.join(config.paths['genebank'], genome + '.json')
-                    config.model_type = genome
-                    config.config['model_type'] = config.model_type
-                    config.config['paths'] = config.paths
-                    config.epochs = 0
-                    config.run_epochs = 1
+                config.paths['model'] = os.path.join(config.paths['genebank'], genome + '.h5')
+                config.paths['state'] = os.path.join(config.paths['genebank'], genome + '.json')
+                config.model_type = genome
+                
+                # Build a model for the organism, train the model, and record the results
 
-                    population[i] = [genome, genomics.one_epoch(genome, config), least_evolved + 1]
-                    checkpoint(poolpath, population, graveyard, statistics, config)
+                population[i] = [genome, genomics.fitness(
+                    genome, config, apoptosis=grim_reaper)]
 
-            population.sort(key=lambda o: o[1])
+                # Generate all sorts of statistics on various genome combinations. Later we
+                # may use them to optimize evolution a it.
 
-            # Remove a genome -- grab stats on it
+                statistics = genomics.ligate(
+                    statistics, population[i][0], population[i][1])
 
-            print('Removing {} @ {}'.format(population[-1][0], population[-1][1]))
-            statistics = genomics.ligate(statistics, population[-1][0], population[-1][1])
-            del population[-1]
+                checkpoint(poolpath, population, graveyard, statistics, config)
 
-            # What organism need handling in the next iteration?
+                # If the model we just trained has better fitness than the worst fitness of
+                # the previously trained genomes, exit early (which will generate a new
+                # population using a "better" genepool). However, don't do this if we are
+                # training up an initial population sample.
 
-            least_evolved = min([p[2] for p in population])
+                trained = [p for p in population if isinstance(p, list)]
+                if population[i][1] < worst_fitness and len(trained) >= MIN_POPULATION:
+                    break
 
-        # Gather statistics on the genomes that are about to be culled
+        # Remove untrained populations
 
-        for organism in population[MIN_POPULATION:]:
-            statistics = genomics.ligate(statistics, organism[0], organism[1])
+        population = [p for p in population if isinstance(p, list)]
 
-        # Cull the population
+        # If our population has expanded past the minimum limit, cut back to the best.
 
-        population = population[:MIN_POPULATION]
-        checkpoint(poolpath, population, graveyard, statistics, config)
+        if len(population) > MIN_POPULATION:
+            printlog('Trimming population to {}...'.format(MIN_POPULATION))
+            population.sort(key=lambda org: org[1])
+            graveyard.extend([p[0] for p in population[MIN_POPULATION:]])
+            population = population[:MIN_POPULATION]
+            checkpoint(poolpath, population, graveyard, statistics, config)
+            graveyard.sort()
 
         # Expand the population to the maximum size.
 
@@ -371,7 +378,7 @@ def evolve(config, genepool, image_info):
             child = '-'.join(genomics.mutate(parent, conjugate,
                                              best_fitness=best_fitness, statistics=statistics))
             if child not in parents and child not in children and child not in graveyard:
-                children.append([child, 0.0, 0])
+                children.append(child)
             else:
                 printlog('Duplicate genome rejected...')
 

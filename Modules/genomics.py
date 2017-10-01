@@ -513,3 +513,50 @@ def fitness(genome, config, best_fitness=0.0, apoptosis=None):
 
     printlog('Fitness: {}'.format(results))
     return results
+
+def one_epoch(genome, config):
+    """ Train a model by 1 epoch
+
+        organism      string or list with genetic code to be tested
+        config        ModelIO configuration
+        best_fitness  Best fitness in the gene pool
+        apoptosis     Function that returns True if we should quit early
+    """
+
+    if not isinstance(genome, list):
+        genome = genome.split('-')
+
+    organism = '-'.join(genome)
+
+    printlog('Training for one epoch : {}'.format(organism))
+
+    cell = BaseSRCNNModel(organism, config)
+
+    if cell.model is None:
+        print("Compiling model")
+        model = build_model(genome, shape=config.image_shape, learning_rate=config.learning_rate, metrics=[cell.evaluation_function])
+
+        if model is None:
+            return 0.0
+
+        cell.model = model
+    else:
+        print("Using loaded model - x fingers")
+
+    # Now we have a compiled model, execute it - or at least try to, there are still some
+    # models that may bomb out.
+
+    try:
+
+        results = cell.fit(max_epochs=999, run_epochs=1)
+
+    except KeyboardInterrupt:
+
+        raise
+
+    except:
+        printlog('Cannot train: {}'.format(sys.exc_info()[1]))
+        raise
+
+    printlog('Fitness: {}'.format(results))
+    return results
