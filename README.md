@@ -164,8 +164,7 @@ Options are:
 ````
     Expects {source folder} to contain 1920x1080 HD images with 1440x1080 4:3 framing. Converts to
     720x480 SD images and saves in {destination folder}. Used for data preparation.
-
-```
+````
 
 ## Miscellaneous Tools
 
