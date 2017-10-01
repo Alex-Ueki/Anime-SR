@@ -64,7 +64,8 @@ DPX are (usually) logarithmically-encoded images, as opposed to linearly-encoded
 
 You can use ImageMagick to convert DPX to PNG like this:
 
-```convert {source dpx file} -set colorspace sRGB {destination png file}```
+```convert {source dpx file} -set colorspace sRGB {destination png file}
+```
 
 # Miscellaneous ImageMagick
 
@@ -74,9 +75,10 @@ Convert all the 1920x1080 dpx images in a folder into 720x480 dpx images by slic
 and right, and then squeezing down from 1440x1080 to 720x480 (without preserving aspect ratio).
 Useful for generating training and validation Alpha images when you have HD beta images.
 
-```mogrify -shave 240x0 -resize 720x480\! *.dpx```
+```mogrify -shave 240x0 -resize 720x480\! *.dpx
+```
 
-# Todos
+# TODOS
 
 Old Analog transfers are often going to have edge sharpening artifacts. Need to investigate how to remove these before
 upconversion.

@@ -1,3 +1,5 @@
+# pylint: disable=C0301
+# (line_too_long disabled)
 """
 Set up Anime-SR project with default datafile structure
 """
@@ -5,36 +7,37 @@ Set up Anime-SR project with default datafile structure
 import os
 
 
-def create_folder(root, folders):
+def create_folder(root, folders, depth=0):
+    """ Recursively create folder structure from nested list """
 
-    if os.path.exists(root):
-        print('Exists ', root)
-    else:
-        print('Creating ', root)
+    exists = os.path.exists(root)
+    if not exists:
         os.makedirs(root)
 
-    for f in folders:
-        if type(f) in (list, tuple):
-            subroot = os.path.join(root, f[0])
-            if len(f) > 1:
-                create_folder(subroot, f[1])
+    print('{}{} {}'.format(' ' * (depth * 4), os.path.abspath(root), '' if exists else ' ** CREATED **'))
+
+    for folder in folders:
+        if isinstance(folder, (list, tuple)):
+            subroot = os.path.join(root, folder[0])
+            create_folder(subroot, folder[1], depth + 1)
         else:
-            subroot = os.path.join(root, f)
-            create_folder(subroot, [])
+            subroot = os.path.join(root, folder)
+            create_folder(subroot, [], depth + 1)
 
+def setup():
+    """ Setup folder structure """
 
-if __name__ == '__main__':
+    alphabeta = ['Alpha', 'Beta']
 
-    ab = ['Alpha', 'Beta']
+    sub_folders = [[s, alphabeta]
+                   for s in ['eval_images', 'predict_images']]
 
-    sub_folders = [[s, ab]
-                   for s in ['eval_images', 'input_images', 'predict_images']]
-
-    train_images = [[s, ab] for s in ['training', 'validation']]
+    train_images = [[s, alphabeta] for s in ['training', 'validation']]
     sub_folders.append(['train_images', train_images])
 
-    sub_folders.append(['models'])
+    sub_folders.append(['models', ['genes', 'submodels']])
 
-    print(sub_folders)
+    create_folder('Data', sub_folders, depth=0)
 
-    create_folder('Data', sub_folders)
+if __name__ == '__main__':
+    setup()

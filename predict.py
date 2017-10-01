@@ -4,14 +4,7 @@
 """
 Usage: predict.py [option(s)] ...
 
-    Predicts images by applying model. The available models are:
-
-        BasicSR
-        ExpansionSR
-        DeepDenoiseSR
-        VDSR
-        PUPSR (Testing)
-        GPUSR (Testing)
+    Predicts images using a model.
 
 Options are:
 
@@ -28,13 +21,12 @@ Options are:
 """
 
 
-import sys
 import os
 import json
 
 import numpy as np
 
-from Modules.misc import oops, terminate, set_docstring
+from Modules.misc import oops, terminate, set_docstring, parse_options
 import Modules.frameops as frameops
 from Modules.modelio import ModelIO
 import Modules.models as models
@@ -46,185 +38,106 @@ set_docstring(__doc__)
 
 DEBUG = True
 
+def setup(options):
+    """Set up configuration """
 
-def predict():
-    """ Run predictor on a folder of images """
+    # Set remaining options
 
-    # Initialize defaults. Note that we trim 240 pixels off right and left, this is
-    # because our default use case is 1440x1080 upconverted SD in a 1920x1080 box.
-    # These variables will be set by parse_options() and configure()
+    options.setdefault('data', 'Data')
+    dpath = options['data']
 
-    options = sorted(['type', 'data', 'images', 'model'])
+    options.setdefault('model', os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5'))
+    options.setdefault('predict', os.path.join(dpath, 'predict_images'))
 
-    def parse_options():
-        """ Parses options; fills in paths. Returns paths and model_type
-            If errors detected, exits
-        """
-        errors = False
-        paths = {}
+    model_split = os.path.splitext(options['model'])
+    if model_split[1] == '':
+        options['model'] = options['model'] + '.h5'
+    if os.path.dirname(options['model']) == '':
+        options['model'] = os.path.join(dpath, 'models', options['model'])
 
-        # Parse options
+    options['state'] = os.path.splitext(options['model'])[0] + '_state.json'
 
-        for option in sys.argv[1:]:
+    model_type = os.path.basename(options['model']).split('-')[0]
 
-            opvalue = option.split('=', maxsplit=1)
+    # Remind user what we're about to do.
 
-            if len(opvalue) == 1:
-                errors = oops(errors, True, 'Invalid option ({})', option)
-                continue
+    print('             Data : {}'.format(options['data']))
+    print('   Predict Images : {}'.format(options['predict']))
+    print('            Model : {}'.format(options['model']))
+    print('            State : {}'.format(options['state']))
+    print('       Model Type : {}'.format(model_type))
+    print('')
 
-            option, value = opvalue
+    # Validation and error checking
 
-            opmatch = [s for s in options if s.startswith(option)]
+    for path in options:
+        errors = oops(False, not os.path.exists(
+            options[path]), 'Path to {} is not valid ({})'.format(path, options[path]))
 
-            if not opmatch or len(opmatch) > 1 and opmatch[0] != option:
-                errors = oops(errors, True, '{} option ({})',
-                              ('Ambiguous' if opmatch else 'Unknown', option))
-                continue
+    terminate(errors, False)
 
-            option = opmatch[0]
-            paths[option] = value
+    # Load the actual model state
 
-        terminate(errors)
+    with open(options['state'], 'r') as jsonfile:
+        state = json.load(jsonfile)
 
-        # Set remaining defaults
+    # Grab the config data (backwards compatible)
 
-        if 'data' not in paths:
-            paths['data'] = 'Data'
+    config = state['config' if 'config' in state else 'io']
 
-        dpath = paths['data']
+    # Create real config with configurable parameters. In particular we disable options like
+    # jitter, shuffle, skip and quality.
 
-        if 'input' not in paths:
-            paths['input'] = os.path.join(dpath, 'predict_images', 'Alpha')
+    config['paths'] = options
+    config['jitter'] = False
+    config['shuffle'] = False
+    config['skip'] = False
+    config['quality'] = 1.0
+    config['model_type'] = model_type
 
-        if 'output' not in paths:
-            paths['output'] = os.path.join(dpath, 'predict_images', 'Beta')
+    config = ModelIO(config)
 
-        if 'model' not in paths:
-            paths['model'] = os.path.join(
-                dpath, 'models', 'BasicSR-60-60-2-dpx.h5')
-        else:
-            model_split = os.path.splitext(paths['model'])
-            if model_split[1] == '':
-                paths['model'] = paths['model'] + '.h5'
-            if os.path.dirname(paths['model']) == '':
-                paths['model'] = os.path.join(dpath, 'models', paths['model'])
+    # Check image files -- we do not explore subfolders. Note we have already checked
+    # path validity above
 
-        paths['state'] = os.path.splitext(paths['model'])[0] + '_state.json'
+    image_info = frameops.image_files(os.path.join(config.paths['predict'], config.alpha), False)
 
-        model_type = os.path.basename(paths['model']).split('-')[0]
+    errors = oops(False, len(image_info) == 0, 'Input folder does not contain any images')
+    errors = oops(errors, len(image_info) > 1, 'Images folder contains more than one type of image')
 
-        # Remind user what we're about to do.
+    terminate(errors, False)
 
-        print('             Data : {}'.format(paths['data']))
-        print('            Input : {}'.format(paths['input']))
-        print('           Output : {}'.format(paths['output']))
-        print('            Model : {}'.format(paths['model']))
-        print('            State : {}'.format(paths['state']))
-        print('       Model Type : {}'.format(model_type))
-        print('')
+    # Get the list of files and check the filetype is correct
 
-        # Validation and error checking
+    image_info = image_info[0]
 
-        for path in paths:
-            errors = oops(errors, not os.path.exists(
-                paths[path]), 'Path to {} is not valid ({})'.format(path, paths[path]))
+    image_ext = os.path.splitext(image_info[0])[1][1:].lower()
 
-        terminate(errors, False)
+    errors = oops(errors, image_ext != config.img_suffix.lower(),
+                  'Image files are of type [{}] but model was trained on [{}]'.format(image_ext, config.img_suffix.lower()))
 
-        return (paths, model_type)
+    terminate(errors, False)
 
-    def configure(paths, model_type):
-        """ Configure the model and returns image_info and ModelIO instance """
+    return (config, image_info)
 
-        # Load state
-
-        with open(paths['state'], 'r') as jsonfile:
-            state = json.load(jsonfile)
-
-        # We only look at the io info
-
-        iostate = state['io']
-
-        # Check image files -- we do not explore subfolders. Note we have already checked
-        # path validity above
-
-        image_info = frameops.image_files(paths['input'], False)
-
-        errors = oops(False, len(image_info) == 0,
-                      'Input folder does not contain any images')
-        errors = oops(errors, len(image_info) > 1,
-                      'Images folder contains more than one type of image')
-
-        terminate(errors, False)
-
-        # Get the list of files and check the filetype is correct
-
-        image_info = image_info[0]
-
-        image_ext = os.path.splitext(image_info[0])[1][1:].lower()
-
-        errors = oops(errors, image_ext != iostate['img_suffix'].lower(),
-                      'Image files are of type [{}] but model was trained on [{}]'.format(image_ext, iostate['img_suffix'].lower()))
-
-        terminate(errors, False)
-
-        # Configure model IO
-
-        errors = oops(errors, model_type not in models.models,
-                      'Unknown model type ({})'.format(model_type))
-
-        terminate(errors, False)
-
-        io_config = ModelIO(model_type=model_type,
-                            image_width=iostate['image_width'],
-                            image_height=iostate['image_height'],
-                            base_tile_width=iostate['base_tile_width'],
-                            base_tile_height=iostate['base_tile_height'],
-                            channels=iostate['channels'],
-                            border=iostate['border'],
-                            border_mode=iostate['border_mode'],
-                            batch_size=iostate['batch_size'],
-                            black_level=iostate['black_level'],
-                            trim_top=iostate['trim_top'],
-                            trim_bottom=iostate['trim_bottom'],
-                            trim_left=iostate['trim_left'],
-                            trim_right=iostate['trim_left'],
-                            jitter=False,
-                            shuffle=False,
-                            skip=False,
-                            quality=1.0,
-                            residual=iostate['residual'],
-                            img_suffix=iostate['img_suffix'],
-                            paths={})
-
-        return (image_info, io_config)
-
-    paths, model_type = parse_options()
-    image_info, io_config = configure(paths, model_type)
+def predict(config, image_info):
+    """ Run predictions using the configuration and list of files """
 
     # Create model. Since the model file contains the complete model info, not just the
     # weights, we can instantiate it using the base class. So no matter what changes we
     # make to the definition of the models in models.py, old model files will still
     # work.
 
-    sr_model = models.BaseSRCNNModel(
-        name=model_type, io=io_config, verbose=False, bargraph=False)
+    sr_model = models.BaseSRCNNModel(name=config.model_type, config=config)
 
-    # Compute some handy information
+    # Need to use unjittered tiles_per_imag
 
-    row_width = (io_config.image_width - io_config.trim_left -
-                 io_config.trim_right) // io_config.base_tile_width
-    row_height = (io_config.image_height - io_config.trim_top -
-                  io_config.trim_bottom) // io_config.base_tile_height
-    tiles_per_img = row_width * row_height
-
-    print('tiles per image', tiles_per_img)
+    tiles_per_img = config.tiles_across * config.tiles_down
 
     # Process the images
 
     if DEBUG:
-        image_info = [image_info[0]]  # just do one image
+        image_info = [image_info[-1]]  # just do one image
 
     # There is no point in caching tiles since we never revisit them.
 
@@ -234,27 +147,12 @@ def predict():
         print('Predicting', os.path.basename(img_path))
 
         # Generate the tiles for the image. Note that tiles is a generator
-        # Also, we must specify quality=1.0 to make sure we get all
-        # the tiles in the default order.
 
-        tiles = frameops.tesselate(file_paths=img_path,
-                                   tile_width=io_config.base_tile_width,
-                                   tile_height=io_config.base_tile_height,
-                                   border=io_config.border,
-                                   black_level=io_config.black_level,
-                                   trim_top=io_config.trim_top,
-                                   trim_bottom=io_config.trim_bottom,
-                                   trim_left=io_config.trim_left,
-                                   trim_right=io_config.trim_right,
-                                   shuffle=False,
-                                   jitter=False,
-                                   skip=False,
-                                   quality=1.0,
-                                   theano=io_config.theano)
+        tiles = frameops.tesselate(img_path, config)
 
         # Create a batch with all the tiles
 
-        tile_batch = np.empty((tiles_per_img, ) + io_config.image_shape)
+        tile_batch = np.empty((tiles_per_img, ) + config.image_shape)
         for idx, tile in enumerate(tiles):
             tile_batch[idx] = tile
 
@@ -264,15 +162,7 @@ def predict():
             for i in range(0, min(30, tiles_per_img)):
                 frameops.imsave(os.path.join(
                     'Temp', 'PNG', fname[:-4] + '-' + str(i) + '-IN.png'), tile_batch[i])
-            input_image = frameops.grout(tile_batch,
-                                         border=io_config.border,
-                                         row_width=row_width,
-                                         black_level=io_config.black_level,
-                                         pad_top=io_config.trim_top,
-                                         pad_bottom=io_config.trim_bottom,
-                                         pad_left=io_config.trim_left,
-                                         pad_right=io_config.trim_right,
-                                         theano=io_config.theano)
+            input_image = frameops.grout(tile_batch, config)
             frameops.imsave(os.path.join('Temp', 'PNG', os.path.basename(
                 img_path)[:-4] + '-IN.png'), input_image)
 
@@ -286,25 +176,17 @@ def predict():
         # Without residual, mean is usually higher
         # print('Debug: Residual {} Mean {}'.format(io.residual==1, np.mean(predicted_tiles)))
 
-        if io_config.residual:
+        if config.residual:
             predicted_tiles += tile_batch
 
         # Merge the tiles back into a single image
 
-        predicted_image = frameops.grout(predicted_tiles,
-                                         border=io_config.border,
-                                         row_width=row_width,
-                                         black_level=io_config.black_level,
-                                         pad_top=io_config.trim_top,
-                                         pad_bottom=io_config.trim_bottom,
-                                         pad_left=io_config.trim_left,
-                                         pad_right=io_config.trim_right,
-                                         theano=io_config.theano)
+        predicted_image = frameops.grout(predicted_tiles, config)
 
         # Save the image
 
         frameops.imsave(os.path.join(
-            paths['output'], os.path.basename(img_path)), predicted_image)
+            config.paths['predict'], config.beta, os.path.basename(img_path)), predicted_image)
 
         # Debug code to confirm what we are doing
 
@@ -322,4 +204,11 @@ def predict():
 
 
 if __name__ == '__main__':
-    predict()
+    OPCODES = {
+        'data': ('data', str, lambda x: False, ''),
+        'images': ('predict', str, lambda x: False, ''),
+        'model': ('model', str, lambda x: False, '')}
+
+    OPTIONS = parse_options(OPCODES)
+    CONFIG, IMAGE_INFO = setup(OPTIONS)
+    predict(CONFIG, IMAGE_INFO)
