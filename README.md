@@ -1,4 +1,4 @@
-# Anime Image Super Resolution using in Keras 2+ (TensorFlow Backend)
+# Anime Image Super Resolution using Keras 2+ (TensorFlow Backend)
 
 Toolkit for investigating techniques for improved upconversion of SD video to HD. Can potentially be adapted for
 use on other image conversion tasks.
