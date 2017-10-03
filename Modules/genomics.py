@@ -33,6 +33,8 @@ _DEBUG = True
 # filter sizes, kernel ranges, and activation functions. The parameters to the
 # convolution are embedded in the codon name so that they can be tweaked easily.
 # Codon names always start with a type code and end with an activation code.
+#
+# Codons can have a *{number} suffix that means "repeat the layer {number) times"
 
 FILTERS = [32, 64, 128, 256]
 KERNELS = [1, 3, 5, 7, 9]
@@ -42,8 +44,8 @@ DEPTHS = [2, 3, 4]
 CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): Conv2D(f, (k, k), activation=a, padding='same')
                 for a in ACTS for k in KERNELS for f in FILTERS}
 
-# Merge codons combine multiple layers. They are only expressed inside composite
-# codons
+# Merge codons combine multiple layers. They are internal codons that are the
+# final layer of composite codons
 
 MERGERS = {
     'add': Add(),
@@ -77,6 +79,42 @@ def _make_composites():
 
 COMPOSITES = _make_composites()
 
+# Modifier codons modify the effect of the next codon. Currently, the only one
+# is a dup_nnn codon that duplicates the next codon nnn times. Modifiers are
+# additive, not cumulative, and applied in reverse order. So for example,
+# dup_2-dup_3-CODON will first duplicate CODON 3 times, then duplicate it
+# again 2 times, resulting in *6* CODON codons.
+
+def mod_duplicate(codon, layers, inputs, levels):
+    """ mod_rnnn: Duplicate the current front codon nnn times """
+
+    # We want to duplicate all layers at the same level as the last layer
+    # added (so we can duplicate merge layers). Reverse the layers so we
+    # add the last ones first, which will cause the order to be maintained.
+
+    level = levels[0]
+    codon_layers = [layer for i, layer in enumerate(layers) if levels[i] == level]
+    codon_inputs = [inputs for i, inputs in enumerate(inputs) if levels[i] == level]
+    codon_layers.reverse()
+    codon_inputs.reverse()
+
+    for i in range(int(codon.split('_')[1][1:])):
+        level -= 1
+        for j, _ in enumerate(codon_layers):
+            layer = deepcopy(codon_layers[j])
+            layer.name = layer.name + '_r{}'.format(i)
+            layers.insert(0, layer)
+            levels.insert(0, level)
+            inputs.insert(0, codon_inputs[j])
+
+    return layers, inputs, levels
+
+PRIMES = [1, 2, 3, 5, 7, 11, 13]
+
+MODIFIERS = {'mod_r' + str(n): mod_duplicate for n in PRIMES}
+
+MODIFIER_FUNCTIONS = [mod_duplicate]
+
 # The output layer is always a convolution layer that generates 3 channels
 
 OUTPUTS = {'out_k{}_{}'.format(k, a): Conv2D(3, (k, k), padding='same')
@@ -84,74 +122,115 @@ OUTPUTS = {'out_k{}_{}'.format(k, a): Conv2D(3, (k, k), padding='same')
 
 # For convenience, make a dictionary of all the possible codons. Python 3.5 black magic!
 
-ALL_CODONS = {**CONVOLUTIONS, **COMPOSITES, **OUTPUTS, **MERGERS}
+ALL_CODONS = {**CONVOLUTIONS, **COMPOSITES, **OUTPUTS, **MERGERS, **MODIFIERS}
 
 # Mutation selection list (of dicts. Used to select a random codon for mutation.
 
-MUTABLE_CODONS = [CONVOLUTIONS, COMPOSITES]
+MUTABLE_CODONS = [CONVOLUTIONS, COMPOSITES, MODIFIERS]
 
 
 def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
     """ Build and compile a keras model from an expressed sequence of codons.
-        Returns the model or None if the compile failed in some way
+        Returns (model, layer_count) tuple or None if the compile failed in some way
 
-        genome      list of codon names (if string, will be converted)
-        shape       shape of model input
-        learning_rate  initial learning rate
-        metrics     callbacks
+        genome          list of codon names (if string, will be converted)
+        shape           shape of model input
+        learning_rate   initial learning rate
+        metrics         callbacks
     """
 
     if not isinstance(genome, list):
         genome = genome.split('-')
 
-    # Get the wiring hookups for the sequence, and preface them with an
-    # input layer. This means genome[i-1] is the code for codon[i].
-
-    codons = [Input(shape=shape)] + [ALL_CODONS[gene] for gene in genome]
-
-    # Wire the Codons. As we generate each layer, we update the codons[] list
-    # with the constructed layer, so that subsequent codons can be connected
-    # to them. We don't have to create the first (input) codon. All Keras layer
-    # functions have to be deep-copied so that they are unique objects.
-
     if _DEBUG:
-        all_layers = [codons[0]]
+        print(genome)
 
     try:
 
-        # We don't wire up the first (input) codon, so because of the slice
-        # in enumerate(), i = codon number - 1. Keep this in mind when
-        # reading references to i inside this loop.
+        # layers are the actual model layers. inputs are how they have
+        # to be wired up (a relative reference, always negative). For
+        # the final layer of a composite codon, this will be a list.
 
-        for i, layer in enumerate(codons[1:]):
-            layer = deepcopy(layer)
-            if isinstance(layer, list):
-                # Composite multi-layer codon with a merge as the last element.
-                # Wire all the input layers to previous codon, then
-                # wire their outputs to the merge layer
-                for j, _ in enumerate(layer):
-                    layer[j] = deepcopy(layer[j])
-                    layer[j].name = genome[i] + '_{}_{}'.format(i, j)
-                    layer[j] = layer[j](codons[i] if j < len(layer) - 1 else layer[:-1])
-                # Update the layer to point to the output layer
-                codons[i + 1] = layer[-1]
-                if _DEBUG:
-                    all_layers.extend(layer)
+        layers = []
+        inputs = []
+        levels = []
+
+        level = 0
+
+        # Build the layers of the model in reverse, from output to input.
+        # Note that here we use reversed(list(enumerate())) so while we
+        # process the codons in reverse order, i still links them to the
+        # genome (i will count down, in other words)
+
+        for i, codon in reversed(list(enumerate(genome))):
+
+            # Keep track of layer levels so we can figure out what layers
+            # were generated by the same codon.
+
+            level += 1
+
+            # If the codon is a modifier, use it's function to modify the model
+            # as built so far. Do not modify an output!
+
+            if ALL_CODONS[codon] in MODIFIER_FUNCTIONS:
+                if genome[i + 1] not in OUTPUTS:
+                    layers, inputs, levels = ALL_CODONS[codon](codon, layers, inputs, levels)
+                    level = levels[0]
+                else:
+                    print('Cannot compile: Modifier codon trying to modify output layer.')
+                    return None, 0
             else:
-                # Simple 1-layer codon
-                layer.name = genome[i] + '_{}'.format(i)
-                codons[i + 1] = layer(codons[i])
-                if _DEBUG:
-                    all_layers.append(codons[i + 1])
+                # Make a deep copy of the layer to generate. If the result is
+                # a list, then it is a composite codon.
+
+                layer = deepcopy(ALL_CODONS[codon])
+                if isinstance(layer, list):
+                    # Composite multi-layer codon with a merge as the last element.
+                    # Wire all the input layers to previous codon, then
+                    # wire their outputs to the merge layer. Note that here we
+                    # use enumerate(reversed()), so that j will count up (and
+                    # will be 0 when we do the merge layer)
+
+                    for j, sublayer in enumerate(reversed(layer)):
+                        sublayer = deepcopy(sublayer)
+                        sublayer.name = genome[i] + '_{}_{}'.format(i, j)
+                        layers.insert(0, sublayer)
+                        levels.insert(0, level)
+                        if j:
+                            # Input layers are wired to the previous codon output
+                            inputs.insert(0, j - len(layer))
+                        else:
+                            # Merge layer is wired to all the input layers
+                            inputs.insert(0, [-1 * n for n in range(1, len(layer))])
+                else:
+                    # Simple 1-layer codon.
+                    layer.name = codon + '_{}'.format(i)
+                    layers.insert(0, layer)
+                    levels.insert(0, level)
+                    inputs.insert(0, -1)
+
+        # Add the input layer
+
+        layers.insert(0, Input(shape=shape))
+        inputs.insert(0, None)
+
+        # Wire the layers
+
+        for i, wires in enumerate(inputs):
+            if wires:
+                if isinstance(wires, list):
+                    layers[i] = layers[i]([layers[i + j] for j in wires])
+                else:
+                    layers[i] = layers[i](layers[i + wires])
 
         if _DEBUG:
-            for i, layer in enumerate(all_layers):
+            for i, layer in enumerate(layers):
                 print('Layer', i, layer.name, layer, layer._consumers)
             print('')
 
         # Create and compile the model
 
-        model = Model(codons[0], codons[-1])
+        model = Model(layers[0], layers[-1])
 
         adam = optimizers.Adam(lr=learning_rate, clipvalue=(1.0 / .001), epsilon=0.001)
 
@@ -162,7 +241,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         if _DEBUG:
             print('Compiled model: shape={}, learning rate={}, metrics={}'.format(
                 shape, learning_rate, metrics))
-        return model
+        return (model, len(layers))
 
     except KeyboardInterrupt:
 
@@ -171,6 +250,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
     except:
         printlog('Cannot compile: {}'.format(sys.exc_info()[1]))
         raise
+        return None, 0
 
 
 def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), best_fitness=0.0, statistics=None, viable=None):
@@ -229,9 +309,10 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
     def point_mutation(child, _):
         """ Make a point mutation in a codon. Codon will always be in the format
-            type_parameter_parameter_... _activation and parameter will always
+            type_parameter_parameter_... {_activation} and parameter will always
             be in format letter-code[digits]. The type is never changed, and we
-            do special handling for the activation function
+            do special handling for the activation function if it is present.
+            Currently modifier codons do not have activation functions.
         """
 
         def kernel_sequence(number):
@@ -245,7 +326,7 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
         basepair = random.randrange(len(codons))
 
         while True:
-            if basepair == len(codons) - 1:
+            if basepair == len(codons) - 1 and original_locus not in MODIFIERS:
                 # choose new activation function
                 new_codon = random.choice(ACTS)
             elif basepair == 0:
@@ -258,6 +339,13 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
                 # tweak a codon parameter
                 base = codons[basepair][0]
                 param = codons[basepair][1:]
+
+                # possible base codes are:
+                # k kernel size
+                # d depth of merger codon
+                # f number of filters
+                # r replication number of modifier codon
+
                 if base == 'k':
                     # If the codon has a depth parameter we need a sequence of kernel sizes, but we
                     # can deduce this by the length of the current k parameter, since currently
@@ -270,6 +358,8 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
                               kernel_sequence(param) for c in codons]
                 elif base == 'f':
                     param = random.choice(FILTERS)
+                elif base == 'r':
+                    param = random.choice(PRIMES)
                 else:
                     printlog('Unknown parameter base {} in {}'.format(
                         base, original_locus))
@@ -291,8 +381,8 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
         child_len = len(child)
 
-        if child_len >= max_len:
-            return None
+        # This may cause the layer count to become too high, but we can't check for that
+        # until later, when we do a test-build of the model.
 
         codon = random_codon()
 
@@ -356,6 +446,27 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
         return child
 
+    def regularize(child):
+        """ Rearrange modifier codons into consistent order """
+
+        shuffled = True
+
+        while shuffled:
+
+            shuffled = False
+
+            for i in range(len(child)-1):
+                if child[i] in MODIFIERS and child[i + 1] in MODIFIERS:
+                    # Currently depends on the modifier parameter codes being
+                    # in string sort order, but since we only have one of them
+                    # (*) this is not an issue.
+                    codes = [(p[0], int(p[1:])) for p in child[i:i + 2]]
+                    if codes[0] > codes[1]:
+                        child[i], child[i + 1] = child[i + 1], child[i]
+                        shuffled = True
+
+        return child
+
     # -------------------------------------------------
     # MAIN BODY OF evolve(). Make sure inputs are lists
     # -------------------------------------------------
@@ -378,7 +489,7 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
     # Repeat until we get a useful mutation
 
-    while child is None or child == parent or child == conjugate or viable != None and not viable(child):
+    while child is None or child == parent or child == conjugate:
 
         # Deep copy the parent into child, choose a mutation type, and
         # call the appropriate mutation function
@@ -392,6 +503,19 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
 
         todo = len([i for i in odds if choice < i])
         child = operations[-todo](child, conjugate)
+
+        # Check for invalid children
+
+        if viable != None and not viable(child):
+            child = None
+        else:
+            model, layer_count = build_model(child)
+            if model is None or layer_count > max_len:
+                child = None
+    # Rearrange any adjacent modifier codons into a consistent order so we don't end up training
+    # two effectively identical genomes.
+
+    child = regularize(child)
 
     if _DEBUG:
         print('   Resulting child', '-'.join(child))
@@ -458,14 +582,14 @@ def train(genome, config, epochs=1):
 
     if cell.model is None:
         print("Compiling model")
-        model = build_model(genome, shape=config.image_shape, learning_rate=config.learning_rate, metrics=[cell.evaluation_function])
+        model, _ = build_model(genome, shape=config.image_shape, learning_rate=config.learning_rate, metrics=[cell.evaluation_function])
 
         if model is None:
             return 0.0
 
         cell.model = model
     else:
-        print("Using loaded model - x fingers")
+        print("Using loaded model...")
 
     # Now we have a compiled model, execute it - or at least try to, there are still some
     # models that may bomb out.

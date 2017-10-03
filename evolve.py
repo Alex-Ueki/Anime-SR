@@ -53,7 +53,7 @@ set_docstring(__doc__)
 
 # Evolutionary constants (not saved in the JSON file)
 
-MAX_POPULATION = 20         # Maximum size of population
+MAX_POPULATION = 25         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
 EPOCHS = 10                 # Number of epochs to train
 
@@ -298,11 +298,15 @@ def evolve(config, genepool, image_info):
         population = [p if len(p) == 3 else p + [10] for p in population]
 
         # While there are some genomes with less than EPOCHS epochs of fitting,
-        # evolve them 1 epoch and remove the worst performer
+        # evolve them 1 epoch and remove the worst performer.
+
+        # All sequences that end in a checkpoint are protected by dummy try/except
+        # blocks, to ensure that a user-break doesn't cause an incorrect state to
+        # be checkpointed
 
         least_evolved = min([p[2] for p in population])
         while least_evolved < EPOCHS:
-            print('Processing Epoch', least_evolved)
+            print('Processing Epoch', least_evolved + 1)
             for i, organism in enumerate(population):
                 if organism[2] == least_evolved:
                     genome = organism[0]
@@ -314,19 +318,29 @@ def evolve(config, genepool, image_info):
                     config.epochs = 0
                     config.run_epochs = 1
 
-                    population[i] = [genome, genomics.train(genome, config, epochs=1), least_evolved + 1]
-                    checkpoint(poolpath, population, graveyard, statistics, config)
+                    try:
+                        population[i] = [genome, genomics.train(genome, config, epochs=1), least_evolved + 1]
+                    except:
+                        raise
+                    else:
+                        print('checkpoint reached')
+                        checkpoint(poolpath, population, graveyard, statistics, config)
 
-            population.sort(key=lambda o: o[1])
 
-            # Remove a genome -- grab stats on it
+            try:
+                population.sort(key=lambda o: o[1])
 
-            if len(population) >= EPOCHS - least_evolved:
-                print('Removing {} @ {}'.format(population[-1][0], population[-1][1]))
-                statistics = genomics.ligate(statistics, population[-1][0], population[-1][1])
-                del population[-1]
+                # Remove a genome -- grab stats on it
 
-            checkpoint(poolpath, population, graveyard, statistics, config)
+                if len(population) > MAX_POPULATION - least_evolved:
+                    print('Removing {} @ {}'.format(population[-1][0], population[-1][1]))
+                    graveyard.append(population[-1][0])
+                    statistics = genomics.ligate(statistics, population[-1][0], population[-1][1])
+                    del population[-1]
+            except:
+                raise
+            else:
+                checkpoint(poolpath, population, graveyard, statistics, config)
 
             # What organisms need handling in the next iteration?
 
@@ -335,34 +349,42 @@ def evolve(config, genepool, image_info):
         # Cull excess population
 
         if len(population) > MIN_POPULATION:
-            # Gather statistics on the genomes that are about to be culled
+            try:
+                # Gather statistics on the genomes that are about to be culled
 
-            for organism in population[MIN_POPULATION:]:
-                statistics = genomics.ligate(statistics, organism[0], organism[1])
+                for organism in population[MIN_POPULATION:]:
+                    statistics = genomics.ligate(statistics, organism[0], organism[1])
+                    graveyard.append(organism[0])
+                    
+                # Cull the population
 
-            # Cull the population
-
-            population = population[:MIN_POPULATION]
-            checkpoint(poolpath, population, graveyard, statistics, config)
+                population = population[:MIN_POPULATION]
+            except:
+                raise
+            else:
+                checkpoint(poolpath, population, graveyard, statistics, config)
 
         # Expand the population to the maximum size.
 
-        parents, children = [p[0] for p in population], []
+        try:
+            parents, children = [p[0] for p in population], []
 
-        printlog('Creating new children...')
+            printlog('Creating new children...')
 
-        while len(children) < (MAX_POPULATION - len(parents)):
-            parent, conjugate = [p for p in random.sample(parents, 2)]
-            child = '-'.join(genomics.mutate(parent, conjugate,
-                                             best_fitness=best_fitness, statistics=statistics))
-            if child not in parents and child not in children and child not in graveyard:
-                children.append([child, 0.0, 0])
-            else:
-                printlog('Duplicate genome rejected...')
+            while len(children) < (MAX_POPULATION - len(parents)):
+                parent, conjugate = [p for p in random.sample(parents, 2)]
+                child = '-'.join(genomics.mutate(parent, conjugate,
+                                                 best_fitness=best_fitness, statistics=statistics))
+                if child not in parents and child not in children and child not in graveyard:
+                    children.append([child, 0.0, 0])
+                else:
+                    printlog('Duplicate genome rejected...')
 
-        population.extend(children)
-
-        checkpoint(poolpath, population, graveyard, statistics, config)
+            population.extend(children)
+        except:
+            raise
+        else:
+            checkpoint(poolpath, population, graveyard, statistics, config)
 
 
 if __name__ == '__main__':
