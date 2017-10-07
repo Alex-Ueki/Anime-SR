@@ -95,17 +95,16 @@ def genepool_display(data, codon_filter=None, last_mod=None):
     def population_display(info, timestamp):
         """ Display the current evolver population """
 
-        info = [p if isinstance(p, list) else [p, 0.0, 0] for p in info]  # legacy format conversion
-        info = [[fitstr(p[0], 21), p[1], p[2]] for p in info]
+        info = [[fitstr(p[0], 21), p[1] if len(p) > 1 else 0.0, p[2] if len(p) > 2 else 0, p[3] if len(p) > 3 else False] for p in info]
 
         print('Current Genepool{}\n'.format(timestamp))
         info.sort(key=lambda x: x[1])
         max_width = max([12] + [len(p[0]) for p in info])
-        print('{} {:>6s} {:>9s}'.format('Genomes'.ljust(max_width + 4), 'Epochs', 'PSNR'))
-        print('{} {:>6s} {:>9s}'.format('-' * (max_width + 4), '-' * 6, '-' * 9))
+        print('{} {:>6s} {:>9s} {}'.format('Genomes'.ljust(max_width + 4), 'Epochs', 'PSNR', '+'))
+        print('{} {:>6s} {:>9s} {}'.format('-' * (max_width + 4), '-' * 6, '-' * 9, '-'))
         for model in info:
             if model[2] > 0:
-                print('    {} {:>6d} {:9.4f}'.format(endash(model[0], max_width), model[2], model[1]))
+                print('    {} {:>6d} {:9.4f} {}'.format(endash(model[0], max_width), model[2], model[1], '+' if model[3] else ''))
             else:
                 print('    {}'.format(endash(model[0], max_width)))
 

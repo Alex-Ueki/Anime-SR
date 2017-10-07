@@ -67,8 +67,10 @@ def setup(options):
     # Validation and error checking
 
     for path in options:
-        errors = oops(False, not os.path.exists(
-            options[path]), 'Path to {} is not valid ({})'.format(path, options[path]))
+        errors = oops(False,
+                      not os.path.exists(options[path]),
+                      'Path to {} is not valid ({})',
+                      (path, options[path]))
 
     terminate(errors, False)
 
@@ -98,8 +100,12 @@ def setup(options):
 
     image_info = frameops.image_files(os.path.join(config.paths['evaluation'], config.alpha), False)
 
-    errors = oops(False, len(image_info) == 0, 'Input folder does not contain any images')
-    errors = oops(errors, len(image_info) > 1, 'Images folder contains more than one type of image')
+    errors = oops(False,
+                  not image_info,
+                  'Input folder does not contain any images')
+    errors = oops(errors,
+                  len(image_info) > 1,
+                  'Images folder contains more than one type of image')
 
     terminate(errors, False)
 
@@ -109,9 +115,10 @@ def setup(options):
 
     image_ext = os.path.splitext(image_info[0])[1][1:].lower()
 
-    errors = oops(errors, image_ext != config.img_suffix.lower(),
-                  'Image files are of type [{}] but model was trained on [{}]'.format(
-                      image_ext, config.img_suffix.lower()))
+    errors = oops(errors,
+                  image_ext != config.img_suffix.lower(),
+                  'Image files are of type {} but model was trained on {}',
+                  (image_ext, config.img_suffix.lower()))
 
     terminate(errors, False)
 

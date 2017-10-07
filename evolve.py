@@ -1,5 +1,5 @@
-# pylint: disable=C0301
-# Line too long
+# pylint: disable=C0301,E1101
+# Line too long, class variable warning in list enumerations
 """
 Usage: evolve.py [option(s)] ...
 
@@ -47,7 +47,7 @@ import numpy as np
 
 from Modules.misc import oops, terminate, set_docstring, printlog, parse_options
 from Modules.modelio import ModelIO
-
+from Modules.genomics import Organism, train, ligate, mutate
 
 set_docstring(__doc__)
 
@@ -55,7 +55,8 @@ set_docstring(__doc__)
 
 MAX_POPULATION = 25         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
-EPOCHS = 10                 # Number of epochs to train
+EPOCHS = 10                 # Number of epochs to train (usual, minimum)
+MAX_EPOCHS = 15             # Max number of epochs to train (if extended due to continuous improvement)
 
 
 # Checkpoint state to genepool.json file
@@ -65,7 +66,7 @@ def checkpoint(json_path, population, graveyard, statistics, config):
     """ Checkpoint the current evolutionary state to json file """
 
     state = {
-        'population': population,
+        'population': [p.list() for p in population],
         'graveyard': graveyard,
         'statistics': statistics,
         'config': config.config
@@ -88,7 +89,7 @@ def setup(options):
 
     if os.path.exists(poolpath):
         if os.path.isfile(poolpath):
-            print('Loading existing genepool')
+            printlog('Loading existing genepool')
             try:
                 with open(poolpath, 'r') as jsonfile:
                     genepool = json.load(jsonfile)
@@ -100,7 +101,7 @@ def setup(options):
                     del genepool['io']
 
             except json.decoder.JSONDecodeError:
-                print(
+                printlog(
                     'Could not parse json. Did you edit "population" and forget to delete the trailing comma?')
                 errors = True
         else:
@@ -185,7 +186,7 @@ def setup(options):
         size1, size2 = np.shape(test_images[fcnt][0]), np.shape(
             test_images[fcnt][1])
         if size1 != size2:
-            print('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(
+            printlog('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(
                 image_paths[fcnt].title(), size1, size2))
 
     terminate(errors, False)
@@ -233,22 +234,26 @@ def evolve(config, genepool, image_info):
     if 'population' in genepool:
         population = genepool['population']
     else:
-        print('Initializing population...')
+        printlog('Initializing population...')
         population = [
-            ["conv_f64_k9_elu-conv_f32_k1_elu-out_k5_elu", 0.0, 0],
-            ["conv_f64_k9_elu-conv_f32_k1_elu-avg_f32_k135_d3_elu-out_k5_elu", 0.0, 0]
+            ["conv_f64_k9_elu-conv_f32_k1_elu-out_k5_elu", 0.0, 0, True],
+            ["conv_f64_k9_elu-conv_f32_k1_elu-avg_f32_k135_d3_elu-out_k5_elu", 0.0, 0, True]
         ]
+
+    # Update population state structure from older, simpler formats
+
+    population = [Organism(p) for p in population]
 
     if 'graveyard' in genepool:
         graveyard = genepool['graveyard']
     else:
-        print('Initializing graveyard...')
+        printlog('Initializing graveyard...')
         graveyard = []
 
     if 'statistics' in genepool:
         statistics = genepool['statistics']
     else:
-        print('Initializing statistics...')
+        printlog('Initializing statistics...')
         statistics = {}
 
     poolpath = config.paths['genepool']
@@ -278,13 +283,9 @@ def evolve(config, genepool, image_info):
     print('              Skip : {}'.format(config.skip == 1))
     print('          Residual : {}'.format(config.residual == 1))
     print('           Quality : {}'.format(config.quality))
-    print('')
+
 
     checkpoint(poolpath, population, graveyard, statistics, config)
-
-    # Evolve the genepool
-
-    import Modules.genomics as genomics
 
     # Repeat until program terminated.
 
@@ -292,70 +293,79 @@ def evolve(config, genepool, image_info):
 
     while True:
 
-        # Legacy fix to clean up population
-
-        population = [p if isinstance(p, list) else [p, 0.0, 0] for p in population]
-        population = [p if len(p) == 3 else p + [10] for p in population]
-
         # While there are some genomes with less than EPOCHS epochs of fitting,
-        # evolve them 1 epoch and remove the worst performer.
+        # evolve them 1 epoch and remove the worst performer if it has not shown
+        # continuous improvement (a sign of a slow evolver). In addition, continue
+        # to train models past EPOCHS epochs for as long as they show improvement
+        # in each epoch.
 
         # All sequences that end in a checkpoint are protected by dummy try/except
         # blocks, to ensure that a user-break doesn't cause an incorrect state to
         # be checkpointed
 
-        least_evolved = min([p[2] for p in population])
-        while least_evolved < EPOCHS:
-            print('Processing Epoch', least_evolved + 1)
-            for i, organism in enumerate(population):
-                if organism[2] == least_evolved:
-                    genome = organism[0]
-                    config.paths['model'] = os.path.join(config.paths['genebank'], genome + '.h5')
-                    config.paths['state'] = os.path.join(config.paths['genebank'], genome + '.json')
-                    config.model_type = genome
-                    config.config['model_type'] = config.model_type
-                    config.config['paths'] = config.paths
-                    config.epochs = 0
-                    config.run_epochs = 1
+        while population:
 
-                    try:
-                        population[i] = [genome, genomics.train(genome, config, epochs=1), least_evolved + 1]
-                    except:
-                        raise
-                    else:
-                        print('checkpoint reached')
-                        checkpoint(poolpath, population, graveyard, statistics, config)
+            # What organisms need evolution?
 
+            todo = [(i, p) for i, p in enumerate(population) if p.epoch < EPOCHS or (p.epoch < MAX_EPOCHS and p.improved)]
+            if not todo:
+                break
+
+            # Do the least-trained ones first (in case we got interrupted/restarted)
+
+            least_evolved = min([p.epoch for i, p in todo])
+            todo = [(i, p) for i, p in todo if p.epoch == least_evolved]
+
+            # Give them an epoch of training
+
+            printlog('Processing round of {} organisms...'.format(len(todo)))
+            for i, organism in todo:
+                config.paths['model'] = os.path.join(config.paths['genebank'], organism.genome + '.h5')
+                config.paths['state'] = os.path.join(config.paths['genebank'], organism.genome + '.json')
+                config.model_type = organism.genome
+                config.config['model_type'] = config.model_type
+                config.config['paths'] = config.paths
+                config.epochs = 0
+                config.run_epochs = 1
+
+                try:
+                    population[i] = train(organism, config, epochs=1)
+                except:
+                    raise
+                else:
+                    checkpoint(poolpath, population, graveyard, statistics, config)
+
+            # Possibly delete the worst-performer
 
             try:
-                population.sort(key=lambda o: o[1])
 
-                # Remove a genome -- grab stats on it
+                # Sort lowest-fitness to front of list, but exempt continuous improvers
 
-                if len(population) > MAX_POPULATION - least_evolved:
-                    print('Removing {} @ {}'.format(population[-1][0], population[-1][1]))
-                    graveyard.append(population[-1][0])
-                    statistics = genomics.ligate(statistics, population[-1][0], population[-1][1])
-                    del population[-1]
+                population.sort(key=lambda o: 9999.9 if o.improved else -o.fitness)
+
+                # Remove the worst organism unless it has shown continuous improvement.
+
+                if not population[0].improved:
+                    printlog('Removing {} = {} @ {}'.format(population[0].genome, population[0].fitness, population[0].epoch))
+                    graveyard.append(population[0].genome)
+                    statistics = ligate(statistics, population[0].genome, population[0].fitness)
+                    del population[0]
+
             except:
                 raise
             else:
                 checkpoint(poolpath, population, graveyard, statistics, config)
 
-            # What organisms need handling in the next iteration?
-
-            least_evolved = min([p[2] for p in population])
-
-        # Cull excess population
+        # Now that training rounds are all done, keep only the best for the next generation
 
         if len(population) > MIN_POPULATION:
             try:
                 # Gather statistics on the genomes that are about to be culled
 
                 for organism in population[MIN_POPULATION:]:
-                    statistics = genomics.ligate(statistics, organism[0], organism[1])
-                    graveyard.append(organism[0])
-                    
+                    statistics = ligate(statistics, organism.genome, organism.fitness)
+                    graveyard.append(organism.genome)
+
                 # Cull the population
 
                 population = population[:MIN_POPULATION]
@@ -367,16 +377,18 @@ def evolve(config, genepool, image_info):
         # Expand the population to the maximum size.
 
         try:
-            parents, children = [p[0] for p in population], []
+            parents, children = [p.genome for p in population], []
 
             printlog('Creating new children...')
 
             while len(children) < (MAX_POPULATION - len(parents)):
                 parent, conjugate = [p for p in random.sample(parents, 2)]
-                child = '-'.join(genomics.mutate(parent, conjugate,
-                                                 best_fitness=best_fitness, statistics=statistics))
+                child = '-'.join(mutate(parent,
+                                        conjugate,
+                                        best_fitness=best_fitness,
+                                        statistics=statistics))
                 if child not in parents and child not in children and child not in graveyard:
-                    children.append([child, 0.0, 0])
+                    children.append(Organism(child))
                 else:
                     printlog('Duplicate genome rejected...')
 

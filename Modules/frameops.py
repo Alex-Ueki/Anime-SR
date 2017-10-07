@@ -15,6 +15,8 @@ import scipy.misc as misc
 from skimage import transform as tf
 
 import Modules.dpx as dpx
+from Modules.misc import printlog
+
 #from Modules.modelio import ModelIO
 
 IMAGETYPES = ['.jpg', '.png', '.dpx']
@@ -231,7 +233,7 @@ def tesselate_pair(alpha_paths, beta_paths, config):
         beta_tiles = extract_tiles(beta_path, config, can_disable=True)
 
         if len(alpha_tiles) != len(beta_tiles):
-            print('Tesselation error: file pairs {} and {} have different numbers of tiles {} and {}'.format(
+            printlog('Tesselation error: file pairs {} and {} have different tile counts {} and {}'.format(
                 alpha_path, beta_path, len(alpha_tiles), len(beta_tiles)))
         elif alpha_tiles:
             # If we are doing quality selection, then we need to fix the cache the first time
@@ -325,8 +327,8 @@ def extract_tiles(file_path, config, can_disable=False):
 
     if shape[0] > config.image_height or shape[1] > config.image_width:
         if RESIZE_WARNING:
-            print('Warning: Read image larger than expected {} - downscaling'.format(shape))
-            print('(This warning will not repeat)')
+            printlog('Warning: Read image larger than expected {} - downscaling'.format(shape))
+            printlog('(This warning will not repeat)')
             RESIZE_WARNING = False
         img = tf.resize(img,
                         (config.image_height, config.image_width, 3),
@@ -349,9 +351,8 @@ def extract_tiles(file_path, config, can_disable=False):
                         mode='constant')
 
         if RESIZE_WARNING:
-            print(
-                'Warning - Read image smaller than expected {} - upscaled to {}'.format(shape, np.shape(img)))
-            print('(This warning will not repeat)')
+            printlog('Warning - Read image smaller than expected {} - upscaled to {}'.format(shape, np.shape(img)))
+            printlog('(This warning will not repeat)')
             RESIZE_WARNING = False
 
     elif config.trim_top + config.trim_bottom + config.trim_left + config.trim_right > 0:
@@ -368,8 +369,7 @@ def extract_tiles(file_path, config, can_disable=False):
     # Generate image tile offsets
 
     if len(shape) != 3 or (shape[0] > config.tiles_down * config.base_tile_height) or (shape[1] > config.base_tile_width * config.tiles_across):
-        print('Tesselation Error: file {} has incorrect shape {}'.format(
-            file_path, str(shape)))
+        printlog('Tesselation Error: file {} has incorrect shape {}'.format(file_path, str(shape)))
         return []
 
     # Pad the image - if border_mode is 'constant', the pixels added have

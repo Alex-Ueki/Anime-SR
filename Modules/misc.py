@@ -57,19 +57,21 @@ def setup_default(paths):
             os.makedirs(path)
 
 
-def oops(error_state, is_error, msg, error_value=0, end_run=False):
+def oops(error_state, is_error, msg, error_value=None, end_run=False):
     """ If is_error is true, display message and optionally end the run.
         return updated error_state. error_value may be a tuple of
         arguments for format().
     """
 
     if is_error:
-        # Have to handle the single/multiple argument case.
-        # if we pass format a simple string using *value it
-        # gets treated as a list of individual characters.
 
-        print('Error: ' + (msg.format(*error_value) if isinstance(error_value, (list, tuple)) else
-                           msg.format(error_value)))
+        if error_value is not None:
+            if isinstance(error_value, (list, tuple)):
+                msg = msg.format(*error_value)
+            else:
+                msg = msg.format(error_value)
+
+        print('Error: ' + msg)
 
         if end_run:
             terminate(True)

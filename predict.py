@@ -71,8 +71,10 @@ def setup(options):
     # Validation and error checking
 
     for path in options:
-        errors = oops(False, not os.path.exists(
-            options[path]), 'Path to {} is not valid ({})'.format(path, options[path]))
+        errors = oops(False,
+                      not os.path.exists(options[path]),
+                      'Path to {} is not valid ({})',
+                      (path, options[path]))
 
     terminate(errors, False)
 
@@ -102,8 +104,12 @@ def setup(options):
 
     image_info = frameops.image_files(os.path.join(config.paths['predict'], config.alpha), False)
 
-    errors = oops(False, len(image_info) == 0, 'Input folder does not contain any images')
-    errors = oops(errors, len(image_info) > 1, 'Images folder contains more than one type of image')
+    errors = oops(False,
+                  not image_info,
+                  'Input folder does not contain any images')
+    errors = oops(errors,
+                  len(image_info) > 1,
+                  'Images folder contains more than one type of image')
 
     terminate(errors, False)
 
@@ -113,8 +119,10 @@ def setup(options):
 
     image_ext = os.path.splitext(image_info[0])[1][1:].lower()
 
-    errors = oops(errors, image_ext != config.img_suffix.lower(),
-                  'Image files are of type [{}] but model was trained on [{}]'.format(image_ext, config.img_suffix.lower()))
+    errors = oops(errors,
+                  image_ext != config.img_suffix.lower(),
+                  'Image files are of type {} but model was trained on {}',
+                  (image_ext, config.img_suffix.lower()))
 
     terminate(errors, False)
 
@@ -160,11 +168,11 @@ def predict(config, image_info):
         if DEBUG:
             fname = os.path.basename(img_path)
             for i in range(0, min(30, tiles_per_img)):
-                frameops.imsave(os.path.join(
-                    'Temp', 'PNG', fname[:-4] + '-' + str(i) + '-IN.png'), tile_batch[i])
+                fpath = os.path.join('Temp', 'PNG', fname[:-4] + '-' + str(i) + '-IN.png')
+                frameops.imsave(fpath, tile_batch[i])
             input_image = frameops.grout(tile_batch, config)
-            frameops.imsave(os.path.join('Temp', 'PNG', os.path.basename(
-                img_path)[:-4] + '-IN.png'), input_image)
+            fpath = os.path.join('Temp', 'PNG', os.path.basename(img_path)[:-4] + '-IN.png')
+            frameops.imsave(fpath, input_image)
 
         # Predict the new tiles
 
@@ -185,19 +193,19 @@ def predict(config, image_info):
 
         # Save the image
 
-        frameops.imsave(os.path.join(
-            config.paths['predict'], config.beta, os.path.basename(img_path)), predicted_image)
+        fpath = os.path.join(config.paths['predict'], config.beta, os.path.basename(img_path))
+        frameops.imsave(fpath, predicted_image)
 
         # Debug code to confirm what we are doing
 
         if DEBUG:
             fname = os.path.basename(img_path)
             for i in range(0, min(30, tiles_per_img)):
-                frameops.imsave(os.path.join(
-                    'Temp', 'PNG', fname[0:-4] + '-' + str(i) + '-OUT.png'), predicted_tiles[i])
+                fpath = os.path.join('Temp', 'PNG', fname[0:-4] + '-' + str(i) + '-OUT.png')
+                frameops.imsave(fpath, predicted_tiles[i])
 
-            frameops.imsave(os.path.join('Temp', 'PNG', os.path.basename(
-                img_path)[:-4] + '-OUT.png'), predicted_image)
+            fpath = os.path.join('Temp', 'PNG', os.path.basename(img_path)[:-4] + '-OUT.png')
+            frameops.imsave(fpath, predicted_image)
 
     print('')
     print('Predictions completed...')

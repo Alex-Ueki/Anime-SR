@@ -7,7 +7,7 @@ Usage: train.py [option(s)] ...
 
 Options are:
 
-    type=model          model type, default is BasicSR.
+    type=model          model type, default is BasicSR. Model type can also be a genome (see below)
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
@@ -40,6 +40,9 @@ Options are:
     The epochs value is the maximum number of epochs that will be trained **over multiple sessions**. So if you have
     previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,
     you could specify epochs+=25 to limit the current training run to 25 epochs.
+
+    If the type is not one of the standard defined models, then it is checked to see if it is a valid genome.
+    If so, the model and state files (if not set) are searched for in {Data}/models and {Data}/models/genes
 """
 
 import os
@@ -48,6 +51,10 @@ import numpy as np
 
 from Modules.misc import oops, terminate, set_docstring, parse_options
 from Modules.modelio import ModelIO
+import Modules.genomics as genomics
+import Modules.models as models
+import Modules.frameops as frameops
+
 
 set_docstring(__doc__)
 
@@ -59,10 +66,36 @@ def setup(options):
 
     errors = False
     config = ModelIO(options)
+    dpath = config.paths['data']
+
+    # Fix up model and state paths if genetic model and not explicitly specified in options
+
+    if config.model_type not in models.MODELS:
+        errors = oops(errors,
+                      genomics.build_model(config.model_type)[0] is None,
+                      '{} is an invalid model',
+                      config.model_type)
+        terminate(errors, False)
+
+        if 'model_path' not in options:
+            mpath = os.path.join(dpath, 'models', config.model_type + '.h5')
+            if os.path.exists(mpath):
+                config.paths['model'] = mpath
+            else:
+                mpath = os.path.join(dpath, 'models', 'genes', config.model_type + '.h5')
+                if os.path.exists(mpath):
+                    config.paths['model'] = mpath
+
+        if 'state_path' not in options:
+            spath = os.path.join(dpath, 'models', config.model_type + '.json')
+            if os.path.exists(spath):
+                config.paths['state'] = spath
+            else:
+                spath = os.path.join(dpath, 'models', 'genes', config.model_type + '.json')
+                if os.path.exists(spath):
+                    config.paths['state'] = mpath
 
     # Validation and error checking
-
-    import Modules.frameops as frameops
 
     image_paths = ['training', 'validation']
     sub_folders = ['Alpha', 'Beta']
@@ -74,31 +107,41 @@ def setup(options):
 
     for fcnt in [0, 1]:
         for scnt in [0, 1]:
-            errors = oops(
-                errors, image_info[fcnt][scnt] is None, '{} images folder does not exist', image_paths[fcnt] + '/' + sub_folders[scnt])
+            errors = oops(errors,
+                          image_info[fcnt][scnt] is None,
+                          '{} images folder does not exist',
+                          image_paths[fcnt] + '/' + sub_folders[scnt])
 
     terminate(errors, False)
 
     for fcnt in [0, 1]:
         for scnt in [0, 1]:
-            errors = oops(errors, len(
-                image_info[fcnt][scnt]) == 0, '{} images folder does not contain any images', image_paths[fcnt] + '/' + sub_folders[scnt])
-            errors = oops(errors, len(
-                image_info[fcnt][scnt]) > 1, '{} images folder contains more than one type of image', image_paths[fcnt] + '/' + sub_folders[scnt])
+            errors = oops(errors,
+                          not image_info[fcnt][scnt],
+                          '{} images folder does not contain any images',
+                          image_paths[fcnt] + '/' + sub_folders[scnt])
+            errors = oops(errors,
+                          len(image_info[fcnt][scnt]) > 1,
+                          '{} images folder contains more than one type of image',
+                          image_paths[fcnt] + '/' + sub_folders[scnt])
 
     terminate(errors, False)
 
     for fcnt in [0, 1]:
-        errors = oops(errors, len(image_info[fcnt][0][0]) != len(
-            image_info[fcnt][1][0]), '{} images folders have different numbers of images', image_paths[fcnt])
+        errors = oops(errors,
+                      len(image_info[fcnt][0][0]) != len(image_info[fcnt][1][0]),
+                      '{} images folders have different numbers of images',
+                      image_paths[fcnt])
 
     terminate(errors, False)
 
     for fcnt in [0, 1]:
         for fpath1, fpath2 in zip(image_info[fcnt][0][0], image_info[fcnt][1][0]):
             fpath1, fpath2 = os.path.basename(fpath1), os.path.basename(fpath2)
-            errors = oops(
-                errors, fpath1 != fpath2, '{} images folders do not have identical image filenames ({} vs {})', (image_paths[fcnt], fpath1, fpath2))
+            errors = oops(errors,
+                          fpath1 != fpath2,
+                          '{} images folders do not have identical image filenames ({} vs {})',
+                          (image_paths[fcnt], fpath1, fpath2))
             terminate(errors, False)
 
     # Check sizes, even tiling here.
@@ -108,14 +151,12 @@ def setup(options):
     test_images = [[frameops.imread(image_info[f][g][0][0])
                     for g in [0, 1]] for f in [0, 1]]
 
-    # What kind of file is it? Do I win an award for the most brackets?
-
-    #img_suffix = os.path.splitext(image_info[0][0][0][0])[1][1:]
-
     # Check that the Beta tiles are the same size.
 
     size1, size2 = np.shape(test_images[0][1]), np.shape(test_images[1][1])
-    errors = oops(errors, size1 != size2, 'Beta training and evaluation images do not have identical size ({} vs {})',
+    errors = oops(errors,
+                  size1 != size2,
+                  'Beta training and evaluation images do not have identical size ({} vs {})',
                   (size1, size2))
 
     # Warn if we do have some differences between Alpha and Beta sizes
@@ -123,15 +164,17 @@ def setup(options):
     for fcnt in [0, 1]:
         size1, size2 = np.shape(test_images[fcnt][0]), np.shape(test_images[fcnt][1])
         if size1 != size2:
-            print('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(
-                image_paths[fcnt].title(), size1, size2))
+            print('Warning: {} Alpha and Beta images are not the same size.'.format(image_paths[fcnt].title))
 
     terminate(errors, False)
 
     # Only check the size of the Beta output for proper configuration, since Alpha tiles will
     # be scaled as needed.
 
-    errors = oops(errors, len(size2) != 3 or size2[2] != 3, 'Images have improper shape ({0})', str(size2))
+    errors = oops(errors,
+                  len(size2) != 3 or size2[2] != 3,
+                  'Images have improper shape ({})',
+                  str(size2))
 
     terminate(errors, False)
 
@@ -139,17 +182,25 @@ def setup(options):
     trimmed_width = image_width - (config.trim_left + config.trim_right)
     trimmed_height = image_height - (config.trim_top + config.trim_bottom)
 
-    errors = oops(errors, trimmed_width <= 0,
-                  'Trimmed images have invalid width ({} - ({} + {}) <= 0)', (size1[0], config.trim_left, config.trim_right))
-    errors = oops(errors, trimmed_width <= 0,
-                  'Trimmed images have invalid height ({} - ({} + {}) <= 0)', (size1[1], config.trim_top, config.trim_bottom))
+    errors = oops(errors,
+                  trimmed_width <= 0,
+                  'Trimmed images have invalid width ({} - ({} + {}) <= 0)',
+                  (size1[0], config.trim_left, config.trim_right))
+    errors = oops(errors,
+                  trimmed_height <= 0,
+                  'Trimmed images have invalid height ({} - ({} + {}) <= 0)',
+                  (size1[1], config.trim_top, config.trim_bottom))
 
     terminate(errors, False)
 
-    errors = oops(errors, (trimmed_width % config.base_tile_width) != 0,
-                  'Trimmed images do not evenly tile horizontally ({} % {} != 0)', (trimmed_width, config.tile_width))
-    errors = oops(errors, (trimmed_height % config.base_tile_height) != 0,
-                  'Trimmed images do not evenly tile vertically ({} % {} != 0)', (trimmed_height, config.tile_height))
+    errors = oops(errors,
+                  (trimmed_width % config.base_tile_width) != 0,
+                  'Trimmed images do not evenly tile horizontally ({} % {} != 0)',
+                  (trimmed_width, config.tile_width))
+    errors = oops(errors,
+                  (trimmed_height % config.base_tile_height) != 0,
+                  'Trimmed images do not evenly tile vertically ({} % {} != 0)',
+                  (trimmed_height, config.tile_height))
 
     terminate(errors, False)
 
@@ -167,7 +218,8 @@ def setup(options):
         for scnt, spath in enumerate(sub_folders):
             config.paths[fpath + '.' + spath] = image_info[fcnt][scnt]
 
-    # Only at this point can we set default model and state filenames because that depends on image type
+    # Only at this point can we set default model and state filenames because that depends on image type.
+    # If we are training a genetic model, then these will already have been set.
 
     if 'model' not in config.paths:
         name = '{}{}-{}-{}-{}-{}.h5'.format(
@@ -183,10 +235,16 @@ def setup(options):
         config.paths['state'] = config.paths['model'][:-3] + '.json'
 
     tpath = os.path.dirname(config.paths['state'])
-    errors = oops(errors, not os.path.exists(tpath), 'Model state path ({}) does not exist'.format(tpath))
+    errors = oops(errors,
+                  not os.path.exists(tpath),
+                  'Model state path ({}) does not exist',
+                  tpath)
 
     tpath = os.path.dirname(config.paths['model'])
-    errors = oops(errors, not os.path.exists(tpath), 'Model path ({}) does not exist'.format(tpath))
+    errors = oops(errors,
+                  not os.path.exists(tpath),
+                  'Model path ({}) does not exist',
+                  tpath)
 
     # If we do have an existing json state, load it and override
 
@@ -207,12 +265,13 @@ def setup(options):
                         del state['io']
 
             except json.decoder.JSONDecodeError:
-                print(
-                    'Could not parse json. Did you edit state and forget to delete a trailing comma?')
+                print('Could not parse json. Did you forget to delete a trailing comma?')
                 errors = True
         else:
-            errors = oops(
-                errors, True, 'Model state path is not a reference to a file ({})', statepath)
+            errors = oops(errors,
+                          True,
+                          'Model state path is not a reference to a file ({})',
+                          statepath)
 
         for setting in state['config']:
             if setting not in config.config or config.config[setting] != state['config'][setting]:
@@ -260,7 +319,7 @@ def setup(options):
 def train(config, options):
     """ Train the model """
 
-    import Modules.models as models
+
 
     if config.model_type.lower() == 'all':
         model_list = models.MODELS
@@ -271,20 +330,27 @@ def train(config, options):
 
     for model in model_list:
 
-        # Put proper model name in the model and state paths
+        config.model_type = model
 
-        for entry in ['model', 'state']:
-            path = config.paths[entry]
-            folder_name, file_name = os.path.split(path)
-            file_name_parts = file_name.split('-')
-            file_name_parts[0] = model
-            file_name = '-'.join(file_name_parts)
-            path = os.path.join(folder_name, file_name)
-            config.paths[entry] = path
+        # Put proper model name in the model and state paths (if not a genetic
+        # model), then create the model
+
+        if model in models.MODELS:
+            for entry in ['model', 'state']:
+                path = config.paths[entry]
+                folder_name, file_name = os.path.split(path)
+                file_name_parts = file_name.split('-')
+                file_name_parts[0] = model
+                file_name = '-'.join(file_name_parts)
+                path = os.path.join(folder_name, file_name)
+                config.paths[entry] = path
+
+            cur_model = models.MODELS[model](config)
+        else:
+            cur_model = models.BaseSRCNNModel(model, config)
+            cur_model.model = genomics.build_model(model)
 
         # Create and fit model (best model state will be automatically saved)
-
-        cur_model = models.MODELS[model](config)
 
         cur_config = cur_model.get_config()
         print('Model configuration:')
@@ -337,7 +403,7 @@ if __name__ == '__main__':
         'data': ('data_path', str, lambda x: False, ''),
         'training': ('training_path', str, lambda x: False, ''),
         'validation': ('validation_path', str, lambda x: False, ''),
-        'model': ('state_path', str, lambda x: False, ''),
+        'model': ('model_path', str, lambda x: False, ''),
         'state': ('state_path', str, lambda x: False, ''),
     }
 

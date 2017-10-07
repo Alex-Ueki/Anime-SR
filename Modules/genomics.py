@@ -36,42 +36,60 @@ _DEBUG = True
 #
 # Codons can have a *{number} suffix that means "repeat the layer {number) times"
 
-FILTERS = [32, 64, 128, 256]
-KERNELS = [1, 3, 5, 7, 9]
-ACTS = ['linear', 'elu', 'tanh', 'softsign']
-DEPTHS = [2, 3, 4]
+# Define the complete range of our variable parameters
 
-CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): Conv2D(f, (k, k), activation=a, padding='same')
-                for a in ACTS for k in KERNELS for f in FILTERS}
+ALL_FILTERS = [32, 64, 128, 256]
+ALL_KERNELS = [1, 3, 5, 7, 9]
+ALL_ACTS = ['linear', 'elu', 'tanh', 'softsign', 'relu']
+ALL_DEPTHS = [2, 3, 4]
 
 # Merge codons combine multiple layers. They are internal codons that are the
 # final layer of composite codons
 
-MERGERS = {
+ALL_MERGERS = {
     'add': Add(),
     'avg': Average(),
     'mult': Multiply(),
     'max': Maximum()
 }
 
-# Autogenerate composite codons. We have some restrictions; for example, the filter
-# size of all the convolutions must be the same.
+# The subset of the complete range that we will use in mutation. The reason for
+# the difference is that it lets us evolve using older models with a different
+# subset, and change the parameter space we are exploring as needed.
+#
+# Currently we are only using elu activation layers, the add and max merge types,
+# and a restricted number of filter and kernel sizes. Once we find a good model
+# topology, we can explore variants of that topology.
 
+FILTERS = [32, 64]
+KERNELS = [1, 5, 9]
+ACTS = ['elu']
+DEPTHS = [2, 3]
+
+MERGERS = {
+    'add': Add(),
+    'max': Maximum()
+}
+
+# Generate all the possible codons
+
+CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): Conv2D(f, (k, k), activation=a, padding='same')
+                for a in ALL_ACTS for k in ALL_KERNELS for f in ALL_FILTERS}
 
 def _make_composites():
     """ Make composite codons """
 
     codons = {}
 
-    for mrg in MERGERS:
-        for flt in FILTERS:
-            for act in ACTS:
-                for dep in DEPTHS:
-                    for knl in itertools.combinations(KERNELS, dep):
+    for mrg in ALL_MERGERS:
+        for flt in ALL_FILTERS:
+            for act in ALL_ACTS:
+                for dep in ALL_DEPTHS:
+                    for knl in itertools.combinations(ALL_KERNELS, dep):
                         cname = '{}_f{}_k{}_d{}_{}'.format(
                             mrg, flt, ''.join([str(k) for k in knl]), dep, act)
                         flist = [CONVOLUTIONS['conv_f{}_k{}_{}'.format(
-                            flt, k, act)] for k in knl] + [MERGERS[mrg]]
+                            flt, k, act)] for k in knl] + [ALL_MERGERS[mrg]]
                         codons[cname] = flist
 
     return codons
@@ -84,6 +102,7 @@ COMPOSITES = _make_composites()
 # additive, not cumulative, and applied in reverse order. So for example,
 # dup_2-dup_3-CODON will first duplicate CODON 3 times, then duplicate it
 # again 2 times, resulting in *6* CODON codons.
+
 
 def mod_duplicate(codon, layers, inputs, levels):
     """ mod_rnnn: Duplicate the current front codon nnn times """
@@ -109,6 +128,7 @@ def mod_duplicate(codon, layers, inputs, levels):
 
     return layers, inputs, levels
 
+
 PRIMES = [1, 2, 3, 5, 7, 11, 13]
 
 MODIFIERS = {'mod_r' + str(n): mod_duplicate for n in PRIMES}
@@ -118,7 +138,7 @@ MODIFIER_FUNCTIONS = [mod_duplicate]
 # The output layer is always a convolution layer that generates 3 channels
 
 OUTPUTS = {'out_k{}_{}'.format(k, a): Conv2D(3, (k, k), padding='same')
-           for k in KERNELS for a in ACTS}
+           for k in ALL_KERNELS for a in ALL_ACTS}
 
 # For convenience, make a dictionary of all the possible codons. Python 3.5 black magic!
 
@@ -143,7 +163,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         genome = genome.split('-')
 
     if _DEBUG:
-        print(genome)
+        printlog(genome)
 
     try:
 
@@ -177,7 +197,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
                     layers, inputs, levels = ALL_CODONS[codon](codon, layers, inputs, levels)
                     level = levels[0]
                 else:
-                    print('Cannot compile: Modifier codon trying to modify output layer.')
+                    printlog('Cannot compile: Modifier codon trying to modify output layer.')
                     return None, 0
             else:
                 # Make a deep copy of the layer to generate. If the result is
@@ -192,16 +212,12 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
                     # will be 0 when we do the merge layer)
 
                     for j, sublayer in enumerate(reversed(layer)):
-                        sublayer = deepcopy(sublayer)
+                        #sublayer = deepcopy(sublayer)
                         sublayer.name = genome[i] + '_{}_{}'.format(i, j)
                         layers.insert(0, sublayer)
                         levels.insert(0, level)
-                        if j:
-                            # Input layers are wired to the previous codon output
-                            inputs.insert(0, j - len(layer))
-                        else:
-                            # Merge layer is wired to all the input layers
-                            inputs.insert(0, [-1 * n for n in range(1, len(layer))])
+                        # Input layers are wired to the previous codon output
+                        inputs.insert(0, j - len(layer) if j else [-1 * n for n in range(1, len(layer))])
                 else:
                     # Simple 1-layer codon.
                     layer.name = codon + '_{}'.format(i)
@@ -226,7 +242,6 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         if _DEBUG:
             for i, layer in enumerate(layers):
                 print('Layer', i, layer.name, layer, layer._consumers)
-            print('')
 
         # Create and compile the model
 
@@ -234,12 +249,10 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
 
         adam = optimizers.Adam(lr=learning_rate, clipvalue=(1.0 / .001), epsilon=0.001)
 
-        metrics = {} if metrics is None else metrics
-
-        model.compile(optimizer=adam, loss='mse', metrics=metrics)
+        model.compile(optimizer=adam, loss='mse', metrics={} if metrics is None else metrics)
 
         if _DEBUG:
-            print('Compiled model: shape={}, learning rate={}, metrics={}'.format(
+            printlog('Compiled model: shape={}, learning rate={}, metrics={}'.format(
                 shape, learning_rate, metrics))
         return (model, len(layers))
 
@@ -250,7 +263,218 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
     except:
         printlog('Cannot compile: {}'.format(sys.exc_info()[1]))
         raise
-        return None, 0
+        # return None, 0
+
+# Support functions for mutate()
+
+
+def fit_enough(best_fitness, statistics):
+    """ A codon is "fit enough" if it is *not* in the statistics dictionary or
+        if it passes a dice roll based on how close its mean fitness is to the
+        best fitness of all the genomes. This will give a slight preference to
+        the better codons, but still allow for variety.
+
+        Returns a curried function
+    """
+
+    def fitness(codon):
+        """ Is the codon of acceptable fitness? """
+        if best_fitness >= 0 or codon not in statistics:
+            return True
+
+        codon_fitness = statistics[codon][1]
+
+        return codon_fitness >= 0 or random.random() >= codon_fitness / best_fitness
+
+    return fitness
+
+
+def random_codon(acceptable_fitness):
+    """ Choose a random codon from mutable_codons, with suitable fitness """
+
+    while True:
+        codon = MUTABLE_CODONS
+
+        while isinstance(codon, (list, tuple)):
+            codon = random.choice(codon)
+
+        if isinstance(codon, dict):
+            return random.choice(list(codon.keys()))
+
+        if acceptable_fitness(codon):
+            break
+
+    return codon
+
+
+def kernel_sequence(number):
+    """ Generate a random sorted kernel sequence string """
+
+    return ''.join(sorted([str(n) for n in random.sample(KERNELS, number)]))
+
+
+def point_mutation(child, _, acceptable_fitness):
+    """ Make a point mutation in a codon. Codon will always be in the format
+        type_parameter_parameter_... {_activation} and parameter will always
+        be in format letter-code[digits]. The type is never changed, and we
+        do special handling for the activation function if it is present.
+        Currently modifier codons do not have activation functions.
+    """
+
+    locus = random.randrange(len(child))
+    original_locus = child[locus]
+    codons = original_locus.split('_')
+    basepair = random.randrange(len(codons))
+
+    while True:
+        if basepair == len(codons) - 1 and original_locus not in MODIFIERS:
+            # choose new activation function
+            new_codon = random.choice(ACTS)
+        elif basepair == 0:
+            # choose new codon type (only if a merge-type codon)
+            new_codon = random.choice(list(MERGERS.keys())) if codons[0] in MERGERS else codons[0]
+        else:
+            # tweak a codon parameter
+            base = codons[basepair][0]
+            param = codons[basepair][1:]
+
+            # possible base codes are:
+            # k kernel size
+            # d depth of merger codon
+            # f number of filters
+            # r replication number of modifier codon
+
+            if base == 'k':
+                # If the codon has a depth parameter we need a sequence of kernel sizes, but we
+                # can deduce this by the length of the current k parameter, since currently
+                # they are all single-digit.
+                param = kernel_sequence(len(param))
+            elif base == 'd':
+                # If we change the depth we have to also change the k parameter
+                param = random.choice(DEPTHS)
+                codons = [c if c[0] != 'k' else 'k' + kernel_sequence(param) for c in codons]
+            elif base == 'f':
+                param = random.choice(FILTERS)
+            elif base == 'r':
+                param = random.choice(PRIMES)
+            else:
+                printlog('Unknown parameter base {} in {}'.format(base, original_locus))
+                param = 'XXX'
+            new_codon = base + str(param)
+        if acceptable_fitness(new_codon):
+            break
+
+    codons[basepair] = new_codon
+    child[locus] = '_'.join(codons)
+
+    if _DEBUG:
+        printlog('Point mutation {} -> {}'.format(original_locus, child[locus]))
+
+    return child
+
+
+def insertion(child, _, acceptable_fitness):
+    """ Insertion mutation - never insert after output codon """
+
+    child_len = len(child)
+
+    codon = random_codon(acceptable_fitness)
+
+    # This may cause the layer count to become too high, but we can't check for that
+    # until later, when we do a test-build of the model.
+
+    child.insert(random.randrange(child_len), codon)
+
+    if _DEBUG:
+        printlog('Insertion', codon)
+
+    return child
+
+
+def deletion(child, _, min_len):
+    """ Deletion mutation - never delete output codon! """
+
+    child_len = len(child)
+
+    if child_len <= min_len:
+        return None
+
+    del child[random.randrange(child_len - 1)]
+
+    if _DEBUG:
+        printlog('Deletion')
+
+    return child
+
+
+def conjugation(child, conjugate, _):
+    """ Conjugate two genomes - always at least one codon from each contributor """
+
+    splice = random.randrange(1, len(child))
+    child = child[:-splice] + conjugate[-splice:]
+
+    if _DEBUG:
+        printlog('Conjugation')
+
+    return child
+
+
+def transposition(child, _, __):
+    """ Transposition mutation - never transpose output codon """
+
+    splice = random.randrange(len(child) - 1)
+    codon = child[splice]
+    del child[splice]
+
+    splice = random.randrange(len(child) - 1)
+    child.insert(splice, codon)
+
+    if _DEBUG:
+        printlog('Transposition {}'.format(codon))
+
+    return child
+
+
+def inversion(child, _, __):
+    """ Invert two adjacent codons """
+
+    locus = random.randrange(len(child) - 2)
+
+    child[locus], child[locus + 1] = child[locus + 1], child[locus]
+
+    if _DEBUG:
+        printlog('Inversion @ {}'.format(locus))
+
+    return child
+
+
+def regularize(child):
+    """ Rearrange modifier codons into consistent order """
+
+    def crispr(codon):
+        """ cut up a codon for sort purposes """
+
+        codon = codon.split('_')[1:]
+        codon = [(p[0], int(p[1:])) for p in reversed(codon)]
+
+        return codon
+
+    shuffled = True
+
+    while shuffled:
+
+        shuffled = False
+
+        for i in range(len(child) - 1):
+            if child[i] in MODIFIERS and child[i + 1] in MODIFIERS:
+                # Currently depends on the modifier parameter codes being
+                # in string sort order, but since we only have one of them
+                # (r) this is not an issue.
+                if crispr(child[i]) > crispr(child[i + 1]):
+                    child[i], child[i + 1] = child[i + 1], child[i]
+                    shuffled = True
+
+    return child
 
 
 def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), best_fitness=0.0, statistics=None, viable=None):
@@ -275,202 +499,6 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
         viable        viability function; takes a codon list, returns true if it is acceptable
     """
 
-    def fit_enough(codon):
-        """ A codon is "fit enough" if it is *not* in the statistics dictionary or
-            if it passes a dice roll based on how close its mean fitness is to the
-            best fitness of all the genomes. This will give a slight preference to
-            the better codons, but still allow for variety
-        """
-
-        if best_fitness >= 0 or codon not in statistics:
-            return True
-
-        codon_fitness = statistics[codon][1]
-
-        return codon_fitness >= 0 or random.random() >= codon_fitness / best_fitness
-
-
-    def random_codon():
-        """ Choose a random codon from mutable_codons, with suitable fitness """
-
-        while True:
-            codon = MUTABLE_CODONS
-
-            while isinstance(codon, (list, tuple)):
-                codon = random.choice(codon)
-
-            if isinstance(codon, dict):
-                return random.choice(list(codon.keys()))
-
-            if fit_enough(codon):
-                break
-
-        return codon
-
-    def point_mutation(child, _):
-        """ Make a point mutation in a codon. Codon will always be in the format
-            type_parameter_parameter_... {_activation} and parameter will always
-            be in format letter-code[digits]. The type is never changed, and we
-            do special handling for the activation function if it is present.
-            Currently modifier codons do not have activation functions.
-        """
-
-        def kernel_sequence(number):
-            """ Generate a random sorted kernel sequence string """
-
-            return ''.join(sorted([str(n) for n in random.sample(KERNELS, number)]))
-
-        locus = random.randrange(len(child))
-        original_locus = child[locus]
-        codons = original_locus.split('_')
-        basepair = random.randrange(len(codons))
-
-        while True:
-            if basepair == len(codons) - 1 and original_locus not in MODIFIERS:
-                # choose new activation function
-                new_codon = random.choice(ACTS)
-            elif basepair == 0:
-                # choose new codon type (only if a merge-type codon)
-                if codons[0] in MERGERS:
-                    new_codon = random.choice(list(MERGERS.keys()))
-                else:
-                    new_codon = codons[0]
-            else:
-                # tweak a codon parameter
-                base = codons[basepair][0]
-                param = codons[basepair][1:]
-
-                # possible base codes are:
-                # k kernel size
-                # d depth of merger codon
-                # f number of filters
-                # r replication number of modifier codon
-
-                if base == 'k':
-                    # If the codon has a depth parameter we need a sequence of kernel sizes, but we
-                    # can deduce this by the length of the current k parameter, since currently
-                    # they are all single-digit.
-                    param = kernel_sequence(len(param))
-                elif base == 'd':
-                    # If we change the depth we have to also change the k parameter
-                    param = random.choice(DEPTHS)
-                    codons = [c if c[0] != 'k' else 'k' +
-                              kernel_sequence(param) for c in codons]
-                elif base == 'f':
-                    param = random.choice(FILTERS)
-                elif base == 'r':
-                    param = random.choice(PRIMES)
-                else:
-                    printlog('Unknown parameter base {} in {}'.format(
-                        base, original_locus))
-                    param = 'XXX'
-                new_codon = base + str(param)
-            if fit_enough(new_codon):
-                break
-
-        codons[basepair] = new_codon
-        child[locus] = '_'.join(codons)
-
-        if _DEBUG:
-            print('    Point mutation {} -> {}'.format(original_locus, child[locus]))
-
-        return child
-
-    def insertion(child, _):
-        """ Insertion mutation - never insert after output codon """
-
-        child_len = len(child)
-
-        # This may cause the layer count to become too high, but we can't check for that
-        # until later, when we do a test-build of the model.
-
-        codon = random_codon()
-
-        child.insert(random.randrange(child_len), codon)
-
-        if _DEBUG:
-            print('         Insertion', codon)
-
-        return child
-
-    def deletion(child, _):
-        """ Deletion mutation - never delete output codon! """
-
-        child_len = len(child)
-
-        if child_len <= min_len:
-            return None
-
-        del child[random.randrange(child_len - 1)]
-
-        if _DEBUG:
-            print('          Deletion')
-
-        return child
-
-    def conjugation(child, conjugate):
-        """ Conjugate two genomes - always at least one codon from each contributor """
-
-        splice = random.randrange(1, len(child))
-        child = child[:-splice] + conjugate[-splice:]
-
-        if _DEBUG:
-            print('       Conjugation')
-
-        return child
-
-    def transposition(child, _):
-        """ Transposition mutation - never transpose output codon """
-
-        splice = random.randrange(len(child) - 1)
-        codon = child[splice]
-        del child[splice]
-
-        splice = random.randrange(len(child) - 1)
-        child.insert(splice, codon)
-
-        if _DEBUG:
-            print('     Transposition {}'.format(codon))
-
-        return child
-
-    def inversion(child, _):
-        """ Invert two adjacent codons """
-
-        locus = random.randrange(len(child) - 2)
-
-        child[locus], child[locus + 1] = child[locus + 1], child[locus]
-
-        if _DEBUG:
-            print('       Inversion @ {}'.format(locus))
-
-        return child
-
-    def regularize(child):
-        """ Rearrange modifier codons into consistent order """
-
-        shuffled = True
-
-        while shuffled:
-
-            shuffled = False
-
-            for i in range(len(child)-1):
-                if child[i] in MODIFIERS and child[i + 1] in MODIFIERS:
-                    # Currently depends on the modifier parameter codes being
-                    # in string sort order, but since we only have one of them
-                    # (*) this is not an issue.
-                    codes = [(p[0], int(p[1:])) for p in child[i:i + 2]]
-                    if codes[0] > codes[1]:
-                        child[i], child[i + 1] = child[i + 1], child[i]
-                        shuffled = True
-
-        return child
-
-    # -------------------------------------------------
-    # MAIN BODY OF evolve(). Make sure inputs are lists
-    # -------------------------------------------------
-
     if not isinstance(parent, list):
         parent = parent.split('-')
 
@@ -480,10 +508,15 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
     statistics = {} if statistics is None else statistics
 
     if _DEBUG:
-        print('   Mutation parent', '-'.join(parent))
-        print('Mutation conjugate', '-'.join(conjugate))
+        printlog('   Mutation parent', '-'.join(parent))
+        printlog('Mutation conjugate', '-'.join(conjugate))
+
+    # The mutations and their optional parameter, if any
+
+    acceptable = fit_enough(best_fitness, statistics)
 
     operations = [point_mutation, insertion, deletion, inversion, transposition, conjugation]
+    parameters = [acceptable, acceptable, min_len, None, None, None]
 
     child = None
 
@@ -495,14 +528,13 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
         # call the appropriate mutation function
 
         child = parent[:]
-        choice = random.randrange(sum(odds))
 
         # I admit, this is a bit tricky! Will generate 5 for the first
         # possible choice, 4 for the next, etc. Then use negative indexing
         # to choose the right function!
 
-        todo = len([i for i in odds if choice < i])
-        child = operations[-todo](child, conjugate)
+        todo = len([i for i in odds if random.randrange(sum(odds)) < i])
+        child = operations[-todo](child, conjugate, parameters[-todo])
 
         # Check for invalid children
 
@@ -518,8 +550,7 @@ def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), 
     child = regularize(child)
 
     if _DEBUG:
-        print('   Resulting child', '-'.join(child))
-        print('')
+        printlog('   Resulting child', '-'.join(child))
 
     return child
 
@@ -562,34 +593,54 @@ def ligate(statistics, genome, new_fitness):
 
     return statistics
 
+class Organism():
+    """ Holds information about an organism and its state """
 
-def train(genome, config, epochs=1):
-    """ Train a model for 1 or more epochs
+    def __init__(self, item):
 
-        organism      string or list with genetic code to be tested
+        if isinstance(item, list):
+            self.genome = item[0]
+            self.fitness = item[1] if len(item) > 1 else 0.0
+            self.epoch = item[2] if len(item) > 2 else 0
+            self.improved = item[3] if len(item) > 3 else True
+        elif isinstance(item, str):
+            self.genome = item
+            self.fitness, self.epoch, self.improved = 0.0, 0, True
+
+
+    def list(self):
+        """ convert Organism to list """
+        return [self.genome, self.fitness, self.epoch, self.improved]
+
+def train(org, config, epochs=1):
+    """ Train an organism for 1 or more epochs
+
+        org           Organism class instance [genome, fitness, epochs, boolean]
         config        ModelIO configuration
         epochs        How many epochs to run
+
+        Returns updated organism
     """
+
+    genome = org.genome
 
     if not isinstance(genome, list):
         genome = genome.split('-')
 
-    organism = '-'.join(genome)
+    printlog('Training for {} epoch{} : {}'.format(epochs, 's' if epochs > 0 else '', '-'.join(genome)))
 
-    printlog('Training for {} epoch{} : {}'.format(epochs, 's' if epochs > 0 else '', organism))
-
-    cell = BaseSRCNNModel(organism, config)
+    cell = BaseSRCNNModel(org.genome, config)
 
     if cell.model is None:
-        print("Compiling model")
+        printlog("Compiling model")
         model, _ = build_model(genome, shape=config.image_shape, learning_rate=config.learning_rate, metrics=[cell.evaluation_function])
 
         if model is None:
-            return 0.0
+            return Organism([org.genome, 0.0, 0, False])
 
         cell.model = model
     else:
-        print("Using loaded model...")
+        printlog("Using loaded model...")
 
     # Now we have a compiled model, execute it - or at least try to, there are still some
     # models that may bomb out.
@@ -607,4 +658,5 @@ def train(genome, config, epochs=1):
         raise
 
     printlog('Fitness: {}'.format(results))
-    return results
+
+    return Organism([org.genome, results, org.epoch + epochs, org.improved and results < org.fitness])

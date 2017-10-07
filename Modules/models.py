@@ -12,10 +12,14 @@ from abc import ABCMeta, abstractmethod
 from keras.models import Sequential, Model, load_model
 from keras.layers import Add, Average, Input
 from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D
+from keras.layers.normalization import BatchNormalization
+from keras.layers.core import Activation
+
 from keras import backend as K
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
+from Modules.misc import printlog
 
 class ModelState(callbacks.Callback):
     """ State monitor callback. Tracks how well we are doing and writes
@@ -38,7 +42,7 @@ class ModelState(callbacks.Callback):
 
         if os.path.isfile(self.path):
             if config.verbose:
-                print('Loading existing .json state')
+                printlog('Loading existing .json state')
             with open(self.path, 'r') as jsonfile:
                 self.state = json.load(jsonfile)
 
@@ -46,7 +50,7 @@ class ModelState(callbacks.Callback):
 
             self.state['config'] = config.config
         else:
-            print('Initializing new model')
+            printlog('Initializing new model')
             self.state = {'epoch_count': 0,
                           'best_values': {},
                           'best_epoch': {},
@@ -56,7 +60,7 @@ class ModelState(callbacks.Callback):
     def on_train_begin(self, logs=None):
 
         if self.verbose:
-            print('Training commences...')
+            printlog('Training commences...')
 
     def on_epoch_end(self, epoch, logs=None):
 
@@ -73,7 +77,7 @@ class ModelState(callbacks.Callback):
             json.dump(self.state, jsonfile, indent=4)
 
         if self.verbose:
-            print('Completed epoch', self.state['epoch_count'])
+            printlog('Completed epoch', self.state['epoch_count'])
 
 # GPU : Untested, but may be needed for VDSR
 
@@ -92,7 +96,7 @@ class AdjustableGradient(callbacks.Callback):
     def on_train_begin(self, logs=None):
 
         if self.verbose:
-            print('Starting Gradient Clipping Value: %f' % (self.theta/self.learning_rate))
+            printlog('Starting Gradient Clipping Value: %f' % (self.theta/self.learning_rate))
         self.optimizer.clipvalue.set_value(self.theta/self.learning_rate)
 
     def on_epoch_end(self, epoch, logs=None):
@@ -102,7 +106,7 @@ class AdjustableGradient(callbacks.Callback):
             self.learning_rate = self.optimizer.lr.get_value()
             self.optimizer.clipvalue.set_value(self.theta/self.learning_rate)
             if self.verbose:
-                print('Changed Gradient Clipping Value: %f' % (self.theta/self.learning_rate))
+                printlog('Changed Gradient Clipping Value: %f' % (self.theta/self.learning_rate))
 
 
 
@@ -168,11 +172,11 @@ class BaseSRCNNModel(object):
 
         if os.path.isfile(config.paths['model']):
             if self.config.verbose:
-                print('Loading existing .h5 model')
+                printlog('Loading existing .h5 model')
             self.model = load_model(config.paths['model'], custom_objects={loss_function: self.evaluation_function})
         else:
             if self.config.verbose:
-                print('Creating new untrained model')
+                printlog('Creating new untrained model')
             self.model = self.create_model(load_weights=False)
 
     # Config will be a dictionary with contents similar to this:
@@ -205,10 +209,10 @@ class BaseSRCNNModel(object):
         """
 
         """
-        print('fit')
+        printlog('fit')
         for key in self.config.config:
             if key != 'paths':
-                print(key, self.config.config[key])
+                printlog(key, self.config.config[key])
         """
 
         samples_per_epoch = self.config.train_images_count()
@@ -243,14 +247,14 @@ class BaseSRCNNModel(object):
             model_checkpoint.best = model_state.state['best_values'][self.val_loss_function]
 
         if self.config.verbose:
-            print('Best {} found so far: {}'.format(self.val_loss_function, model_checkpoint.best))
+            printlog('Best {} found so far: {}'.format(self.val_loss_function, model_checkpoint.best))
 
         callback_list = [model_checkpoint,
                          learning_rate,
                          model_state]
 
         if self.config.verbose:
-            print('Training model : {}'.format(self.config.config['model_type']))
+            printlog('Training model : {}'.format(self.config.config['model_type']))
 
         # Offset epoch counts if we are resuming training.
 
@@ -293,8 +297,6 @@ class BaseSRCNNModel(object):
     def predict_tiles(self, tile_generator, batches):
         """ Predict a sequence of tiles. This can later be expanded to do multiprocessing """
 
-        print('predict tiles')
-
         result = self.model.predict_generator(generator=tile_generator,
                                               steps=batches,
                                               verbose=self.config.verbose)
@@ -310,7 +312,7 @@ class BaseSRCNNModel(object):
     def evaluate(self):
         """ Evaluate the model on self.evaluation_path """
 
-        print('Validating %s model' % self.name)
+        printlog('Validating %s model' % self.name)
 
         results = self.model.evaluate_generator(self.config.evaluation_data_generator(),
                                                 steps=self.config.eval_images_count() // self.config.batch_size)
@@ -475,7 +477,13 @@ class VDSR(BaseSRCNNModel):
 
 
 class PUPSR(BaseSRCNNModel):
-    """ Parental Unit Pathetic Super-Resolution Model (elu vs. relu test) """
+    """ Parental Unit Pathetic Super-Resolution Model (batch normalization test, residual model)
+
+        BasicSR (20 Epochs, relu) : -39.7536911815 @ epoch 15
+        PUPSR (20 Epochs, relu)   : -40.8934259724 @ epoch 20
+        PUPSR (20 Epochs, elu)    : -40.7926285811 @ epoch 15
+
+    """
 
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
@@ -485,11 +493,15 @@ class PUPSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        base = Input(shape=self.config.image_shape)
-        conv1 = Conv2D(64, (9, 9), activation='elu', padding='same')(base)
-        conv2 = Conv2D(32, (1, 1), activation='elu', padding='same')(conv1)
-        end = Conv2D(self.config.channels, (5, 5), padding='same')(conv2)
-        model = Model(base, end)
+        model = Sequential()
+        model.add(Conv2D(64, (9, 9), padding='same', input_shape=self.config.image_shape))
+        model.add(BatchNormalization(axis=-1))
+        model.add(Activation('elu'))
+        model.add(Conv2D(32, (1, 1), padding='same'))
+        model.add(BatchNormalization(axis=-1))
+        model.add(Activation('elu'))
+        model.add(Conv2D(self.config.channels, (5, 5), padding='same'))
+
 
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
