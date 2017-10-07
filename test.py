@@ -1,22 +1,6 @@
-        'width': ('tile_width', int, lambda x: x <= 0, 'Tile width invalid ({})'),
-        'height': ('tile_height', int, lambda x: x <= 0, 'Tile height invalid ({})'),
-        'border': ('tile_border', int, lambda x: x <= 0, 'Tile border invalid ({})'),
-        'black' and value != 'auto': ('black_level', float, lambda x: x <= 0, 'Black level invalid ({})'),
-        'lr': ('lr', float, lambda x: x <= 0.0 or x > 0.01, 'Learning rate should be 0 > and <= 0.01 ({})'),
-        'quality': ('quality', float, lambda x: x <= 0.0 or x > 1.0, 'Quality should be 0 > and <= 1.0 ({})'),
-        'trimleft': ('trim_left', int, lambda x: x <= 0, 'Left trim value invalid ({})'),
-        'trimright': ('trim_right', int, lambda x: x <= 0, 'Right trim value invalid ({})'),
-        'trimtop': ('trim_top', int, lambda x: x <= 0, 'Top trim value invalid ({})'),
-        'trimbottom': ('trim_bottom', int, lambda x: x <= 0, 'Bottom trim value invalid ({})'),
-        'left': ('trim_left', int, lambda x: x <= 0, 'Left trim value invalid ({})'),
-        'right': ('trim_right', int, lambda x: x <= 0, 'Right trim value invalid ({})'),
-        'top': ('trim_top', int, lambda x: x <= 0, 'Top trim value invalid ({})'),
-        'bottom': ('trim_bottom', int, lambda x: x <= 0, 'Bottom trim value invalid ({})'),
-        'residual': ('residual', bool, lambda x: x != 0 and x != 1, 'Residual value invalid ({}). Must be 0, 1, T, F.'),
-        'jitter': ('jitter', bool, lambda x: x != 0 and x != 1, 'Jitter value invalid ({}). Must be 0, 1, T, F.'),
-        'skip': ('skip', bool, lambda x: x != 0 and x != 1, 'Skip value invalid ({}). Must be 0, 1, T, F.'),
-        'shuffle': ('shuffle', bool, lambda x: x != 0 and x != 1, 'Shuffle value invalid ({}). Must be 0, 1, T, F.'),
-        'data' : ('data_path', str, lambda x: True, ''),
-        'training' : ('training_path', str, lambda x: True, ''),
-        'validation' : ('validation_path', str, lambda x: True, ''),
-        'genepool' : ('genepool_path', str, lambda x: True, ''),
+""" test """
+
+import Modules.models as models
+
+models.derf()
+print('')

@@ -47,24 +47,25 @@ See *Notes.md* for useful tips / tricks / comments
 
 #### train.py [option(s)] ...
 ```
-    Trains a model. See Modules/models.py for sample model types.
+Trains a model. See Modules/models.py for sample model types.
 
 Options are:
 
-    type=model          model type, default is BasicSR
+    type=model          model type, default is BasicSR. Model type can also be a genome (see below)
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=2
     epochs=nnn          max epoch count, default=100. See below for more details
     epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
-    quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
+    quality=.nnn        fraction of the "best" tiles used in training. Default is 1.0 (use all tiles)
+    residual=1|0|T|F    have the model train using residual images. Default is false.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
-    trimleft=nnn        pixels to trim on image left edge, default = 240; can also use left=nnn
-    trimright=nnn       pixels to trim on image right edge, default = 240; can also use right=nnn
-    trimtop=nnn         pixels to trim on image top edge, default = 0; can also use top=nnn
-    trimbottom=nnn      pixels to trim on image bottom edge, default = 0; can also use bottom=nnn
-    jitter=1|0|T|F      include tiles offset by half a tile across&down when training (but not validation); default=True
+    trimleft=nnn        pixels to trim on image left edge, default = 240
+    trimright=nnn       pixels to trim on image right edge, default = 240
+    trimtop=nnn         pixels to trim on image top edge, default = 0
+    trimbottom=nnn      pixels to trim on image bottom edge, default = 0
+    jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=True
     skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
     shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
     data=path           path to the main data folder, default = Data
@@ -83,6 +84,9 @@ Options are:
     The epochs value is the maximum number of epochs that will be trained **over multiple sessions**. So if you have
     previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,
     you could specify epochs+=25 to limit the current training run to 25 epochs.
+
+    If the type is not one of the standard defined models, then it is checked to see if it is a valid genome.
+    If so, the model and state files (if not set) are searched for in {Data}/models and {Data}/models/genes
 ````
 #### evaluate.py [option(s)] ...
 ````
