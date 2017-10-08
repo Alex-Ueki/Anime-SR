@@ -345,7 +345,7 @@ def evolve(config, genepool, image_info):
 
                 # Remove the worst organism unless it has shown continuous improvement.
 
-                if not population[0].improved:
+                if len(population) > MIN_POPULATION and not population[0].improved:
                     printlog('Removing {} = {} @ {}'.format(population[0].genome, population[0].fitness, population[0].epoch))
                     graveyard.append(population[0].genome)
                     statistics = ligate(statistics, population[0].genome, population[0].fitness)

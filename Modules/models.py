@@ -12,6 +12,7 @@ from abc import ABCMeta, abstractmethod
 from keras.models import Sequential, Model, load_model
 from keras.layers import Add, Average, Input
 from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D
+#from keras.layers.convolutional_recurrent import ConvLSTM2D
 from keras.layers.normalization import BatchNormalization
 from keras.layers.core import Activation
 
@@ -482,7 +483,7 @@ class PUPSR(BaseSRCNNModel):
         BasicSR (20 Epochs, relu) : -39.7536911815 @ epoch 15
         PUPSR (20 Epochs, relu)   : -40.8934259724 @ epoch 20
         PUPSR (20 Epochs, elu)    : -40.7926285811 @ epoch 15
-
+        PUPSR (20 Epochs, leveld) : -40.8624241233 @ epoch 16
     """
 
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
@@ -493,13 +494,30 @@ class PUPSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
+        print(self.config.image_shape)
+        newshape = (None,) + self.config.image_shape
+        print(newshape)
+
         model = Sequential()
         model.add(Conv2D(64, (9, 9), padding='same', input_shape=self.config.image_shape))
-        model.add(BatchNormalization(axis=-1))
+        model.add(BatchNormalization())
         model.add(Activation('elu'))
         model.add(Conv2D(32, (1, 1), padding='same'))
-        model.add(BatchNormalization(axis=-1))
+        model.add(BatchNormalization())
         model.add(Activation('elu'))
+
+        # Back to original representation
+        model.add(Conv2D(self.config.channels, (5, 5), padding='same'))
+
+        # Now train a little deeper
+        model.add(Conv2D(64, (9, 9), padding='same', input_shape=self.config.image_shape))
+        model.add(BatchNormalization())
+        model.add(Activation('elu'))
+        model.add(Conv2D(64, (9, 9), padding='same'))
+        model.add(BatchNormalization())
+        model.add(Activation('elu'))
+
+        # Back to original representation
         model.add(Conv2D(self.config.channels, (5, 5), padding='same'))
 
 
