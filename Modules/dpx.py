@@ -68,11 +68,16 @@ SIMPLE_PROPERTYMAP = [
 
 def read(dpxfile):
 
-    """ Read a DPX file and return an img. Stash the header and meta information in a global for use when writing. """
+    """ Read a DPX file and extract image. Stash the header and meta information in a global for use when writing. """
 
     global DPX_META
     global DPX_HEADER
 
+    # Open file if passed a path instead of a file descriptor
+
+    if isinstance(dpxfile, str):
+        dpxfile = open(dpxfile, 'rb')
+        
     # Figure out the byte order of the file
 
     dpxfile.seek(0)

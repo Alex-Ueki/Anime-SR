@@ -66,7 +66,8 @@ def setup(options):
 
     # Validation and error checking
 
-    for path in options:
+    errors = False
+    for path in ['evaluation', 'state', 'model', 'data']:
         errors = oops(False,
                       not os.path.exists(options[path]),
                       'Path to {} is not valid ({})',

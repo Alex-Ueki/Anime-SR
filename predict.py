@@ -70,8 +70,9 @@ def setup(options):
 
     # Validation and error checking
 
-    for path in options:
-        errors = oops(False,
+    errors = False
+    for path in ['predict', 'state', 'model', 'data']:
+        errors = oops(errors,
                       not os.path.exists(options[path]),
                       'Path to {} is not valid ({})',
                       (path, options[path]))
@@ -124,7 +125,7 @@ def setup(options):
                   'Image files are of type {} but model was trained on {}',
                   (image_ext, config.img_suffix.lower()))
 
-    terminate(errors, False)
+    terminate(errors, True)
 
     return (config, image_info)
 

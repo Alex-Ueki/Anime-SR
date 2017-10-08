@@ -133,14 +133,15 @@ def psnr_loss_border(border):
 
         if border == 0:
             return psnr_loss(y_true, y_pred)
+
+        if K.image_data_format() == 'channels_first':
+            y_pred = y_pred[:, :, border:-border, border:-border]
+            y_true = y_true[:, :, border:-border, border:-border]
         else:
-            if K.image_data_format() == 'channels_first':
-                y_pred = y_pred[:, :, border:-border, border:-border]
-                y_true = y_true[:, :, border:-border, border:-border]
-            else:
-                y_pred = y_pred[:, border:-border, border:-border, :]
-                y_true = y_true[:, border:-border, border:-border, :]
-            return psnr_loss(y_true, y_pred)
+            y_pred = y_pred[:, border:-border, border:-border, :]
+            y_true = y_true[:, border:-border, border:-border, :]
+
+        return psnr_loss(y_true, y_pred)
 
     func = psnr_loss_border_func
     func.__name__ = 'PeakSignaltoNoiseRatio'
@@ -151,8 +152,6 @@ def psnr_loss_border(border):
 
 LOSS_FUNCTIONS = {'PeakSignaltoNoiseRatio': psnr_loss_border
                  }
-
-#
 
 
 class BaseSRCNNModel(object):
@@ -320,7 +319,7 @@ class BaseSRCNNModel(object):
         print("Loss = %.5f, PeekSignalToNoiseRatio = %.5f" % (results[0], results[1]))
 
 
-    #
+
 
     def save(self, path=None):
         """ Save the model to a .h5 file """
@@ -355,6 +354,7 @@ class BasicSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 class ExpansionSR(BaseSRCNNModel):
@@ -390,6 +390,7 @@ class ExpansionSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 
@@ -441,6 +442,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 
@@ -474,6 +476,7 @@ class VDSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 
@@ -530,6 +533,7 @@ class PUPSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 
@@ -567,6 +571,7 @@ class GPUSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 
@@ -614,6 +619,7 @@ class ELUBasicSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 """
@@ -654,6 +660,7 @@ class ELUExpansionSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 """
@@ -709,6 +716,7 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+
         return model
 
 """
@@ -741,6 +749,7 @@ class ELUVDSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
+        
         return model
 
 

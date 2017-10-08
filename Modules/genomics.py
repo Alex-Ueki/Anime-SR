@@ -254,6 +254,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         if _DEBUG:
             printlog('Compiled model: shape={}, learning rate={}, metrics={}'.format(
                 shape, learning_rate, metrics))
+
         return (model, len(layers))
 
     except KeyboardInterrupt:
@@ -279,7 +280,8 @@ def fit_enough(best_fitness, statistics):
 
     def fitness(codon):
         """ Is the codon of acceptable fitness? """
-        if best_fitness >= 0 or codon not in statistics:
+
+        if best_fitness >= 0.0 or codon not in statistics:
             return True
 
         codon_fitness = statistics[codon][1]
@@ -290,7 +292,9 @@ def fit_enough(best_fitness, statistics):
 
 
 def random_codon(acceptable_fitness):
-    """ Choose a random codon from mutable_codons, with suitable fitness """
+    """ Choose a random codon from mutable_codons, with suitable fitness.
+        Will always return because of the random diceroll.
+    """
 
     while True:
         codon = MUTABLE_CODONS
@@ -302,9 +306,7 @@ def random_codon(acceptable_fitness):
             return random.choice(list(codon.keys()))
 
         if acceptable_fitness(codon):
-            break
-
-    return codon
+            return codon
 
 
 def kernel_sequence(number):

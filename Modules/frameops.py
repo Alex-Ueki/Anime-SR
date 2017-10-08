@@ -68,7 +68,7 @@ def image_files(folder_path, deep=False):
             break
 
     if not file_paths:
-        return file_lists
+        return []
 
     for ext in IMAGETYPES:
         ext_list = [f for f in file_paths if os.path.splitext(f)[1] == ext]
@@ -87,21 +87,16 @@ def imread(file_path):
         have to handle that for operations we hand off to scipy.misc.
     """
 
-    # global last_meta
+    if not os.path.isfile(file_path):
+        return None
 
     file_type = os.path.splitext(file_path)[1]
 
-    if os.path.isfile(file_path):
-        if file_type == '.dpx':
-            with open(file_path, 'rb') as dpxfile:
-                img = dpx.read(dpxfile)
-        else:
-            img = misc.imread(file_path, mode='RGB')
-            img = img.astype('float32') / 255.0
-    else:
-        img = None
+    if file_type == '.dpx':
+        return dpx.read(file_path)
 
-    return img
+    return misc.imread(file_path, mode='RGB').astype('float32') / 255.0
+
 
 
 def imsave(file_path, img, meta=None):
@@ -445,14 +440,7 @@ def grout(tiles, config):
         theano          if True, transpose the array into theano order. UNTESTED
     """
 
-    # Figure out the size of the final image and allocate it
-
-    #tile_shape = np.shape(tiles[0])
-    #tile_width = tile_shape[1] - border * 2
-    #tile_height = tile_shape[0] - border * 2
-
-    #row_count = (len(tiles) // row_width)
-    #img_width, img_height = tile_width * row_width, tile_height * row_count
+    # Allocate image in the resulting size
 
     img = np.empty((config.trimmed_height, config.trimmed_width, 3), dtype='float32')
 
