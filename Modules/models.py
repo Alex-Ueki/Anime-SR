@@ -484,7 +484,7 @@ class VDSR(BaseSRCNNModel):
 
 
 class PUPSR(BaseSRCNNModel):
-    """ Parental Unit Pathetic Super-Resolution Model (batch normalization test, residual model)
+    """ Parental Unit Pathetic Super-Resolution Model (batch normalization, residual, sequential)
 
         BasicSR (20 Epochs, relu) : -39.7536911815 @ epoch 15
         PUPSR (20 Epochs, relu)   : -40.8934259724 @ epoch 20
@@ -520,12 +520,7 @@ class PUPSR(BaseSRCNNModel):
         return model
 
 class PUPSR2(BaseSRCNNModel):
-    """ Parental Unit Pathetic Super-Resolution Model (batch normalization test, residual model)
-
-        BasicSR (20 Epochs, relu) : -39.7536911815 @ epoch 15
-        PUPSR (20 Epochs, relu)   : -40.8934259724 @ epoch 20
-        PUPSR (20 Epochs, elu)    : -40.7926285811 @ epoch 15
-        PUPSR (20 Epochs, leveld) : -40.8624241233 @ epoch 16
+    """ Parental Unit Pathetic Super-Resolution Model V2 - API generated
     """
 
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):

@@ -57,9 +57,9 @@ class ModelIO():
         config.setdefault('black_level', 0.0)
         config.setdefault('batch_size', 16)
         config.setdefault('img_suffix', 'dpx')
-        config.setdefault('jitter', True)
+        config.setdefault('jitter', False)
         config.setdefault('shuffle', True)
-        config.setdefault('skip', True)
+        config.setdefault('skip', False)
         config.setdefault('residual', True)
         config.setdefault('quality', 1.0)
         config.setdefault('paths', {})
@@ -205,7 +205,7 @@ class ModelIO():
         """ Return number of image files in a path's alpha directory, checking for cached info """
 
         path_code += '.alpha'
-        
+
         files = self.paths[path_code] if path_code in self.paths else frameops.image_files(
             os.path.join(path_name, self.alpha))
 

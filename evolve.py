@@ -22,8 +22,8 @@ Options are:
     trimright=nnn       pixels to trim on image right edge, default = 240; can also use right=nnn
     trimtop=nnn         pixels to trim on image top edge, default = 0; can also use top=nnn
     trimbottom=nnn      pixels to trim on image bottom edge, default = 0; can also use bottom=nnn
-    jitter=1|0|T|F      include tiles offset by half a tile across&down when training (but not validation); default=True
-    skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=True
+    jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=False
+    skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=False
     shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
     data=path           path to the main data folder, default = Data
     training=path       path to training folder, default = {Data}/train_images/training
