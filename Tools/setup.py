@@ -35,7 +35,7 @@ def setup():
     train_images = [[s, alphabeta] for s in ['training', 'validation']]
     sub_folders.append(['train_images', train_images])
 
-    sub_folders.append(['models', ['genes', 'submodels']])
+    sub_folders.append(['models', ['genes', 'submodels', 'graphs']])
 
     create_folder('Data', sub_folders, depth=0)
 
