@@ -76,7 +76,7 @@ def mod_time(path, suffix='.json'):
     return max(times) if times else 0.0
 
 
-def state_files(path, suffix='_state.json'):
+def state_files(path, suffix='.json'):
     """ Extract the json in all files in the path and return them in a list.
         Filter files by suffix.
     """

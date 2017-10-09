@@ -160,7 +160,7 @@ class ModelIO():
                 self.img_suffix)))
 
         self.paths.setdefault('state', os.path.join(
-            self.paths['data'], 'models', '{}{}-{}-{}-{}-{}_state.json'.format(
+            self.paths['data'], 'models', '{}{}-{}-{}-{}-{}.json'.format(
                 self.model_type,
                 '-R' if self.residual else '',
                 self.base_tile_width,

@@ -16,8 +16,8 @@ Options are:
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
-    Expects that there will be a matching _state.json file for the model
-    (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
+    Expects that there will be a matching .json file for the model
+    (ie: BasicSR-60-60-2-dpx.json) that contains all the tiling/trimming information
 """
 
 
@@ -55,7 +55,7 @@ def setup(options):
     if os.path.dirname(options['model']) == '':
         options['model'] = os.path.join(dpath, 'models', options['model'])
 
-    options['state'] = os.path.splitext(options['model'])[0] + '_state.json'
+    options['state'] = os.path.splitext(options['model'])[0] + '.json'
 
     model_type = os.path.basename(options['model']).split('-')[0]
 

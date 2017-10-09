@@ -28,14 +28,14 @@ Options are:
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
     model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
-    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
+    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.json
     verbose=1|0|T|F     display verbose training output, default = True
     bargraph=1|0|T|F    display bargraph of training progress, default = True
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
     You can terminate a training session with ^C, and then resume training by reissuing the same command. The model's state
-    is completely stored in the .h5 file, and the training state is in the _state.json file.
+    is completely stored in the .h5 file, and the training state is in the .json file.
 
     The epochs value is the maximum number of epochs that will be trained **over multiple sessions**. So if you have
     previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,

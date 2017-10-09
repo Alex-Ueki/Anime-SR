@@ -33,7 +33,7 @@ Data
         validation/             Model validation images
             Alpha/                  Input images
             Beta/                   Target images
-    models/                 .h5 and _state.json files for trained models.
+    models/                 .h5 and .json files for trained models.
 ```
 
 Alex : *<a href="https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0&preview=Data.zip">Data.zip</a>*
@@ -72,14 +72,14 @@ Options are:
     training=path       path to training folder, default = {Data}/train_images/training
     validation=path     path to validation folder, default = {Data}/train_images/validation
     model=path          path to trained model file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.h5
-    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}_state.json
+    state=path          path to state file, default = {Data}/models/{model}-{width}-{height}-{border}-{img_type}.json
     verbose=1|0|T|F     display verbose training output, default = True
     bargraph=1|0|T|F    display bargraph of training progress, default = True
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK).
 
     You can terminate a training session with ^C, and then resume training by reissuing the same command. The model's state
-    is completely stored in the .h5 file, and the training state is in the _state.json file.
+    is completely stored in the .h5 file, and the training state is in the .json file.
 
     The epochs value is the maximum number of epochs that will be trained **over multiple sessions**. So if you have
     previously trained a model for 50 epochs, epochs=75 would mean the model trains for 25 additional epochs. Alternately,
@@ -102,8 +102,8 @@ Options are:
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
-    Expects that there will be a matching _state.json file for the model
-    (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
+    Expects that there will be a matching .json file for the model
+    (ie: BasicSR-60-60-2-dpx.json) that contains all the tiling/trimming information
 ````
 #### predict.py [option(s)] ...
 ````
@@ -119,8 +119,8 @@ Options are:
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
-    Expects that there will be a matching _state.json file for the model
-    (ie: BasicSR-60-60-2-dpx_state.json) that contains all the tiling/trimming information
+    Expects that there will be a matching .json file for the model
+    (ie: BasicSR-60-60-2-dpx.json) that contains all the tiling/trimming information
 ````
 #### evolve.py [option(s)] ...
 ````
@@ -157,6 +157,21 @@ Options are:
     to some of the models in models.py
 
     See Modules/genomics.py for details on the structure of genes, codons and other genetic elements.
+````
+#### Usage: graph.py [option(s)] ...
+````
+    Generates nice graph of a model.
+
+Options are:
+
+    data=path           path to the main data folder, default = Data
+    model=filename|path model filename or absolute path. If just a filename, then the
+                        path will be {Data}/models/{model}. The .h5 extension may be omitted.
+                        Default = BasicSR-60-60-2-dpx.h5
+    graph=path          output file path. Default = {Data}/models/graphs/{model}.png
+
+    Expects that there will be a matching .json file for the model
+    (ie: BasicSR-60-60-2-dpx.json) that contains all the tiling/trimming information
 ````
 #### monitor.py
 ````
