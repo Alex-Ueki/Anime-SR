@@ -186,8 +186,8 @@ def setup(options):
         size1, size2 = np.shape(test_images[fcnt][0]), np.shape(
             test_images[fcnt][1])
         if size1 != size2:
-            printlog('Warning: {} Alpha and Beta images are not the same size ({} vs {}). Will attempt to scale Alpha images.'.format(
-                image_paths[fcnt].title(), size1, size2))
+            printlog('Warning: {} Alpha and Beta images are not the same size. Will attempt to scale Alpha images.'.format(
+                image_paths[fcnt].title()))
 
     terminate(errors, False)
 

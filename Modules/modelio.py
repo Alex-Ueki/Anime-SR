@@ -124,7 +124,8 @@ class ModelIO():
         self.tiles_across = config['tiles_across']
         self.tiles_down = config['tiles_down']
 
-        config['tiles_per_image'] = self.tiles_across * self.tiles_down + (self.tiles_across - 1) * (self.tiles_down - 1) if self.jitter else 0
+        config['tiles_per_image'] = self.tiles_across * self.tiles_down + \
+            ((self.tiles_across - 1) * (self.tiles_down - 1) if self.jitter else 0)
 
         self.tiles_per_image = config['tiles_per_image']
 
@@ -204,8 +205,10 @@ class ModelIO():
         """ Return number of image files in a path's alpha directory, checking for cached info """
 
         path_code += '.alpha'
+        
         files = self.paths[path_code] if path_code in self.paths else frameops.image_files(
             os.path.join(path_name, self.alpha))
+
         return self.tiles_per_image * len(files[0])
 
     # Data generators generate matched pairs of tiles from the appropriate alpha and beta

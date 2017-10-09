@@ -43,7 +43,7 @@ class ModelState(callbacks.Callback):
 
         if os.path.isfile(self.path):
             if config.verbose:
-                printlog('Loading existing .json state')
+                printlog('Loading existing .json state: ' + self.path)
             with open(self.path, 'r') as jsonfile:
                 self.state = json.load(jsonfile)
 
@@ -172,7 +172,7 @@ class BaseSRCNNModel(object):
 
         if os.path.isfile(config.paths['model']):
             if self.config.verbose:
-                printlog('Loading existing .h5 model')
+                printlog('Loading existing .h5 model: ' + config.paths['model'])
             self.model = load_model(config.paths['model'], custom_objects={loss_function: self.evaluation_function})
         else:
             if self.config.verbose:
@@ -264,6 +264,9 @@ class BaseSRCNNModel(object):
 
         # PU: There is an inconsistency when Keras prints that it has saved an improved
         # model. It reports that it happened in the previous epoch.
+
+        print(val_count)
+        print(self.config.batch_size)
 
         self.model.fit_generator(self.config.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.config.batch_size,
@@ -497,32 +500,55 @@ class PUPSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        print(self.config.image_shape)
-        newshape = (None,) + self.config.image_shape
-        print(newshape)
-
         model = Sequential()
-        model.add(Conv2D(64, (9, 9), padding='same', input_shape=self.config.image_shape))
+        model.add(Conv2D(64, (9, 9), padding='same', activation='elu', input_shape=self.config.image_shape))
         model.add(BatchNormalization())
-        model.add(Activation('elu'))
-        model.add(Conv2D(32, (1, 1), padding='same'))
+        model.add(Conv2D(32, (1, 1), padding='same', activation='elu'))
         model.add(BatchNormalization())
-        model.add(Activation('elu'))
-
-        # Back to original representation
         model.add(Conv2D(self.config.channels, (5, 5), padding='same'))
 
-        # Now train a little deeper
-        model.add(Conv2D(64, (9, 9), padding='same', input_shape=self.config.image_shape))
-        model.add(BatchNormalization())
-        model.add(Activation('elu'))
-        model.add(Conv2D(64, (9, 9), padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('elu'))
+        adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
-        # Back to original representation
-        model.add(Conv2D(self.config.channels, (5, 5), padding='same'))
+        model.compile(optimizer=adam, loss='mse',
+                      metrics=[self.evaluation_function])
 
+        if load_weights:
+            model.load_weights(self.config.paths['model'])
+
+        self.model = model
+
+        return model
+
+class PUPSR2(BaseSRCNNModel):
+    """ Parental Unit Pathetic Super-Resolution Model (batch normalization test, residual model)
+
+        BasicSR (20 Epochs, relu) : -39.7536911815 @ epoch 15
+        PUPSR (20 Epochs, relu)   : -40.8934259724 @ epoch 20
+        PUPSR (20 Epochs, elu)    : -40.7926285811 @ epoch 15
+        PUPSR (20 Epochs, leveld) : -40.8624241233 @ epoch 16
+    """
+
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
+
+        super(PUPSR2, self).__init__('PUPSR2', config, loss_function)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+
+        layer0 = Input(shape=self.config.image_shape)
+        layer1 = Conv2D(64, (9, 9), padding='same', activation='elu', input_shape=self.config.image_shape)(layer0)
+        print(layer1)
+        layer1 = BatchNormalization()(layer1)
+        print(layer1)
+        layer1 = Conv2D(32, (1, 1), padding='same', activation='elu')(layer1)
+        print(layer1)
+        layer1 = BatchNormalization()(layer1)
+        print(layer1)
+        layer1 = Conv2D(self.config.channels, (5, 5), padding='same')(layer1)
+        print(layer1)
+
+        model = Model(layer0, layer1)
 
         adam = optimizers.Adam(lr=.001, clipvalue=(1.0/.001), epsilon=0.001)
 
@@ -580,6 +606,7 @@ MODELS = {'BasicSR': BasicSR,
           'DeepDenoiseSR': DeepDenoiseSR,
           'ExpansionSR': ExpansionSR,
           'PUPSR': PUPSR,
+          'PUPSR2': PUPSR2,
           'GPUSR': GPUSR
          }
 
@@ -749,7 +776,7 @@ class ELUVDSR(BaseSRCNNModel):
             model.load_weights(self.config.paths['model'])
 
         self.model = model
-        
+
         return model
 
 

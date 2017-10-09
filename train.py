@@ -164,7 +164,7 @@ def setup(options):
     for fcnt in [0, 1]:
         size1, size2 = np.shape(test_images[fcnt][0]), np.shape(test_images[fcnt][1])
         if size1 != size2:
-            print('Warning: {} Alpha and Beta images are not the same size.'.format(image_paths[fcnt].title))
+            print('Warning: {} Alpha and Beta images are not the same size.'.format(image_paths[fcnt].title()))
 
     terminate(errors, False)
 
@@ -371,6 +371,7 @@ def train(config, options):
 
     print('')
     print('Training completed...')
+    exit(0)
 
 if __name__ == '__main__':
 

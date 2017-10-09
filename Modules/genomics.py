@@ -8,15 +8,21 @@ Toolkit for evolving Keras models
 import random
 import sys
 import itertools
-from copy import deepcopy
 
 from keras.models import Model
 from keras.layers import Add, Average, Multiply, Maximum, Input
 from keras.layers.convolutional import Conv2D
+from keras.layers.normalization import BatchNormalization
+from keras.layers.core import Activation
 import keras.optimizers as optimizers
+import keras.backend as K
 
 from Modules.models import BaseSRCNNModel
 from Modules.misc import printlog
+
+# Batch normalization axis is -1 for tensorflow and 1 for theano
+
+_BN_AXIS = 1 if K.image_dim_ordering() == 'th' else -1
 
 _DEBUG = True
 
@@ -71,13 +77,50 @@ MERGERS = {
     'max': Maximum()
 }
 
-# Generate all the possible codons
+# List of layers created by a build_model operation
 
-CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): Conv2D(f, (k, k), activation=a, padding='same')
+_LAYERS = []
+
+# Batch-normalized convolution closure
+
+def _bn_conv2d(filters, kernels, activation, padding):
+    """ Return a closure that returns a stack of batch-normalized convolution layers """
+
+    def _closure(inputs, depth=1):
+        """ Closure """
+
+        for _ in range(depth):
+            inputs = Conv2D(filters, (kernels, kernels), padding=padding, activation=activation)(inputs)
+            _LAYERS.append(inputs)
+            inputs = BatchNormalization(axis=_BN_AXIS)(inputs)
+            _LAYERS.append(inputs)
+
+        return inputs
+
+    return _closure
+
+
+# Generate all the possible codons; replaced Conv2D with bn_conv2d
+
+CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): _bn_conv2d(f, k, activation=a, padding='same')
                 for a in ALL_ACTS for k in ALL_KERNELS for f in ALL_FILTERS}
 
 def _make_composites():
-    """ Make composite codons """
+    """ Make composite codons. """
+
+    def _bn_merge(mrg, flt, knl, act):
+        """ Return a closure that returns a merger of stacks of batch-normalized convolution layers """
+
+        def _closure(inputs, depth=1):
+            """" Closure """
+            inputs = [_bn_conv2d(flt, k, act, 'same')(inputs, depth) for k in knl]
+            merge = ALL_MERGERS[mrg](inputs)
+
+            _LAYERS.append(merge)
+
+            return merge
+
+        return _closure
 
     codons = {}
 
@@ -88,57 +131,42 @@ def _make_composites():
                     for knl in itertools.combinations(ALL_KERNELS, dep):
                         cname = '{}_f{}_k{}_d{}_{}'.format(
                             mrg, flt, ''.join([str(k) for k in knl]), dep, act)
-                        flist = [CONVOLUTIONS['conv_f{}_k{}_{}'.format(
-                            flt, k, act)] for k in knl] + [ALL_MERGERS[mrg]]
-                        codons[cname] = flist
+                        #merger = _bn_merge(mrg, flt, knl, act)
+                        #flist = [CONVOLUTIONS['conv_f{}_k{}_{}'.format(
+                        #    flt, k, act)] for k in knl] + [ALL_MERGERS[mrg]]
+                        codons[cname] = _bn_merge(mrg, flt, knl, act)
 
     return codons
 
 
 COMPOSITES = _make_composites()
 
-# Modifier codons modify the effect of the next codon. Currently, the only one
-# is a dup_nnn codon that duplicates the next codon nnn times. Modifiers are
-# additive, not cumulative, and applied in reverse order. So for example,
-# dup_2-dup_3-CODON will first duplicate CODON 3 times, then duplicate it
-# again 2 times, resulting in *6* CODON codons.
+PRIMES = [2, 3, 5, 7, 11, 13]
+
+MODIFIERS = {'mod_r' + str(n): n for n in PRIMES}
+
+# The output layer is always an un-normalized convolution layer that generates 3 channels
+
+# Simple output layer closure
+
+def _out(kernels, padding):
+    """ Return a closure that returns an output layer. Has the same parameters as all
+        the other closures but ignores depth.
+    """
+
+    def _closure(inputs, _):
+        """ Closure """
+
+        output = Conv2D(3, (kernels, kernels), padding=padding)(inputs)
+
+        _LAYERS.append(output)
+
+        return output
+
+    return _closure
 
 
-def mod_duplicate(codon, layers, inputs, levels):
-    """ mod_rnnn: Duplicate the current front codon nnn times """
-
-    # We want to duplicate all layers at the same level as the last layer
-    # added (so we can duplicate merge layers). Reverse the layers so we
-    # add the last ones first, which will cause the order to be maintained.
-
-    level = levels[0]
-    codon_layers = [layer for i, layer in enumerate(layers) if levels[i] == level]
-    codon_inputs = [inputs for i, inputs in enumerate(inputs) if levels[i] == level]
-    codon_layers.reverse()
-    codon_inputs.reverse()
-
-    for i in range(int(codon.split('_')[1][1:])):
-        level -= 1
-        for j, _ in enumerate(codon_layers):
-            layer = deepcopy(codon_layers[j])
-            layer.name = layer.name + '_r{}'.format(i)
-            layers.insert(0, layer)
-            levels.insert(0, level)
-            inputs.insert(0, codon_inputs[j])
-
-    return layers, inputs, levels
-
-
-PRIMES = [1, 2, 3, 5, 7, 11, 13]
-
-MODIFIERS = {'mod_r' + str(n): mod_duplicate for n in PRIMES}
-
-MODIFIER_FUNCTIONS = [mod_duplicate]
-
-# The output layer is always a convolution layer that generates 3 channels
-
-OUTPUTS = {'out_k{}_{}'.format(k, a): Conv2D(3, (k, k), padding='same')
-           for k in ALL_KERNELS for a in ALL_ACTS}
+OUTPUTS = {'out_k{}'.format(k): _out(k, 'same') for k in ALL_KERNELS}
 
 # For convenience, make a dictionary of all the possible codons. Python 3.5 black magic!
 
@@ -159,6 +187,10 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         metrics         callbacks
     """
 
+    global _LAYERS
+
+    _LAYERS = []
+
     if not isinstance(genome, list):
         genome = genome.split('-')
 
@@ -167,85 +199,56 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
 
     try:
 
-        # layers are the actual model layers. inputs are how they have
-        # to be wired up (a relative reference, always negative). For
-        # the final layer of a composite codon, this will be a list.
+        # Initial layer stacking depth, will be adjusted by modifier codons
 
-        layers = []
-        inputs = []
-        levels = []
+        depth = 1
 
-        level = 0
+        # Initial model state, just an input layer
 
-        # Build the layers of the model in reverse, from output to input.
-        # Note that here we use reversed(list(enumerate())) so while we
-        # process the codons in reverse order, i still links them to the
-        # genome (i will count down, in other words)
+        first_layer = Input(shape=shape)
+        last_layer = first_layer
 
-        for i, codon in reversed(list(enumerate(genome))):
+        _LAYERS.append(first_layer)
 
-            # Keep track of layer levels so we can figure out what layers
-            # were generated by the same codon.
+        # Build the layers of the model.
 
-            level += 1
+        for i, codon in enumerate(genome):
 
-            # If the codon is a modifier, use it's function to modify the model
-            # as built so far. Do not modify an output!
+            # If a modifier codon, adjust the depth of the model. We may encounter
+            # several modifier codons in a row, they are additive. If genome tries
+            # to modify an output codon, abort with a failure.
 
-            if ALL_CODONS[codon] in MODIFIER_FUNCTIONS:
+            if codon in MODIFIERS:
                 if genome[i + 1] not in OUTPUTS:
-                    layers, inputs, levels = ALL_CODONS[codon](codon, layers, inputs, levels)
-                    level = levels[0]
+                    depth += ALL_CODONS[codon] - 1
                 else:
                     printlog('Cannot compile: Modifier codon trying to modify output layer.')
                     return None, 0
             else:
-                # Make a deep copy of the layer to generate. If the result is
-                # a list, then it is a composite codon.
 
-                layer = deepcopy(ALL_CODONS[codon])
-                if isinstance(layer, list):
-                    # Composite multi-layer codon with a merge as the last element.
-                    # Wire all the input layers to previous codon, then
-                    # wire their outputs to the merge layer. Note that here we
-                    # use enumerate(reversed()), so that j will count up (and
-                    # will be 0 when we do the merge layer)
+                # Add the new layer or layer stack and reset the depth
 
-                    for j, sublayer in enumerate(reversed(layer)):
-                        #sublayer = deepcopy(sublayer)
-                        sublayer.name = genome[i] + '_{}_{}'.format(i, j)
-                        layers.insert(0, sublayer)
-                        levels.insert(0, level)
-                        # Input layers are wired to the previous codon output
-                        inputs.insert(0, j - len(layer) if j else [-1 * n for n in range(1, len(layer))])
-                else:
-                    # Simple 1-layer codon.
-                    layer.name = codon + '_{}'.format(i)
-                    layers.insert(0, layer)
-                    levels.insert(0, level)
-                    inputs.insert(0, -1)
+                print(codon)
+                last_layer = ALL_CODONS[codon](last_layer, depth)
+                print(last_layer)
+                depth = 1
 
-        # Add the input layer
-
-        layers.insert(0, Input(shape=shape))
-        inputs.insert(0, None)
-
-        # Wire the layers
-
-        for i, wires in enumerate(inputs):
-            if wires:
-                if isinstance(wires, list):
-                    layers[i] = layers[i]([layers[i + j] for j in wires])
-                else:
-                    layers[i] = layers[i](layers[i + wires])
+        # This debug print code assumes Tensorflow is being used.
 
         if _DEBUG:
-            for i, layer in enumerate(layers):
-                print('Layer', i, layer.name, layer, layer._consumers)
+            layer_outputs = {}
+            for layer in _LAYERS:
+                lname = layer.name
+                layer_outputs[lname] = ' + '.join([l.name for l in layer.consumers()])
+            nwidth = max([len(l) for l in layer_outputs])
+            fstr = 'Layer {:>3d}: {:>' + str(nwidth) + 's} -> {}'
+            for i, layer in enumerate(_LAYERS):
+                lname = layer.name
+                print(fstr.format(i, lname, layer_outputs[lname]))
 
         # Create and compile the model
 
-        model = Model(layers[0], layers[-1])
+        model = Model(first_layer, last_layer)
 
         adam = optimizers.Adam(lr=learning_rate, clipvalue=(1.0 / .001), epsilon=0.001)
 
@@ -255,7 +258,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
             printlog('Compiled model: shape={}, learning rate={}, metrics={}'.format(
                 shape, learning_rate, metrics))
 
-        return (model, len(layers))
+        return (model, len(_LAYERS))
 
     except KeyboardInterrupt:
 
@@ -329,7 +332,7 @@ def point_mutation(child, _, acceptable_fitness):
     basepair = random.randrange(len(codons))
 
     while True:
-        if basepair == len(codons) - 1 and original_locus not in MODIFIERS:
+        if basepair == len(codons) - 1 and original_locus not in MODIFIERS and original_locus not in OUTPUTS:
             # choose new activation function
             new_codon = random.choice(ACTS)
         elif basepair == 0:
@@ -479,7 +482,7 @@ def regularize(child):
     return child
 
 
-def mutate(parent, conjugate, min_len=3, max_len=30, odds=(3, 6, 7, 9, 10, 11), best_fitness=0.0, statistics=None, viable=None):
+def mutate(parent, conjugate, min_len=3, max_len=90, odds=(3, 6, 7, 9, 10, 11), best_fitness=0.0, statistics=None, viable=None):
     """ Mutate a model. There are 6 possible mutations that can occur:
 
         point     point mutation of a parameter of a codon
@@ -609,6 +612,11 @@ class Organism():
             self.genome = item
             self.fitness, self.epoch, self.improved = 0.0, 0, True
 
+    def __repr__(self):
+        return str(self.list())
+
+    def __str__(self):
+        return "Genome={}, Fitness={}, Epoch={}, Improved={}".format(self.genome, self.fitness, self.epoch, self.improved)
 
     def list(self):
         """ convert Organism to list """

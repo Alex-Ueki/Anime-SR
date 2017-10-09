@@ -124,8 +124,8 @@ def opcheck(option, oldvalue, newvalue, errors):
     if option[1] == str:
         newvalue = str(newvalue)
     elif option[1] == bool:
-        newvalue = '1' if 'true'.startswith(newvalue.lower()) else newvalue
-        newvalue = '0' if 'false'.startswith(newvalue.lower()) else newvalue
+        newvalue = True if 'true'.startswith(newvalue.lower()) else newvalue
+        newvalue = False if 'false'.startswith(newvalue.lower()) else newvalue
         try:
             newvalue = bool(newvalue)
         except ValueError:
