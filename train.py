@@ -93,7 +93,8 @@ def setup(options):
             else:
                 spath = os.path.join(dpath, 'models', 'genes', config.model_type + '.json')
                 if os.path.exists(spath):
-                    config.paths['state'] = mpath
+                    config.paths['state'] = spath
+
 
     # Validation and error checking
 
@@ -249,9 +250,7 @@ def setup(options):
     # If we do have an existing json state, load it and override
 
     statepath = config.paths['state']
-    print(statepath)
     if os.path.exists(statepath):
-        print('exists')
         if os.path.isfile(statepath):
             print('Loading existing Model state')
             try:
@@ -348,9 +347,16 @@ def train(config, options):
             cur_model = models.MODELS[model](config)
         else:
             cur_model = models.BaseSRCNNModel(model, config)
-            cur_model.model = genomics.build_model(model)
-
+            cur_model.model, _ = genomics.build_model(model,
+                                                      shape=config.image_shape,
+                                                      learning_rate=config.learning_rate,
+                                                      metrics=[cur_model.evaluation_function])
+            errors = oops(False, cur_model.model is None, 'Compilation failed')
+            terminate(errors, False)
+            
         # Create and fit model (best model state will be automatically saved)
+
+        print(cur_model)
 
         cur_config = cur_model.get_config()
         print('Model configuration:')
