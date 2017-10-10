@@ -195,7 +195,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         genome = genome.split('-')
 
     if _DEBUG:
-        printlog(genome)
+        printlog('Compiling',genome)
 
     try:
 
@@ -205,7 +205,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
 
         # Initial model state, just an input layer
 
-        first_layer = Input(shape=shape)
+        first_layer = Input(shape=shape, dtype='float32')
         last_layer = first_layer
 
         _LAYERS.append(first_layer)
@@ -228,9 +228,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
 
                 # Add the new layer or layer stack and reset the depth
 
-                print(codon)
                 last_layer = ALL_CODONS[codon](last_layer, depth)
-                print(last_layer)
                 depth = 1
 
         # This debug print code assumes Tensorflow is being used.

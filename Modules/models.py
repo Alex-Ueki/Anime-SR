@@ -371,7 +371,7 @@ class ExpansionSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.config.image_shape)
+        init = Input(shape=self.config.image_shape, dtype='float32')
         layer1 = Conv2D(64, (9, 9), activation='relu', padding='same', name='level1')(init)
 
         layer2a = Conv2D(32, (1, 1), activation='relu', padding='same', name='lavel1_1')(layer1)
@@ -406,7 +406,7 @@ class DeepDenoiseSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.config.image_shape)
+        init = Input(shape=self.config.image_shape, dtype='float32')
         conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
         conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv1)
 
@@ -459,7 +459,7 @@ class VDSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.config.image_shape)
+        init = Input(shape=self.config.image_shape, dtype='float32')
 
         mix = Conv2D(64, (3, 3), activation='relu', padding='same')(init)
 
@@ -531,17 +531,12 @@ class PUPSR2(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        layer0 = Input(shape=self.config.image_shape)
-        layer1 = Conv2D(64, (9, 9), padding='same', activation='elu', input_shape=self.config.image_shape)(layer0)
-        print(layer1)
+        layer0 = Input(shape=self.config.image_shape, dtype='float32')
+        layer1 = Conv2D(64, (9, 9), padding='same', activation='elu')(layer0)
         layer1 = BatchNormalization()(layer1)
-        print(layer1)
         layer1 = Conv2D(32, (1, 1), padding='same', activation='elu')(layer1)
-        print(layer1)
         layer1 = BatchNormalization()(layer1)
-        print(layer1)
         layer1 = Conv2D(self.config.channels, (5, 5), padding='same')(layer1)
-        print(layer1)
 
         model = Model(layer0, layer1)
 
@@ -660,7 +655,7 @@ class ELUExpansionSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.config.image_shape)
+        init = Input(shape=self.config.image_shape, dtype='float32')
         mix = Conv2D(64, (9, 9), activation='elu', padding='same', name='level1')(init)
 
         conv1 = Conv2D(32, (1, 1), activation='elu', padding='same', name='level1_1')(mix)
@@ -698,7 +693,7 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
 
     def create_model(self, load_weights):
 
-        init = Input(shape=self.config.image_shape)
+        init = Input(shape=self.config.image_shape, dtype='float32')
         conv1 = Conv2D(64, (3, 3), activation='elu', padding='same')(init)
         conv1 = Conv2D(64, (3, 3), activation='elu', padding='same')(conv1)
 

@@ -353,7 +353,7 @@ def train(config, options):
                                                       metrics=[cur_model.evaluation_function])
             errors = oops(False, cur_model.model is None, 'Compilation failed')
             terminate(errors, False)
-            
+
         # Create and fit model (best model state will be automatically saved)
 
         print(cur_model)
