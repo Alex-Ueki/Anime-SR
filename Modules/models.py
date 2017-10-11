@@ -12,10 +12,7 @@ from abc import ABCMeta, abstractmethod
 from keras.models import Sequential, Model, load_model
 from keras.layers import Add, Average, Input
 from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D
-#from keras.layers.convolutional_recurrent import ConvLSTM2D
 from keras.layers.normalization import BatchNormalization
-from keras.layers.core import Activation
-
 from keras import backend as K
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
@@ -264,9 +261,6 @@ class BaseSRCNNModel(object):
 
         # PU: There is an inconsistency when Keras prints that it has saved an improved
         # model. It reports that it happened in the previous epoch.
-
-        print(val_count)
-        print(self.config.batch_size)
 
         self.model.fit_generator(self.config.training_data_generator(),
                                  steps_per_epoch=samples_per_epoch // self.config.batch_size,

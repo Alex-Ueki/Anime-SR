@@ -55,9 +55,8 @@ set_docstring(__doc__)
 
 MAX_POPULATION = 25         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
-EPOCHS = 10                 # Number of epochs to train (usual, minimum)
-MAX_EPOCHS = 15             # Max number of epochs to train (if extended due to continuous improvement)
-
+EPOCHS = 10                 # Number of epochs to train
+MAX_PER_TRAIN = 5           # Maximum number of epochs to train in one call to fit
 
 # Checkpoint state to genepool.json file
 
@@ -307,18 +306,20 @@ def evolve(config, genepool, image_info):
 
             # What organisms need evolution?
 
-            todo = [(i, p) for i, p in enumerate(population) if p.epoch < EPOCHS or (p.epoch < MAX_EPOCHS and p.improved)]
+            todo = [(i, p) for i, p in enumerate(population) if p.epoch < EPOCHS]
             if not todo:
                 break
 
             # Do the least-trained ones first (in case we got interrupted/restarted)
 
-            least_evolved = min([p.epoch for i, p in todo])
+            least_evolved = min([p.epoch for _, p in todo])
             todo = [(i, p) for i, p in todo if p.epoch == least_evolved]
+
+            epoch_count = min(MAX_PER_TRAIN, EPOCHS-least_evolved)
 
             # Give them an epoch of training
 
-            printlog('Processing round of {} organisms...'.format(len(todo)))
+            printlog('Processing round of {} organisms for {} epoch(s)...'.format(len(todo), epoch_count))
             for i, organism in todo:
                 config.paths['model'] = os.path.join(config.paths['genebank'], organism.genome + '.h5')
                 config.paths['state'] = os.path.join(config.paths['genebank'], organism.genome + '.json')
@@ -326,10 +327,10 @@ def evolve(config, genepool, image_info):
                 config.config['model_type'] = config.model_type
                 config.config['paths'] = config.paths
                 config.epochs = 0
-                config.run_epochs = 1
+                config.run_epochs = epoch_count
 
                 try:
-                    population[i] = train(organism, config, epochs=1)
+                    population[i] = train(organism, config, epochs=epoch_count)
                 except:
                     raise
                 else:
@@ -343,9 +344,11 @@ def evolve(config, genepool, image_info):
 
                 population.sort(key=lambda o: 9999.9 if o.improved else -o.fitness)
 
-                # Remove the worst organism unless it has shown continuous improvement.
+                # Remove the worst organisms unless they have shown continuous improvement.
 
-                if len(population) > MIN_POPULATION and not population[0].improved:
+                least_evolved = min([p.epoch for p in population])
+
+                while len(population) > MAX_POPULATION - least_evolved and not population[0].improved:
                     printlog('Removing {} = {} @ {}'.format(population[0].genome, population[0].fitness, population[0].epoch))
                     graveyard.append(population[0].genome)
                     statistics = ligate(statistics, population[0].genome, population[0].fitness)
@@ -360,6 +363,10 @@ def evolve(config, genepool, image_info):
 
         if len(population) > MIN_POPULATION:
             try:
+                # Ye olde survival of the fittest
+
+                population.sort(key=lambda o: o.fitness)
+
                 # Gather statistics on the genomes that are about to be culled
 
                 for organism in population[MIN_POPULATION:]:

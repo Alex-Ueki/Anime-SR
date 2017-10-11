@@ -5,7 +5,7 @@ Frames/
 Temp/
 Local/
 
-# PU local files
+# PU local files that should be ignored
 scratchpad.txt
 ghostbusters.py
 test.py
