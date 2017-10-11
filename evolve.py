@@ -304,6 +304,15 @@ def evolve(config, genepool, image_info):
 
         while population:
 
+            # Sanity check for duplicate organisms (could be caused by dumb meatbag
+            # hand-editing genepool.json)
+
+            genomes = [p.genome for p in population]
+
+            if len(genomes) != len(set(genomes)):
+                print('Population contains duplicate genomes! Quitting')
+                exit(1)
+
             # What organisms need evolution?
 
             todo = [(i, p) for i, p in enumerate(population) if p.epoch < EPOCHS]
@@ -336,7 +345,7 @@ def evolve(config, genepool, image_info):
                 else:
                     checkpoint(poolpath, population, graveyard, statistics, config)
 
-            # Possibly delete the worst-performer
+            # Possibly delete the worst-performer(s)
 
             try:
 
@@ -344,7 +353,7 @@ def evolve(config, genepool, image_info):
 
                 population.sort(key=lambda o: 9999.9 if o.improved else -o.fitness)
 
-                # Remove the worst organisms unless they have shown continuous improvement.
+                # Remove the worst organism(s) unless they have shown continuous improvement.
 
                 least_evolved = min([p.epoch for p in population])
 
@@ -370,6 +379,7 @@ def evolve(config, genepool, image_info):
                 # Gather statistics on the genomes that are about to be culled
 
                 for organism in population[MIN_POPULATION:]:
+                    printlog('Culling {} = {} @ {}'.format(organism.genome, organism.fitness, organism.epoch))
                     statistics = ligate(statistics, organism.genome, organism.fitness)
                     graveyard.append(organism.genome)
 
@@ -395,11 +405,11 @@ def evolve(config, genepool, image_info):
                                         best_fitness=best_fitness,
                                         statistics=statistics))
                 if child not in parents and child not in children and child not in graveyard:
-                    children.append(Organism(child))
+                    children.append(child)
                 else:
                     printlog('Duplicate genome rejected...')
 
-            population.extend(children)
+            population.extend([Organism(c) for c in children])
         except:
             raise
         else:
