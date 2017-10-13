@@ -73,11 +73,6 @@ def read(dpxfile):
     global DPX_META
     global DPX_HEADER
 
-    # Open file if passed a path instead of a file descriptor
-
-    if isinstance(dpxfile, str):
-        dpxfile = open(dpxfile, 'rb')
-        
     # Figure out the byte order of the file
 
     dpxfile.seek(0)
