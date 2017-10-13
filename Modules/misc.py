@@ -109,7 +109,11 @@ def terminate(sarah_connor, verbose=True):
         if verbose:
             print(_DOCSTRING)
         print('')
-        sys.exit(1)
+
+        # Do not terminate if we are testing
+
+        if 'pytest' not in sys.modules:
+            sys.exit(1)
 
 
 def opcheck(option, oldvalue, newvalue, errors):
@@ -119,7 +123,7 @@ def opcheck(option, oldvalue, newvalue, errors):
 
     # Convert type of newvalue.
 
-    original_value = newvalue
+    _newvalue = newvalue
 
     if option[1] == str:
         newvalue = str(newvalue)
@@ -142,21 +146,22 @@ def opcheck(option, oldvalue, newvalue, errors):
             newvalue = -1.0
 
     if option[2](newvalue):
-        errors = True
-        print(option[3].format(original_value))
+        errors = oops(True, True, option[3], _newvalue)
         newvalue = oldvalue
 
-    return (errors, newvalue)
+    return (newvalue, errors)
 
 
-def parse_options(opcodes):
+def parse_options(opcodes, args=None):
     """ Parse options. Takes a dictionary of options, each element is a tuple
         containing 4 elements:
 
         config_name     the ModelIO element name
         type            type of the option
         invalid_func    func that returns True if option is out of bounds
-        format_string   message to display if there is a problem with {}
+        format_string   message to display if there is a problem with option
+
+        Uses sys.argv if arguments are not explictly provided.
     """
 
     options = {}
@@ -167,7 +172,9 @@ def parse_options(opcodes):
 
     errors = False
 
-    for param in sys.argv[1:]:
+    args = sys.argv[1:] if args is None else args
+
+    for param in args:
 
         opvalue = param.split('=', maxsplit=1)
 
@@ -192,7 +199,7 @@ def parse_options(opcodes):
         if opname not in options:
             options[opname] = None
 
-        errors, options[opname] = opcheck(opcode, options[opname], value, errors)
+        options[opname], errors = opcheck(opcode, options[opname], value, errors)
 
     terminate(errors)
 
