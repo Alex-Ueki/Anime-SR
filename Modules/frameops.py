@@ -93,7 +93,8 @@ def imread(file_path):
     file_type = os.path.splitext(file_path)[1]
 
     if file_type == '.dpx':
-        return dpx.read(file_path)
+        with open(file_path, 'rb') as dpxfile:
+            return dpx.read(dpxfile)
 
     return misc.imread(file_path, mode='RGB').astype('float32') / 255.0
 
@@ -120,12 +121,6 @@ def imsave(file_path, img, meta=None):
 
 
 def tesselate(file_paths, config):
-    """, tile_width, tile_height, border, black_level=0.0, border_mode='constant',
-              trim_top=0, trim_bottom=0, trim_left=0, trim_right=0,
-              shuffle=True, jitter=False, skip=False,
-              expected_width=1920, expected_height=1080,
-              quality=1.0, theano=False):
-    """
     """ Generator for image tiles. Trims each image file (useful for handling 4:3 images in 16:9 HD files),
         then adds a border before generating the tiles. Each tile will be of shape
         (tile_height+border*2, tile_width+border*2, 3). Config is a ModelIO containing these values:
@@ -171,7 +166,8 @@ def tesselate(file_paths, config):
         if tiles != []:
 
             # If we are doing quality selection, then we need to fix the cache the first time
-            # through.
+            # through. Note that if caching is off, nothing will actually get stored in the
+            # cache, but the quality selection will be performed!
 
             if config.quality < 1.0 and img_file not in CACHED_QUALITY:
                 tiles, _ = update_cache_quality(img_file, tiles, config.quality)
@@ -192,8 +188,6 @@ def tesselate(file_paths, config):
                     yield tiles[tile_index]
                 else:
                     skip_count -= 1
-
-#
 
 
 def tesselate_pair(alpha_paths, beta_paths, config):
@@ -289,7 +283,7 @@ def update_cache_quality(path, tiles, quality, indexes=None):
 
     # Update the cache if the tiles are in there
 
-    if path in CACHED_TILES:
+    if CACHING and path in CACHED_TILES:
         CACHED_TILES[path] = tiles
         CACHED_QUALITY[path] = True
 
@@ -472,36 +466,3 @@ def grout(tiles, config):
                            (0, 0)), mode='constant', constant_values=config.black_level)
 
     return img
-
-
-def batch_generator(tile_generator, image_shape, batch_size):
-    """ Turn a tile generator into a tile batch generator
-        Currently not used, was having a problem getting the model to
-        predict with a generator. See model.predict_tiles; it was
-        expecting more tiles than it actually got.
-    """
-
-    tiles = np.empty((batch_size, ) + image_shape)
-    batch_index, bnum = 0, 1
-
-    # Generate batches of tiles
-
-    for tile in tile_generator:
-
-        # PU: This is already handled inside modelio.py
-
-        # if K.image_dim_ordering() == 'th':
-        #    tile = tile.transpose((2, 0, 1))
-
-        tiles[batch_index] = tile
-        batch_index += 1
-        if batch_index >= batch_size:
-            batch_index = 0
-            bnum += 1
-            yield tiles
-
-    # Output residual tiles
-
-    if batch_index > 0:
-        tiles = tiles[:batch_index]
-        yield tiles
