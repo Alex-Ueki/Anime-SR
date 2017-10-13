@@ -4,6 +4,7 @@ Data*/
 Frames/
 Temp/
 Local/
+Obsolete/
 
 # PU local files that should be ignored
 scratchpad.txt
