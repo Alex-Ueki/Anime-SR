@@ -6,7 +6,7 @@ Temp/
 Local/
 Obsolete/
 
-!Test/Data
+!Tests/Data
 
 # PU local files that should be ignored
 scratchpad.txt
