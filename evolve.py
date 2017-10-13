@@ -56,7 +56,7 @@ set_docstring(__doc__)
 MAX_POPULATION = 25         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
 EPOCHS = 10                 # Number of epochs to train
-MAX_PER_TRAIN = 5           # Maximum number of epochs to train in one call to fit
+MAX_PER_TRAIN = 3           # Maximum number of epochs to train in one call to fit
 
 # Checkpoint state to genepool.json file
 
@@ -324,9 +324,9 @@ def evolve(config, genepool, image_info):
             least_evolved = min([p.epoch for _, p in todo])
             todo = [(i, p) for i, p in todo if p.epoch == least_evolved]
 
-            epoch_count = min(MAX_PER_TRAIN, EPOCHS-least_evolved)
+            epoch_count = max(1, MAX_PER_TRAIN-least_evolved)
 
-            # Give them an epoch of training
+            # Give them some training
 
             printlog('Processing round of {} organisms for {} epoch(s)...'.format(len(todo), epoch_count))
             for i, organism in todo:
