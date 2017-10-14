@@ -146,7 +146,7 @@ def predict(config, image_info):
     # Process the images
 
     if DEBUG:
-        image_info = [image_info[-1]]  # just do one image
+        image_info = [image_info[0]]  # just do one image
 
     # There is no point in caching tiles since we never revisit them.
 

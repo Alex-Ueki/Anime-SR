@@ -232,7 +232,7 @@ class ModelIO():
     def prediction_data_generator(self):
         """ Prediction tile generator generates single tiles, not tile pairs """
 
-        return self._predict_image_generator_frameops(self.paths['preduct'], {'jitter': False, 'shuffle': False, 'skip': False})
+        return self._predict_image_generator_frameops(self.paths['predict'], {'jitter': False, 'shuffle': False, 'skip': False})
 
     # Frameops versions of image generators
 
