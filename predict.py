@@ -52,8 +52,18 @@ def setup(options):
     model_split = os.path.splitext(options['model'])
     if model_split[1] == '':
         options['model'] = options['model'] + '.h5'
-    if os.path.dirname(options['model']) == '':
-        options['model'] = os.path.join(dpath, 'models', options['model'])
+
+
+    if not os.path.exists(options['model']):
+        mpath = os.path.join(dpath, 'models', options['model'])
+        print('Model not found, looking for', mpath)
+        if not os.path.exists(mpath):
+            mpath = os.path.join(dpath, 'models', 'genes', options['model'])
+            print('Model not found, looking for', mpath)
+        if not os.path.exists(mpath):
+            mpath = os.path.join(dpath, 'models', 'submodels', options['model'])
+            print('Model not found, looking for', mpath)
+        options['model'] = mpath
 
     options['state'] = os.path.splitext(options['model'])[0] + '.json'
 
@@ -146,7 +156,7 @@ def predict(config, image_info):
     # Process the images
 
     if DEBUG:
-        image_info = [image_info[0]]  # just do one image
+        image_info = [image_info[0], image_info[-1]]  # just do a couple of images
 
     # There is no point in caching tiles since we never revisit them.
 
@@ -175,9 +185,9 @@ def predict(config, image_info):
             fpath = os.path.join('Temp', 'PNG', os.path.basename(img_path)[:-4] + '-IN.png')
             frameops.imsave(fpath, input_image)
 
-        # Predict the new tiles
+        # Predict the new tiles in relatively small chunks so the GPU doesn't get clogged
 
-        predicted_tiles = sr_model.model.predict(tile_batch, tiles_per_img)
+        predicted_tiles = sr_model.model.predict(tile_batch, min(config.tiles_across, config.tiles_down))
 
         # GPU : Just using this to debug, uncomment to print section to see results for yourself
         # debugging: if residual, then the np.mean of tile_batch should be a
