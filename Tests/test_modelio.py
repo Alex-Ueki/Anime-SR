@@ -1,8 +1,28 @@
 """ Tests for Modules/misc.py """
 
 from copy import deepcopy
+import os
 import itertools
 import Modules.modelio as modelio
+import Modules.frameops as frameops
+
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+_DATAPATH = os.path.join(_ROOT, 'Data')
+_TMPPATH = os.path.join(_DATAPATH, 'Temp')
+_IMGPATH = os.path.join(_DATAPATH, 'Images')
+_DPXPATH = os.path.join(_IMGPATH, 'DPX')
+_PNGPATH = os.path.join(_IMGPATH, 'PNG')
+_EMPTYPATH = os.path.join(_IMGPATH, 'Empty')
+
+_IMG = 'frame-002992'
+_DPX = os.path.join(_DPXPATH, _IMG + '.dpx')
+_PNG = os.path.join(_PNGPATH, _IMG + '.png')
+
+_PATHS = {'training': _IMGPATH,
+          'validation': _IMGPATH,
+          'evaluation': _IMGPATH,
+          'predict': _IMGPATH}
 
 PARAMETERS = ['model_type',
               'paths',
@@ -166,7 +186,7 @@ def test_modelio_computed():
                   'image_height': 2160,
                   'trim_top': 240,
                   'trim_bottom': 240,
-                  'jitter': False}
+                  'jitter': True}
 
     # Try all possible input permutations, just to be pedantic
 
@@ -204,3 +224,58 @@ def test_modelio_computed():
     assert obj.config['image_shape'] == obj.image_shape
     assert obj.config['theano'] == obj.theano
     assert obj.image_shape[0 if obj.theano else 2] == 3
+
+def test_modelio_functions():
+    """ Test modelio functions """
+
+    config = {'paths': _PATHS}
+    obj = modelio.ModelIO(config)
+
+    parameters = ['jitter',
+                  'quality']
+
+    alt_values = {'jitter': True,
+                  'quality': 0.5}
+
+    # Just twiddle each item once this time
+
+    frameops.reset_cache(True)
+
+    for item in parameters:
+        config = deepcopy(obj.config)
+        config[item] = alt_values[item]
+        nobj = modelio.ModelIO(config)
+
+        # hack result so Alpha/Beta paths point to our mockup directories
+
+        nobj.alpha = 'DPX'
+        nobj.beta = 'PNG'
+
+        # always 2 images in DPX (alpha) and 1 in PNG (beta)
+
+        assert nobj.train_images_count() == int(nobj.quality * nobj.tiles_per_image * 2)
+        assert nobj.val_images_count() == nobj.tiles_per_image * 2
+        assert nobj.eval_images_count() == nobj.tiles_per_image * 2
+        assert nobj.predict_images_count() == nobj.tiles_per_image * 2
+
+        # Loop through the assumed number of tiles twice, check they are aligned
+
+        gen = nobj.training_data_generator()
+        tiles1 = [next(gen) for _ in range(nobj.train_images_count())]
+        tiles2 = [next(gen) for _ in range(nobj.train_images_count())]
+        assert tiles1 == tiles2
+
+        gen = nobj.validation_data_generator()
+        tiles1 = [next(gen) for _ in range(nobj.val_images_count())]
+        tiles2 = [next(gen) for _ in range(nobj.val_images_count())]
+        assert tiles1 == tiles2
+
+        gen = nobj.evaluation_data_generator()
+        tiles1 = [next(gen) for _ in range(nobj.eval_images_count())]
+        tiles2 = [next(gen) for _ in range(nobj.eval_images_count())]
+        assert tiles1 == tiles2
+
+        gen = nobj.prediction_data_generator()
+        tiles1 = [next(gen) for _ in range(nobj.predict_images_count())]
+        tiles2 = [next(gen) for _ in range(nobj.predict_images_count())]
+        assert tiles1 == tiles2

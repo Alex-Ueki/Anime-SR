@@ -14,8 +14,12 @@ _DPXPATH = os.path.join(_IMGPATH, 'DPX')
 _PNGPATH = os.path.join(_IMGPATH, 'PNG')
 _EMPTYPATH = os.path.join(_IMGPATH, 'Empty')
 
+# 2 DPX and 1 PNG image
+
 _IMG = 'frame-002992'
+_IMG0 = 'frame-000000'
 _DPX = os.path.join(_DPXPATH, _IMG + '.dpx')
+_DPX0 = os.path.join(_DPXPATH, _IMG0 + '.dpx')
 _TMP_DPX = os.path.join(_TMPPATH, _IMG + '.dpx')
 _PNG = os.path.join(_PNGPATH, _IMG + '.png')
 
@@ -61,7 +65,8 @@ def test_image_file():
 
     assert len(result) == 2
 
-    expected = [[os.path.join(_PNGPATH, _IMG + '.png')], [os.path.join(_DPXPATH, _IMG + '.dpx')]]
+    expected = [[os.path.join(_PNGPATH, _IMG0 + '.png'), os.path.join(_PNGPATH, _IMG + '.png')],
+                [os.path.join(_DPXPATH, _IMG0 + '.dpx'), os.path.join(_DPXPATH, _IMG + '.dpx')]]
     assert result == expected
 
 def test_imread():
