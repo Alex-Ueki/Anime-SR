@@ -13,7 +13,6 @@ from keras.models import Model
 from keras.layers import Add, Average, Multiply, Maximum, Input
 from keras.layers.convolutional import Conv2D
 from keras.layers.normalization import BatchNormalization
-from keras.layers.core import Activation
 import keras.optimizers as optimizers
 import keras.backend as K
 
@@ -45,7 +44,7 @@ _DEBUG = True
 # Define the complete range of our variable parameters
 
 ALL_FILTERS = [32, 64, 128, 256]
-ALL_KERNELS = [1, 3, 5, 7, 9]
+ALL_KERNELS = [3, 5, 7, 9]
 ALL_ACTS = ['linear', 'elu', 'tanh', 'softsign', 'relu']
 ALL_DEPTHS = [2, 3, 4]
 
@@ -68,7 +67,7 @@ ALL_MERGERS = {
 # topology, we can explore variants of that topology.
 
 FILTERS = [32, 64]
-KERNELS = [1, 5, 9]
+KERNELS = [3, 5, 7, 9]
 ACTS = ['elu']
 DEPTHS = [2, 3]
 
@@ -195,7 +194,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         genome = genome.split('-')
 
     if _DEBUG:
-        printlog('Compiling',genome)
+        printlog('Compiling', genome)
 
     try:
 

@@ -92,14 +92,21 @@ def state_files(path, suffix='.json'):
 def genepool_display(data, codon_filter=None, last_mod=None):
     """ Display current status overviews of a genepool.json file """
 
-    def population_display(info, timestamp):
+    def population_display(info, timestamp, dtype):
         """ Display the current evolver population """
 
         info = [[fitstr(p[0], 21), p[1] if len(p) > 1 else 0.0, p[2] if len(p) > 2 else 0, p[3] if len(p) > 3 else False] for p in info]
 
-        print('Current Genepool{}\n'.format(timestamp))
         info.sort(key=lambda x: x[1])
+
+        if len(info) > 30:
+            note = ' (Best 30 shown)'
+            info = info[:30]
+        else:
+            note = ''
+
         max_width = max([12] + [len(p[0]) for p in info])
+        print(dtype.title() + ' statistics{}{}\n'.format(note, timestamp))
         print('{} {:>6s} {:>9s} {}'.format('Genomes'.ljust(max_width + 4), 'Epochs', 'PSNR', '+'))
         print('{} {:>6s} {:>9s} {}'.format('-' * (max_width + 4), '-' * 6, '-' * 9, '-'))
         for model in info:
@@ -108,19 +115,10 @@ def genepool_display(data, codon_filter=None, last_mod=None):
             else:
                 print('    {}'.format(endash(model[0], max_width)))
 
-    def graveyard_display(info, timestamp):
-        """ Display contents of the graveyard """
-
-        info = [fitstr(p, 4) for p in info]
-        max_width = max([15] + [len(p) for p in info])
-        print('Genepool graveyard{}\n{}'.format(timestamp, '-' * (max_width + 4)))
-        for model in info:
-            print('    {}'.format(endash(model)))
-
-    def statistics_display(info, timestamp):
+    def statistics_display(info, timestamp, _):
         """" Display evolutionary statistics (with possible filtering) """
 
-        print('Genepool statistics{}\n'.format(timestamp))
+        print('Codon statistics{}\n'.format(timestamp))
 
         # Gene construction info; cribbed from genomics.py
 
@@ -154,7 +152,7 @@ def genepool_display(data, codon_filter=None, last_mod=None):
             print('    {} {:9.4f} {:9.4f} {:9.4f} {:6d}'.format(
                 endash(codon[0], max_width), *codon[1:]))
 
-    def io_display(info, timestamp):
+    def io_display(info, timestamp, _):
         """ Display IO values for evolver """
 
         for k in info['paths'].keys():
@@ -182,12 +180,12 @@ def genepool_display(data, codon_filter=None, last_mod=None):
     clear_screen()
 
     select = {'population': population_display,
-              'graveyard': graveyard_display,
+              'graveyard': population_display,
               'statistics': statistics_display,
               'io': io_display}
 
     if data in select:
-        select[data](info, timestamp)
+        select[data](info, timestamp, data)
     else:
         print('Unknown genepool selector [{}]'.format(data))
 

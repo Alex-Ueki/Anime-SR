@@ -13,7 +13,7 @@ Options are:
     genepool=path       path to genepool file, default is {Data}/genepool.json
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
-    border=nnn          border size, default=2
+    border=nnn          border size, default=10 (note difference here from train)
     lr=.nnn             set initial learning rate. Should be 0.001 or less. Default = 0.001
     quality=.nnn        fraction of the "best" tiles used in training (but not validation). Default is 1.0 (use all)
     residual=1|0|T|F    have the model train using residual images. Default=True.
@@ -66,7 +66,7 @@ def checkpoint(json_path, population, graveyard, statistics, config):
 
     state = {
         'population': [p.list() for p in population],
-        'graveyard': graveyard,
+        'graveyard': [o.list() for o in graveyard],
         'statistics': statistics,
         'config': config.config
     }
@@ -79,10 +79,12 @@ def checkpoint(json_path, population, graveyard, statistics, config):
 def setup(options):
     """Set up configuration """
 
-    # set up our initial state
+    # Set up our initial state. Choosing to use a wide border because I was
+    # seeing tile edge effects.
 
     errors = False
     genepool = {}
+    options.setdefault('border', 10)
     options['paths'].setdefault('genepool', os.path.join('Data', 'genepool.json'))
     poolpath = options['paths']['genepool']
 
@@ -93,7 +95,7 @@ def setup(options):
                 with open(poolpath, 'r') as jsonfile:
                     genepool = json.load(jsonfile)
 
-                # PU: Temp hack to change 'io' key to 'config'
+                # Change 'io' key to 'config' (backwards-compatibility)
 
                 if 'io' in genepool:
                     genepool['config'] = genepool['io']
@@ -245,6 +247,10 @@ def evolve(config, genepool, image_info):
 
     if 'graveyard' in genepool:
         graveyard = genepool['graveyard']
+
+        # Update graveyard to current format (backwards-compatibility)
+
+        graveyard = [Organism(g) for g in graveyard]
     else:
         printlog('Initializing graveyard...')
         graveyard = []
@@ -359,7 +365,7 @@ def evolve(config, genepool, image_info):
 
                 while len(population) > MAX_POPULATION - least_evolved and not population[0].improved:
                     printlog('Removing {} = {} @ {}'.format(population[0].genome, population[0].fitness, population[0].epoch))
-                    graveyard.append(population[0].genome)
+                    graveyard.append(population[0])
                     statistics = ligate(statistics, population[0].genome, population[0].fitness)
                     del population[0]
 
@@ -381,7 +387,7 @@ def evolve(config, genepool, image_info):
                 for organism in population[MIN_POPULATION:]:
                     printlog('Culling {} = {} @ {}'.format(organism.genome, organism.fitness, organism.epoch))
                     statistics = ligate(statistics, organism.genome, organism.fitness)
-                    graveyard.append(organism.genome)
+                    graveyard.append(organism)
 
                 # Cull the population
 
@@ -395,6 +401,7 @@ def evolve(config, genepool, image_info):
 
         try:
             parents, children = [p.genome for p in population], []
+            tombstones = [p.genome for p in graveyard]
 
             printlog('Creating new children...')
 
@@ -404,7 +411,7 @@ def evolve(config, genepool, image_info):
                                         conjugate,
                                         best_fitness=best_fitness,
                                         statistics=statistics))
-                if child not in parents and child not in children and child not in graveyard:
+                if child not in parents and child not in children and child not in tombstones:
                     children.append(child)
                 else:
                     printlog('Duplicate genome rejected...')
