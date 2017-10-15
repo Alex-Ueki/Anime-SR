@@ -327,6 +327,32 @@ class BaseSRCNNModel(object):
 # BaseSRCNNModel Subclasses (add your custom models here)
 #----------------------------------------------------------------------------------
 
+class Dummy(BaseSRCNNModel):
+    """ Dummy model, does nothing, permits baseline comparison """
+
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
+
+        super(Dummy, self).__init__('Dummy', config, loss_function)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+
+        init = Input(shape=self.config.image_shape, dtype='float32')
+
+        model = Model(init, init)
+
+        adam = optimizers.Adam(lr=.001)
+
+        model.compile(optimizer=adam, loss='mse', metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.config.paths['model'])
+
+        self.model = model
+
+        return model
+
 class BasicSR(BaseSRCNNModel):
     """ Basic SuperResolution """
 
@@ -591,7 +617,8 @@ MODELS = {'BasicSR': BasicSR,
           'ExpansionSR': ExpansionSR,
           'PUPSR': PUPSR,
           'PUPSR2': PUPSR2,
-          'GPUSR': GPUSR
+          'GPUSR': GPUSR,
+          'Dummy': Dummy
          }
 
 """
