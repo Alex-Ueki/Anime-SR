@@ -65,6 +65,18 @@ def setup(options):
     # set up our initial state
 
     errors = False
+
+    # If user specified a path to a model, then we have to fix up the model_type.
+    # If the path is just a model name, delete the path, this will ensure that
+    # the correct paths get set up by ModelIO()
+
+    print(options)
+    if 'paths' in options and 'model' in options['paths']:
+        options['model_type'] = os.path.basename(options['paths']['model'])
+        if options['paths']['model'] == options['model_type']:
+            del options['paths']['model']
+
+    print(options)
     config = ModelIO(options)
     dpath = config.paths['data']
 
@@ -241,6 +253,8 @@ def setup(options):
                   'Model state path ({}) does not exist',
                   tpath)
 
+    print(config.paths['state'])
+    print(config.paths['model'])
     tpath = os.path.dirname(config.paths['model'])
     errors = oops(errors,
                   not os.path.exists(tpath),
