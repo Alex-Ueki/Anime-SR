@@ -609,15 +609,17 @@ class Organism():
             self.genome = item
             self.fitness, self.epoch, self.improved = 0.0, 0, True
 
+    def __iter__(self):
+        yield self.genome
+        yield self.fitness
+        yield self.epoch
+        yield self.improved
+
     def __repr__(self):
-        return str(self.list())
+        return str(list(self))
 
     def __str__(self):
         return "Genome={}, Fitness={}, Epoch={}, Improved={}".format(self.genome, self.fitness, self.epoch, self.improved)
-
-    def list(self):
-        """ convert Organism to list """
-        return [self.genome, self.fitness, self.epoch, self.improved]
 
 def train(org, config, epochs=1):
     """ Train an organism for 1 or more epochs

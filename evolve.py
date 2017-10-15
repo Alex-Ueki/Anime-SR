@@ -65,15 +65,14 @@ def checkpoint(json_path, population, graveyard, statistics, config):
     """ Checkpoint the current evolutionary state to json file """
 
     state = {
-        'population': [p.list() for p in population],
-        'graveyard': [o.list() for o in graveyard],
+        'population': [list(p) for p in population],
+        'graveyard': [list(o) for o in graveyard],
         'statistics': statistics,
         'config': config.config
     }
 
     with open(json_path, 'w') as jsonfile:
         json.dump(state, jsonfile, indent=4)
-
 
 
 def setup(options):
