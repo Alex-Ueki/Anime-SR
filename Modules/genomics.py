@@ -76,7 +76,7 @@ MERGERS = {
     'max': Maximum()
 }
 
-# List of layers created by a build_model operation
+# List of layers created by a build_model operation (useful for debugging/testing)
 
 _LAYERS = []
 
@@ -186,9 +186,10 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         metrics         callbacks
     """
 
-    global _LAYERS
+    # Remove any old layers from global
 
-    _LAYERS = []
+    while _LAYERS:
+        _LAYERS.pop()
 
     if not isinstance(genome, list):
         genome = genome.split('-')
