@@ -47,6 +47,8 @@ ALL_FILTERS = [32, 64, 128, 256]
 ALL_KERNELS = [3, 5, 7, 9]
 ALL_ACTS = ['linear', 'elu', 'tanh', 'softsign', 'relu']
 ALL_DEPTHS = [2, 3, 4]
+ALL_MULTIPLIERS = [1, 2, 4, 8, 16]
+
 
 # Merge codons combine multiple layers. They are internal codons that are the
 # final layer of composite codons
@@ -70,6 +72,7 @@ FILTERS = [32, 64]
 KERNELS = [3, 5, 7, 9]
 ACTS = ['elu']
 DEPTHS = [2, 3]
+MULTIPLIERS = [1, 2, 4, 8]
 
 MERGERS = {
     'add': Add(),
@@ -104,7 +107,12 @@ def _bn_conv2d(filters, kernels, activation, padding):
 CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): _bn_conv2d(f, k, activation=a, padding='same')
                 for a in ALL_ACTS for k in ALL_KERNELS for f in ALL_FILTERS}
 
-def _make_composites():
+# Also a dictionary of all the convolutions we may generate via mutation
+
+MUTABLE_CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): _bn_conv2d(f, k, activation=a, padding='same')
+                        for a in ACTS for k in KERNELS for f in FILTERS}
+
+def _make_composites(mergers, filters, acts, depths, kernels):
     """ Make composite codons. """
 
     def _bn_merge(mrg, flt, knl, act):
@@ -123,28 +131,27 @@ def _make_composites():
 
     codons = {}
 
-    for mrg in ALL_MERGERS:
-        for flt in ALL_FILTERS:
-            for act in ALL_ACTS:
-                for dep in ALL_DEPTHS:
-                    for knl in itertools.combinations(ALL_KERNELS, dep):
+    for mrg in mergers:
+        for flt in filters:
+            for act in acts:
+                for dep in depths:
+                    for knl in itertools.combinations(kernels, dep):
                         cname = '{}_f{}_k{}_d{}_{}'.format(
-                            mrg, flt, ''.join([str(k) for k in knl]), dep, act)
-                        #merger = _bn_merge(mrg, flt, knl, act)
-                        #flist = [CONVOLUTIONS['conv_f{}_k{}_{}'.format(
-                        #    flt, k, act)] for k in knl] + [ALL_MERGERS[mrg]]
+                            mrg, flt, '.'.join([str(k) for k in knl]), dep, act)
                         codons[cname] = _bn_merge(mrg, flt, knl, act)
 
     return codons
 
+COMPOSITES = _make_composites(ALL_MERGERS, ALL_FILTERS, ALL_ACTS, ALL_DEPTHS, ALL_KERNELS)
+MUTABLE_COMPOSITES = _make_composites(MERGERS, FILTERS, ACTS, DEPTHS, KERNELS)
 
-COMPOSITES = _make_composites()
+MODIFIERS = {'mod_r' + str(n): n for n in ALL_MULTIPLIERS}
+MUTABLE_MODIFIERS = {'mod_r' + str(n): n for n in MULTIPLIERS}
 
-PRIMES = [2, 3, 5, 7, 11, 13]
+# The output layer is always an un-normalized convolution layer that generates 3 channels.
+# Input layers are the same, but normalized
 
-MODIFIERS = {'mod_r' + str(n): n for n in PRIMES}
-
-# The output layer is always an un-normalized convolution layer that generates 3 channels
+SIMPLE_KERNELS = [1, 3, 5, 7, 9, 11, 13, 15]
 
 # Simple output layer closure
 
@@ -164,17 +171,48 @@ def _out(kernels, padding):
 
     return _closure
 
+# Simple input layer closure
 
-OUTPUTS = {'out_k{}'.format(k): _out(k, 'same') for k in ALL_KERNELS}
+def _in(kernels, padding):
+    """ Return a closure that returns an input layer. Has the same parameters as all
+        the other closures but ignores depth.
+    """
+
+    def _closure(inputs, _):
+        """ Closure """
+
+        inputs = Conv2D(3, (kernels, kernels), padding=padding)(inputs)
+        _LAYERS.append(inputs)
+        inputs = BatchNormalization(axis=_BN_AXIS)(inputs)
+        _LAYERS.append(inputs)
+
+        return inputs
+
+    return _closure
+
+# Output and input codons all generate (x,y,3) shape results. Outputs can
+# only be at end of genome, inputs only at the start. Input layers are
+# effectively naive sharpeners.
+
+OUTPUTS = {'out_k{}'.format(k): _out(k, 'same') for k in SIMPLE_KERNELS}
+INPUTS = {'in_k{}'.format(k): _in(k, 'same') for k in SIMPLE_KERNELS}
 
 # For convenience, make a dictionary of all the possible codons. Python 3.5 black magic!
 
-ALL_CODONS = {**CONVOLUTIONS, **COMPOSITES, **OUTPUTS, **MERGERS, **MODIFIERS}
+ALL_CODONS = {**CONVOLUTIONS, **COMPOSITES, **OUTPUTS, **INPUTS, **MODIFIERS}
 
-# Mutation selection list (of dicts. Used to select a random codon for mutation.
+# Also a dictionary of call codons with activation functions
 
-MUTABLE_CODONS = [CONVOLUTIONS, COMPOSITES, MODIFIERS]
+HAS_ACTIVATION = {**CONVOLUTIONS, **COMPOSITES}
 
+# What codons are available in the primordial soup for random inclusion?
+
+PRIMORDIAL_CODONS = [k for k in {**MUTABLE_CONVOLUTIONS, **MUTABLE_COMPOSITES, **MUTABLE_MODIFIERS}]
+
+# What codons are conserved -- and thus will not be point-mutated once they appear
+# in a genome.
+
+CONSERVED_CODONS = [] # [k for k in {**INPUTS, **OUTPUTS}]
 
 def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
     """ Build and compile a keras model from an expressed sequence of codons.
@@ -242,7 +280,7 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
             fstr = 'Layer {:>3d}: {:>' + str(nwidth) + 's} -> {}'
             for i, layer in enumerate(_LAYERS):
                 lname = layer.name
-                print(fstr.format(i, lname, layer_outputs[lname]))
+                printlog(fstr.format(i, lname, layer_outputs[lname]))
 
         # Create and compile the model
 
@@ -293,27 +331,26 @@ def fit_enough(best_fitness, statistics):
 
 
 def random_codon(acceptable_fitness):
-    """ Choose a random codon from mutable_codons, with suitable fitness.
+    """ Choose a random codon from PRIMORDIAL_CODONS, with suitable fitness.
         Will always return because of the random diceroll.
     """
 
-    while True:
-        codon = MUTABLE_CODONS
+    # Try to get a codon of acceptable fitness but give up if we have been
+    # looking too long.
 
-        while isinstance(codon, (list, tuple)):
-            codon = random.choice(codon)
-
-        if isinstance(codon, dict):
-            return random.choice(list(codon.keys()))
-
+    for _ in range(0, 100):
+        codon = random.choice(PRIMORDIAL_CODONS)
         if acceptable_fitness(codon):
-            return codon
+            if _DEBUG:
+                printlog('Random Codon =', codon)
+            break
 
+    return codon
 
 def kernel_sequence(number):
     """ Generate a random sorted kernel sequence string """
 
-    return ''.join(sorted([str(n) for n in random.sample(KERNELS, number)]))
+    return '.'.join(sorted([str(n) for n in random.sample(KERNELS, number)]))
 
 
 def point_mutation(child, _, acceptable_fitness):
@@ -324,13 +361,24 @@ def point_mutation(child, _, acceptable_fitness):
         Currently modifier codons do not have activation functions.
     """
 
+    if _DEBUG:
+        printlog('Point Mutation <', child)
+
     locus = random.randrange(len(child))
     original_locus = child[locus]
     codons = original_locus.split('_')
     basepair = random.randrange(len(codons))
+    has_depth = any([c[0] == 'd' for c in codons])
+
+    # If the chosen codon is highly conserved, do not mess with it.
+
+    if original_locus in CONSERVED_CODONS:
+        if _DEBUG:
+            printlog('Conserved Codon =', original_locus)
+        return child
 
     while True:
-        if basepair == len(codons) - 1 and original_locus not in MODIFIERS and original_locus not in OUTPUTS:
+        if basepair == len(codons) - 1 and original_locus in HAS_ACTIVATION:
             # choose new activation function
             new_codon = random.choice(ACTS)
         elif basepair == 0:
@@ -348,10 +396,11 @@ def point_mutation(child, _, acceptable_fitness):
             # r replication number of modifier codon
 
             if base == 'k':
-                # If the codon has a depth parameter we need a sequence of kernel sizes, but we
-                # can deduce this by the length of the current k parameter, since currently
-                # they are all single-digit.
-                param = kernel_sequence(len(param))
+                # If the codon has a depth parameter we need a sequence of kernel sizes.
+                # If we are tweaking a codon with no activation, it's an input/output codon
+                # so we have a bigger range.
+                ktype = KERNELS if original_locus in HAS_ACTIVATION else SIMPLE_KERNELS
+                param = kernel_sequence(len(param)) if has_depth else random.choice(ktype)
             elif base == 'd':
                 # If we change the depth we have to also change the k parameter
                 param = random.choice(DEPTHS)
@@ -359,7 +408,7 @@ def point_mutation(child, _, acceptable_fitness):
             elif base == 'f':
                 param = random.choice(FILTERS)
             elif base == 'r':
-                param = random.choice(PRIMES)
+                param = random.choice(MULTIPLIERS)
             else:
                 printlog('Unknown parameter base {} in {}'.format(base, original_locus))
                 param = 'XXX'
@@ -371,7 +420,7 @@ def point_mutation(child, _, acceptable_fitness):
     child[locus] = '_'.join(codons)
 
     if _DEBUG:
-        printlog('Point mutation {} -> {}'.format(original_locus, child[locus]))
+        printlog('Point Mutation >', child)
 
     return child
 
@@ -379,17 +428,25 @@ def point_mutation(child, _, acceptable_fitness):
 def insertion(child, _, acceptable_fitness):
     """ Insertion mutation - never insert after output codon """
 
+    if _DEBUG:
+        printlog('Insertion <', child)
+
     child_len = len(child)
 
+    if child_len == 0:
+        return child
+
+    # If first codon is an input codon, never insert before it (since this will
+    # almost always create an invalid genome).
+
+    start_offset = 1 if child[0] in INPUTS else 0
+    insert_position = start_offset if child_len == 1 else random.randrange(start_offset, child_len)
+
     codon = random_codon(acceptable_fitness)
-
-    # This may cause the layer count to become too high, but we can't check for that
-    # until later, when we do a test-build of the model.
-
-    child.insert(random.randrange(child_len), codon)
+    child.insert(insert_position, codon)
 
     if _DEBUG:
-        printlog('Insertion', codon)
+        printlog('Insertion >', child)
 
     return child
 
@@ -397,15 +454,18 @@ def insertion(child, _, acceptable_fitness):
 def deletion(child, _, min_len):
     """ Deletion mutation - never delete output codon! """
 
+    if _DEBUG:
+        printlog('Deletion <', child)
+
     child_len = len(child)
 
     if child_len <= min_len:
-        return None
+        return child
 
     del child[random.randrange(child_len - 1)]
 
     if _DEBUG:
-        printlog('Deletion')
+        printlog('Deletion <', child)
 
     return child
 
@@ -413,17 +473,28 @@ def deletion(child, _, min_len):
 def conjugation(child, conjugate, _):
     """ Conjugate two genomes - always at least one codon from each contributor """
 
+    if _DEBUG:
+        printlog('Conjugation <', child)
+
     splice = random.randrange(1, len(child))
     child = child[:-splice] + conjugate[-splice:]
 
     if _DEBUG:
-        printlog('Conjugation')
+        printlog('Conjugation >', child)
 
     return child
 
 
 def transposition(child, _, __):
     """ Transposition mutation - never transpose output codon """
+
+    if _DEBUG:
+        printlog('Transposition <', child)
+
+    # Cannot transpose if 2 or fewer elements
+
+    if len(child) <= 2:
+        return child
 
     splice = random.randrange(len(child) - 1)
     codon = child[splice]
@@ -433,7 +504,8 @@ def transposition(child, _, __):
     child.insert(splice, codon)
 
     if _DEBUG:
-        printlog('Transposition {}'.format(codon))
+        printlog('   Transposed :', codon)
+        printlog('Transposition >', child)
 
     return child
 
@@ -441,12 +513,20 @@ def transposition(child, _, __):
 def inversion(child, _, __):
     """ Invert two adjacent codons """
 
-    locus = random.randrange(len(child) - 2)
+    # Cannot invert if 3 or fewer elements
+
+    if _DEBUG:
+        printlog('Inversion <', child)
+
+    if len(child) <= 2:
+        return child
+
+    locus = 0 if len(child) == 2 else random.randrange(len(child) - 2)
 
     child[locus], child[locus + 1] = child[locus + 1], child[locus]
 
     if _DEBUG:
-        printlog('Inversion @ {}'.format(locus))
+        printlog('Inversion >', child)
 
     return child
 
@@ -464,6 +544,9 @@ def regularize(child):
 
     shuffled = True
 
+    if _DEBUG:
+        printlog('Regularize <', child)
+
     while shuffled:
 
         shuffled = False
@@ -477,10 +560,51 @@ def regularize(child):
                     child[i], child[i + 1] = child[i + 1], child[i]
                     shuffled = True
 
+    if _DEBUG:
+        printlog('Regularize >', child)
+
     return child
 
+def valid(child):
+    """ Return True if child is valid """
 
-def mutate(parent, conjugate, min_len=3, max_len=90, odds=(3, 6, 7, 9, 10, 11), best_fitness=0.0, statistics=None, viable=None):
+    # Nonexistent or empty children are invalid
+
+    if child is None or not child:
+        return False
+
+    # One or more leading input layers are OK
+
+    while child and child[0] in INPUTS:
+        child = child[1:]
+
+    # One or more trailing output layers are OK
+
+    while child and child[-1] in OUTPUTS:
+        child = child[:-1]
+
+    # Only input and output layers also OK
+
+    if not child:
+        return True
+
+    # If the first layer is a modifier, then if it's a x1 multiplier
+    # then the subsequent codon must also be a multiplier.
+
+    if child[0] in MODIFIERS:
+        if len(child) == 1 or (child[0] == 'mod-r1' and child[1] not in MODIFIERS):
+            return False
+        return valid(child[1:])
+
+    # Interior input or output layers are invalid
+
+    for codon in child:
+        if codon in INPUTS or codon in OUTPUTS:
+            return False
+
+    return True
+
+def mutate(parent, conjugate, tried, min_len=2, max_len=90, odds=(4, 8, 9, 10, 11, 12), best_fitness=0.0, statistics=None, viable=None):
     """ Mutate a model. There are 6 possible mutations that can occur:
 
         point     point mutation of a parameter of a codon
@@ -494,6 +618,7 @@ def mutate(parent, conjugate, min_len=3, max_len=90, odds=(3, 6, 7, 9, 10, 11), 
 
         parent        parental genome (list of codons; if string will be converted)
         conjugate     parental genome (only used for conjugation)
+        tried         genomes we have already tried (for quick rejection; = parents + graveyard)
         min_len       minimum length of the resulting genome
         max_len       maximum length of the resulting genome
         odds          list of *cumulative* odds of point, insert, delete, transpose, conjugate
@@ -525,7 +650,7 @@ def mutate(parent, conjugate, min_len=3, max_len=90, odds=(3, 6, 7, 9, 10, 11), 
 
     # Repeat until we get a useful mutation
 
-    while child is None or child == parent or child == conjugate:
+    while child is None or child == parent or child == conjugate or '-'.join(child) in tried:
 
         # Deep copy the parent into child, choose a mutation type, and
         # call the appropriate mutation function
@@ -539,21 +664,28 @@ def mutate(parent, conjugate, min_len=3, max_len=90, odds=(3, 6, 7, 9, 10, 11), 
         todo = len([i for i in odds if random.randrange(sum(odds)) < i])
         child = operations[-todo](child, conjugate, parameters[-todo])
 
-        # Check for invalid children
+        # Rearrange any adjacent modifier codons into a consistent order so we don't end up training
+        # two effectively identical genomes.
 
-        if viable != None and not viable(child):
+        child = regularize(child)
+
+        # Quick retry if known to be dead
+
+        if child == parent or child == conjugate or '-'.join(child) in tried:
+            continue
+
+        # Check for invalid and nonviable children
+
+        if not valid(child) or (viable != None and not viable(child)):
             child = None
         else:
             model, layer_count = build_model(child)
             if model is None or layer_count > max_len:
                 child = None
-    # Rearrange any adjacent modifier codons into a consistent order so we don't end up training
-    # two effectively identical genomes.
 
-    child = regularize(child)
 
     if _DEBUG:
-        printlog('   Resulting child', '-'.join(child))
+        printlog('New child', '-'.join(child))
 
     return child
 

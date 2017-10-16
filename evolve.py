@@ -400,7 +400,7 @@ def evolve(config, genepool, image_info):
 
         try:
             parents, children = [p.genome for p in population], []
-            tombstones = [p.genome for p in graveyard]
+            tried = [p.genome for p in graveyard] + parents
 
             printlog('Creating new children...')
 
@@ -408,10 +408,12 @@ def evolve(config, genepool, image_info):
                 parent, conjugate = [p for p in random.sample(parents, 2)]
                 child = '-'.join(mutate(parent,
                                         conjugate,
+                                        tried,
                                         best_fitness=best_fitness,
                                         statistics=statistics))
-                if child not in parents and child not in children and child not in tombstones:
+                if child not in parents and child not in children and child not in tried:
                     children.append(child)
+                    tried.append(child)
                 else:
                     printlog('Duplicate genome rejected...')
 
