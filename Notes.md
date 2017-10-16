@@ -13,9 +13,50 @@ This project has only been tested with Keras/Tensorflow. It may work with Theano
 transpose images into Theano ordering) but there may be cases that haven't been handled. If you try and
 use Theano and things don't work, search in frameops.py and modelio.py for 'theano'.
 
-# The quality setting
+# The Edge of Training
 
-The quality option of train.py uses a simple heuristic to rank the tiles in an image by how much detail
+One interesting issue that we have run into is how to deal with the edges of images when training. While
+the tiler will automatically extend the edges of images as needed, and the training models will also do
+the same when convolutional kernels go outside the edges of a tile, we have found that omitting the edge
+tiles from the training set generates better models, so that is the default. You can override this with
+'edges=true' in train.py.
+
+# Borderlands
+
+While the default border size is 2 pixels, you will get better training if the border size is greater than
+the largest kernel size used in the model -- but at the cost of slower training since the tiles are now
+bigger. You may want to try training with small borders to find promising model architectures, then increase
+the border size.
+
+# Jittering
+
+In addition to simply tiling the image, train.py can also generate intermediate tiles that are offset
+1/2 tile horizontally and vertically, in the hopes of creating additional tiles with interesting
+detail. So an R x C tile image, when jittered, will create an additional (R - 1) * (C - 1) tiles.
+Jittering is the default.
+
+Jittering and Edges interact. If Edges=False and Jitter=False, then only the jittered set of tiles will
+be used (so in effect, each tile can have a border of half the tile width and height without running over
+the edge of an image). Here's the complete "truth table" for tiling:
+
+```
+Edges   Jitter  Tiles
+False   False   (R - 1) * (C - 1)
+False   True    (R - 1) * (C - 1) + (R - 2) * (R - 2)
+True    False   R * C
+True    True    R * C + (R - 1) * (C - 1)
+```
+
+# Shuffle and Skip
+
+The Shuffle option shuffles the order in which images are used for training, as well as the order of
+tiles in an image. Skip randomly skips tiles when training, but since a training epoch requires a fixed
+number of tiles, it will result in some tiles being duplicated in the training set. The defaults are
+True and False respectively. These options are now obsolete.
+
+# Quality of Life
+
+The Quality option of train.py uses a simple heuristic to rank the tiles in an image by how much detail
 they have in them. This helps models train faster because you're not giving them tiles that don't have
 much feature information (especially useful with Anime since there are large areas of single-color paint).
 
@@ -24,13 +65,6 @@ you most definitely do want to know how the model performs on "uninteresting" ti
 keep this in mind when choosing the number of images in your training and validation sets; if you have
 4 times the number of images in your training set but are using quality=0.5, then your real ratio is
 2:1 (not counting the extra tiles you may be creating through jittering)
-
-# Jittering
-
-In addition to simply tiling the image, train.py also generates intermediate tiles that are offset
-1/2 tile horizontally and vertically, in the hopes of creating additional tiles with interesting
-detail. So an NxM tile image, when jittered, will create an additional (N-1)x(M-1) tiles. Jittering
-is the default.
 
 # Converting video from interlaced to progressive
 
