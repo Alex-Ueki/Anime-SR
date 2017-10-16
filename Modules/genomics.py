@@ -347,10 +347,11 @@ def random_codon(acceptable_fitness):
 
     return codon
 
-def kernel_sequence(number):
+def kernel_sequence(kernels, number):
     """ Generate a random sorted kernel sequence string """
 
-    return '.'.join(sorted([str(n) for n in random.sample(KERNELS, number)]))
+    printlog('Kernel sequence :', kernels, number)
+    return '.'.join(sorted([str(n) for n in random.sample(kernels, number)]))
 
 
 def point_mutation(child, _, acceptable_fitness):
@@ -395,16 +396,17 @@ def point_mutation(child, _, acceptable_fitness):
             # f number of filters
             # r replication number of modifier codon
 
+            ktype = KERNELS if original_locus in HAS_ACTIVATION else SIMPLE_KERNELS
+
             if base == 'k':
                 # If the codon has a depth parameter we need a sequence of kernel sizes.
                 # If we are tweaking a codon with no activation, it's an input/output codon
                 # so we have a bigger range.
-                ktype = KERNELS if original_locus in HAS_ACTIVATION else SIMPLE_KERNELS
-                param = kernel_sequence(len(param)) if has_depth else random.choice(ktype)
+                param = kernel_sequence(ktype, len(param.split('.'))) if has_depth else random.choice(ktype)
             elif base == 'd':
                 # If we change the depth we have to also change the k parameter
                 param = random.choice(DEPTHS)
-                codons = [c if c[0] != 'k' else 'k' + kernel_sequence(param) for c in codons]
+                codons = [c if c[0] != 'k' else 'k' + kernel_sequence(ktype, param) for c in codons]
             elif base == 'f':
                 param = random.choice(FILTERS)
             elif base == 'r':
