@@ -126,9 +126,12 @@ class ModelIO():
         self.tiles_across = config['tiles_across']
         self.tiles_down = config['tiles_down']
 
-        adj = 0 if self.edges else 2
-        tpi = (self.tiles_across - adj) * (self.tiles_down - adj)
-        tpi += (self.tiles_across - 1) * (self.tiles_down - 1) if self.jitter else 0
+        # if both edges and jitter are disabled, use the 1/2 tile inset tiles
+
+        tpi = self.tiles_across * self.tiles_down if self.edges else 0
+        tpi += (self.tiles_across - 1) * (self.tiles_down - 1) if self.jitter or not self.edges else 0
+        tpi += (self.tiles_across - 2) * (self.tiles_down - 2) if self.jitter and not self.edges else 0
+
         config['tiles_per_image'] = tpi
 
         self.tiles_per_image = config['tiles_per_image']

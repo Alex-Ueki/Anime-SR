@@ -375,25 +375,28 @@ def extract_tiles(file_path, config, can_disable=False):
                      ((config.border, config.border), (config.border, config.border), (0, 0)),
                      mode=config.border_mode)
 
-    # Actual tile width and height
+    offsets = []
 
-    #across, down = configtile_width + (2 * border), tile_height + (2 * border)
+    # Jittered offsets are shifted half a tile across and down. We need them if
+    # jitter is set or edge is not set.
 
-    # Unjittered tile offsets, with optional exclusion of edge tiles
-
-    inset = 0 if config.edges else 1
-    offsets = [(row * config.base_tile_height, col * config.base_tile_width)
-               for row in range(inset, config.tiles_down-inset) \
-               for col in range(inset, config.tiles_across-inset)]
-
-    # Jittered offsets are shifted half a tile across and down
-
-    if config.jitter:
+    if config.jitter or not config.edges:
         half_across = config.tile_width // 2
         half_down = config.tile_height // 2
         jittered_offsets = [(row * config.base_tile_height + half_down, col * config.base_tile_width + half_across)
                             for row in range(0, config.tiles_down - 1) for col in range(0, config.tiles_across - 1)]
         offsets.extend(jittered_offsets)
+
+    # Unjittered tile offsets, with optional exclusion of edge tiles. We don't need
+    # them if edges and jitter are both false
+
+    if config.edges or config.jitter:
+        inset = 0 if config.edges else 1
+        unjittered_offsets = [(row * config.base_tile_height, col * config.base_tile_width)
+                              for row in range(inset, config.tiles_down-inset) \
+                              for col in range(inset, config.tiles_across-inset)]
+        offsets.extend(unjittered_offsets)
+
 
     # Extract tiles from the image
 

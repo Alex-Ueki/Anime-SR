@@ -143,7 +143,7 @@ def test_extract_tiles():
 
     tiles = frameops.extract_tiles(_DPX, config)
 
-    assert len(tiles) == 352
+    assert len(tiles) == 391
 
     for tile in tiles:
         assert np.shape(tile) == (64, 64, 3)

@@ -220,14 +220,17 @@ def test_modelio_computed():
 
             assert nobj.config['tiles_per_image'] == nobj.tiles_per_image
 
+            # This looks a little bass-ackwards, but I'm being deliberately pedantic
+            # so this isn't computed in the same way as in modelio.py
 
             if nobj.edges:
                 tpi = nobj.tiles_across * nobj.tiles_down
+                if nobj.jitter:
+                    tpi += (nobj.tiles_across - 1) * (nobj.tiles_down - 1)
             else:
-                tpi = (nobj.tiles_across - 2) * (nobj.tiles_down - 2)
-
-            if nobj.jitter:
-                tpi += (nobj.tiles_across - 1) * (nobj.tiles_down - 1)
+                tpi = (nobj.tiles_across - 1) * (nobj.tiles_down - 1)
+                if nobj.jitter:
+                    tpi += (nobj.tiles_across - 2) * (nobj.tiles_down - 2)
 
             assert nobj.tiles_per_image == tpi
 
