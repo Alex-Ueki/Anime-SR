@@ -91,6 +91,7 @@ def setup(options):
     config['jitter'] = False
     config['shuffle'] = False
     config['skip'] = False
+    config['edges'] = True
     config['quality'] = 1.0
     config['model_type'] = model_type
 

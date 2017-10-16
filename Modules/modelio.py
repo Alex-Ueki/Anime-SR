@@ -60,6 +60,7 @@ class ModelIO():
         config.setdefault('jitter', False)
         config.setdefault('shuffle', True)
         config.setdefault('skip', False)
+        config.setdefault('edges', False)
         config.setdefault('residual', True)
         config.setdefault('quality', 1.0)
         config.setdefault('paths', {})
@@ -90,6 +91,7 @@ class ModelIO():
         self.jitter = config['jitter']
         self.shuffle = config['shuffle']
         self.skip = config['skip']
+        self.edges = config['edges']
         self.residual = config['residual']
         self.quality = config['quality']
         self.paths = config['paths']
@@ -124,8 +126,10 @@ class ModelIO():
         self.tiles_across = config['tiles_across']
         self.tiles_down = config['tiles_down']
 
-        config['tiles_per_image'] = self.tiles_across * self.tiles_down + \
-            ((self.tiles_across - 1) * (self.tiles_down - 1) if self.jitter else 0)
+        adj = 0 if self.edges else 2
+        tpi = (self.tiles_across - adj) * (self.tiles_down - adj)
+        tpi += (self.tiles_across - 1) * (self.tiles_down - 1) if self.jitter else 0
+        config['tiles_per_image'] = tpi
 
         self.tiles_per_image = config['tiles_per_image']
 
@@ -222,17 +226,28 @@ class ModelIO():
     def validation_data_generator(self):
         """ Validation tile generator uses all tiles regardless of quality setting """
 
-        return self._image_generator_frameops(self.paths['validation'], {'jitter': False, 'quality': 1.0})
+        return self._image_generator_frameops(self.paths['validation'],
+                                              {'jitter': False,
+                                               'quality': 1.0})
 
     def evaluation_data_generator(self):
         """ Generate tile pairs for evaluation; will not shuffle, jitter, skip or exclude tiles """
 
-        return self._image_generator_frameops(self.paths['evaluation'], {'jitter': False, 'shuffle': False, 'skip': False, 'quality': 1.0})
+        return self._image_generator_frameops(self.paths['evaluation'],
+                                              {'jitter': False,
+                                               'shuffle': False,
+                                               'skip': False,
+                                               'quality': 1.0})
 
     def prediction_data_generator(self):
         """ Prediction tile generator generates single tiles, not tile pairs """
 
-        return self._predict_image_generator_frameops(self.paths['predict'], {'jitter': False, 'shuffle': False, 'skip': False})
+        return self._predict_image_generator_frameops(self.paths['predict'],
+                                                      {'jitter': False,
+                                                       'shuffle': False,
+                                                       'skip': False,
+                                                       'quality': 1.0,
+                                                       'edges': True})
 
     # Frameops versions of image generators
 

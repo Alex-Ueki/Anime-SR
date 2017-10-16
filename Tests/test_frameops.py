@@ -106,7 +106,7 @@ def test_extract_tiles():
 
     # set up a default model configuration
 
-    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False})
+    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False, 'edges': True})
 
     # extract from a 1920x1080 png with 4x3 clipping
 
@@ -128,11 +128,33 @@ def test_extract_tiles():
 
     # extract from a 720x480 dpx with jittering
 
-    config = modelio.ModelIO({'shuffle': False, 'jitter': True})
+    config = modelio.ModelIO({'shuffle': False, 'jitter': True, 'skip': False, 'edges': True})
 
     tiles = frameops.extract_tiles(_DPX, config)
 
     assert len(tiles) == 823
+
+    for tile in tiles:
+        assert np.shape(tile) == (64, 64, 3)
+
+    # extract from a 720x480 dpx with no edges
+
+    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False, 'edges': False})
+
+    tiles = frameops.extract_tiles(_DPX, config)
+
+    assert len(tiles) == 352
+
+    for tile in tiles:
+        assert np.shape(tile) == (64, 64, 3)
+
+    # extract from a 720x480 dpx with no edges and jittering
+
+    config = modelio.ModelIO({'shuffle': False, 'jitter': True, 'skip': False, 'edges': False})
+
+    tiles = frameops.extract_tiles(_DPX, config)
+
+    assert len(tiles) == 743
 
     for tile in tiles:
         assert np.shape(tile) == (64, 64, 3)
@@ -146,7 +168,7 @@ def test_tesselate():
 
     # set up a default model configuration
 
-    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False})
+    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False, 'edges': True})
 
     # get actual tiles to check against
 
@@ -161,7 +183,7 @@ def test_tesselate():
 
     # test jitter
 
-    config = modelio.ModelIO({'shuffle': False, 'jitter': True, 'skip': False})
+    config = modelio.ModelIO({'shuffle': False, 'jitter': True, 'skip': False, 'edges': True})
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
 
@@ -170,7 +192,7 @@ def test_tesselate():
 
     # test skip
 
-    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': True})
+    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': True, 'edges': True})
 
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
@@ -186,7 +208,7 @@ def test_tesselate():
 
     # test shuffle
 
-    config = modelio.ModelIO({'shuffle': True, 'jitter': False, 'skip': False})
+    config = modelio.ModelIO({'shuffle': True, 'jitter': False, 'skip': False, 'edges': True})
 
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
@@ -199,7 +221,7 @@ def test_tesselate():
 
     # test shuffle + jitter
 
-    config = modelio.ModelIO({'shuffle': True, 'jitter': True, 'skip': False})
+    config = modelio.ModelIO({'shuffle': True, 'jitter': True, 'skip': False, 'edges': True})
 
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
@@ -212,7 +234,7 @@ def test_tesselate():
 
     # test shuffle + jitter + skip
 
-    config = modelio.ModelIO({'shuffle': True, 'jitter': True, 'skip': True})
+    config = modelio.ModelIO({'shuffle': True, 'jitter': True, 'skip': True, 'edges': True})
 
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
@@ -229,7 +251,7 @@ def test_caching():
     # cache off
 
     frameops.reset_cache(False)
-    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False})
+    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False, 'edges': True})
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
 
@@ -239,7 +261,7 @@ def test_caching():
     # cache on, quality 100%
 
     frameops.reset_cache(True)
-    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False})
+    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False, 'edges': True})
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
 
@@ -255,7 +277,11 @@ def test_caching():
     # cache on, quality 50%
 
     frameops.reset_cache(True)
-    config = modelio.ModelIO({'shuffle': False, 'jitter': False, 'skip': False, 'quality': 0.50})
+    config = modelio.ModelIO({'shuffle': False,
+                              'jitter': False,
+                              'skip': False,
+                              'edges': True,
+                              'quality': 0.50})
     extracted = frameops.extract_tiles(_DPX, config)
     tiles = [t for t in frameops.tesselate(_DPX, config)]
 
@@ -286,6 +312,7 @@ def test_tesselate_pair():
     config = modelio.ModelIO({'shuffle': False,
                               'jitter': False,
                               'skip': False,
+                              'edges': True,
                               'quality': 1.0,
                               'residual': False})
     tiles = [tp for tp in frameops.tesselate_pair(_DPX, _DPX, config)]
@@ -299,6 +326,7 @@ def test_tesselate_pair():
     config = modelio.ModelIO({'shuffle': False,
                               'jitter': False,
                               'skip': False,
+                              'edges': True,
                               'quality': 1.0,
                               'residual': True})
     tiles = [tp for tp in frameops.tesselate_pair(_DPX, _DPX, config)]
@@ -311,6 +339,7 @@ def test_tesselate_pair():
     config = modelio.ModelIO({'shuffle': True,
                               'jitter': False,
                               'skip': False,
+                              'edges': True,
                               'quality': 1.0,
                               'residual': False})
     tiles = [tp for tp in frameops.tesselate_pair(_DPX, _DPX, config)]
@@ -323,6 +352,7 @@ def test_tesselate_pair():
     config = modelio.ModelIO({'shuffle': False,
                               'jitter': True,
                               'skip': False,
+                              'edges': True,
                               'quality': 1.0,
                               'residual': False})
     tiles = [tp for tp in frameops.tesselate_pair(_DPX, _DPX, config)]
@@ -335,6 +365,7 @@ def test_tesselate_pair():
     config = modelio.ModelIO({'shuffle': False,
                               'jitter': False,
                               'skip': True,
+                              'edges': True,
                               'quality': 1.0,
                               'residual': False})
     tiles = [tp for tp in frameops.tesselate_pair(_DPX, _DPX, config)]
@@ -347,6 +378,7 @@ def test_tesselate_pair():
     config = modelio.ModelIO({'shuffle': False,
                               'jitter': False,
                               'skip': False,
+                              'edges': True,
                               'quality': 0.5,
                               'residual': False})
     tiles = [tp for tp in frameops.tesselate_pair(_DPX, _DPX, config)]
@@ -359,6 +391,7 @@ def test_tesselate_pair():
     config = modelio.ModelIO({'shuffle': True,
                               'jitter': True,
                               'skip': True,
+                              'edges': True,
                               'quality': 0.5,
                               'residual': False})
     tiles = [tp for tp in frameops.tesselate_pair(_DPX, _DPX, config)]
@@ -384,6 +417,7 @@ def test_grout():
     config = modelio.ModelIO({'shuffle': False,
                               'jitter': False,
                               'skip': False,
+                              'edges': True,
                               'residual': False})
 
     tiles = frameops.extract_tiles(_PNG, config)
@@ -402,6 +436,7 @@ def test_grout():
                               'jitter': False,
                               'skip': False,
                               'residual': False,
+                              'edges': True,
                               'trim_left': 0,
                               'trim_right': 0})
 

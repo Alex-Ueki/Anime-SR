@@ -43,6 +43,7 @@ PARAMETERS = ['model_type',
               'jitter',
               'shuffle',
               'skip',
+              'edges',
               'residual',
               'quality',
               'epochs',
@@ -175,7 +176,8 @@ def test_modelio_computed():
                   'image_height',
                   'trim_top',
                   'trim_bottom',
-                  'jitter']
+                  'jitter',
+                  'edges']
 
     alt_values = {'base_tile_width': 30,
                   'base_tile_height': 15,
@@ -186,7 +188,8 @@ def test_modelio_computed():
                   'image_height': 2160,
                   'trim_top': 240,
                   'trim_bottom': 240,
-                  'jitter': True}
+                  'jitter': True,
+                  'edges': True}
 
     # Try all possible input permutations, just to be pedantic
 
@@ -216,8 +219,17 @@ def test_modelio_computed():
             assert nobj.tiles_down == nobj.trimmed_height // nobj.base_tile_height
 
             assert nobj.config['tiles_per_image'] == nobj.tiles_per_image
-            assert nobj.tiles_per_image == nobj.tiles_across * nobj.tiles_down + \
-                ((nobj.tiles_across - 1) * (nobj.tiles_down - 1) if nobj.jitter else 0)
+
+
+            if nobj.edges:
+                tpi = nobj.tiles_across * nobj.tiles_down
+            else:
+                tpi = (nobj.tiles_across - 2) * (nobj.tiles_down - 2)
+
+            if nobj.jitter:
+                tpi += (nobj.tiles_across - 1) * (nobj.tiles_down - 1)
+
+            assert nobj.tiles_per_image == tpi
 
     # Test theano
 
@@ -232,9 +244,11 @@ def test_modelio_functions():
     obj = modelio.ModelIO(config)
 
     parameters = ['jitter',
+                  'edges',
                   'quality']
 
     alt_values = {'jitter': True,
+                  'edges': False,
                   'quality': 0.5}
 
     # Just twiddle each item once this time

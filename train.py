@@ -22,6 +22,7 @@ Options are:
     trimtop=nnn         pixels to trim on image top edge, default = 0
     trimbottom=nnn      pixels to trim on image bottom edge, default = 0
     jitter=1|0|T|F      include jittered tiles (offset by half a tile across&down) when training; default=False
+    edges=1|0|T|F       use image edge tiles when training; default=False
     skip=1|0|T|F        randomly skip 0-3 tiles between tiles when training; default=False
     shuffle=1|0|T|F     shuffle tiles into random order when training; default=True
     data=path           path to the main data folder, default = Data
@@ -417,6 +418,7 @@ if __name__ == '__main__':
         'bottom': ('trim_bottom', int, lambda x: x <= 0, 'Bottom trim value invalid ({})'),
         'residual': ('residual', bool, lambda x: not isinstance(x, bool), 'Residual value invalid ({}). Must be 0, 1, T, F.'),
         'jitter': ('jitter', bool, lambda x: not isinstance(x, bool), 'Jitter value invalid ({}). Must be 0, 1, T, F.'),
+        'edges': ('edges', bool, lambda x: not isinstance(x, bool), 'Edges value invalid ({}). Must be 0, 1, T, F.'),
         'skip': ('skip', bool, lambda x: not isinstance(x, bool), 'Skip value invalid ({}). Must be 0, 1, T, F.'),
         'shuffle': ('shuffle', bool, lambda x: not isinstance(x, bool), 'Shuffle value invalid ({}). Must be 0, 1, T, F.'),
         'verbose': ('verbose', bool, lambda x: not isinstance(x, bool), 'Verbose value invalid ({}). Must be 0, 1, T, F.'),

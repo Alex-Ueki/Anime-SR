@@ -56,6 +56,7 @@ set_docstring(__doc__)
 MAX_POPULATION = 25         # Maximum size of population
 MIN_POPULATION = 5          # Minimum size of population
 EPOCHS = 10                 # Number of epochs to train
+SLOW_EPOCHS = 15            # Continue to train slow-evolvers up to this epoch
 MAX_PER_TRAIN = 3           # Maximum number of epochs to train in one call to fit
 
 # Checkpoint state to genepool.json file
@@ -320,7 +321,7 @@ def evolve(config, genepool, image_info):
 
             # What organisms need evolution?
 
-            todo = [(i, p) for i, p in enumerate(population) if p.epoch < EPOCHS]
+            todo = [(i, p) for i, p in enumerate(population) if p.epoch < EPOCHS or (p.epoch < SLOW_EPOCHS and p.improved)]
             if not todo:
                 break
 
@@ -350,7 +351,7 @@ def evolve(config, genepool, image_info):
                 else:
                     checkpoint(poolpath, population, graveyard, statistics, config)
 
-            # Possibly delete the worst-performer(s)
+            # Possibly delete the worst-performer(s), but only during regular evolution
 
             try:
 
@@ -358,11 +359,12 @@ def evolve(config, genepool, image_info):
 
                 population.sort(key=lambda o: 9999.9 if o.improved else -o.fitness)
 
-                # Remove the worst organism(s) unless they have shown continuous improvement.
+                # Remove the worst organism(s), but don't do so if we are in the post-EPOCHS
+                # bonus training period for slow-evolvers.
 
-                least_evolved = min([p.epoch for p in population])
+                least_evolved = min(EPOCHS, *[p.epoch for p in population])
 
-                while len(population) > MAX_POPULATION - least_evolved and not population[0].improved:
+                while len(population) > MAX_POPULATION - least_evolved:
                     printlog('Removing {} = {} @ {}'.format(population[0].genome, population[0].fitness, population[0].epoch))
                     graveyard.append(population[0])
                     statistics = ligate(statistics, population[0].genome, population[0].fitness)

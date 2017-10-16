@@ -134,6 +134,7 @@ def tesselate(file_paths, config):
         shuffle         Do a random permutation of files
         jitter          Jitter the tile position randomly
         skip            Randomly skip 0 to 4 tiles between returned tiles
+        edges           If true, use image edge tiles, otherwise omit them
         expected_...    Expected width and height, default is HD
         quality         Quality threshold for tiles. The fraction of tiles in
                         an image that are returned, sorted by amount of detail
@@ -378,10 +379,12 @@ def extract_tiles(file_path, config, can_disable=False):
 
     #across, down = configtile_width + (2 * border), tile_height + (2 * border)
 
-    # Unjittered tile offsets
+    # Unjittered tile offsets, with optional exclusion of edge tiles
 
+    inset = 0 if config.edges else 1
     offsets = [(row * config.base_tile_height, col * config.base_tile_width)
-               for row in range(0, config.tiles_down) for col in range(0, config.tiles_across)]
+               for row in range(inset, config.tiles_down-inset) \
+               for col in range(inset, config.tiles_across-inset)]
 
     # Jittered offsets are shifted half a tile across and down
 

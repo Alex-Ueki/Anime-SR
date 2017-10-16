@@ -99,13 +99,15 @@ def setup(options):
     config = state['config' if 'config' in state else 'io']
 
     # Create real config with configurable parameters. In particular we disable options like
-    # jitter, shuffle, skip and quality.
+    # jitter, shuffle, skip and quality, but we set edges to true because we most definitely
+    # want to process edge tiles
 
     config['paths'] = options
     config['jitter'] = False
     config['shuffle'] = False
     config['skip'] = False
     config['quality'] = 1.0
+    config['edges'] = True
     config['model_type'] = model_type
 
     config = ModelIO(config)
