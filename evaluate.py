@@ -45,9 +45,9 @@ def setup(options):
     options.setdefault('model', os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5'))
     options.setdefault('evaluation', os.path.join(dpath, 'eval_images'))
 
-    model_split = os.path.splitext(options['model'])
-    if model_split[1] == '':
+    if not options['model'].endswith('.h5'):
         options['model'] = options['model'] + '.h5'
+        
     if os.path.dirname(options['model']) == '':
         options['model'] = os.path.join(dpath, 'models', options['model'])
 

@@ -49,10 +49,8 @@ def setup(options):
     options.setdefault('model', os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5'))
     options.setdefault('predict', os.path.join(dpath, 'predict_images'))
 
-    model_split = os.path.splitext(options['model'])
-    if model_split[1] == '':
+    if not options['model'].endswith('.h5'):
         options['model'] = options['model'] + '.h5'
-
 
     if not os.path.exists(options['model']):
         mpath = os.path.join(dpath, 'models', options['model'])

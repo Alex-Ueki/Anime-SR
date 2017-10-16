@@ -52,9 +52,9 @@ def setup(options):
     graphname = os.path.splitext(basename)[0] + '.png'
     options.setdefault('graph', os.path.join(dpath, 'models', 'graphs', graphname))
 
-    model_split = os.path.splitext(options['model'])
-    if model_split[1] == '':
+    if not options['model'].endswith('.h5'):
         options['model'] = options['model'] + '.h5'
+
     if os.path.dirname(options['model']) == '':
         options['model'] = os.path.join(dpath, 'models', options['model'])
 
