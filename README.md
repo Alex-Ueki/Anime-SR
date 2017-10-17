@@ -116,6 +116,10 @@ Options are:
     model=filename|path model filename or absolute path. If just a filename, then the
                         path will be {Data}/models/{model}. The .h5 extension may be omitted.
                         Default = BasicSR-60-60-2-dpx.h5
+    test=1|0|T|F        If true, only predict first, last and middle image. Default=False
+    png=1|0|T|F         If true, force output images to be png. Default=False
+    diff=1|0|T|F        If true, generate input/output difference images. Default=False
+                        Generates regular (-diff) and normalized (-ndiff) images.
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 

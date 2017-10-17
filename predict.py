@@ -13,6 +13,10 @@ Options are:
     model=filename|path model filename or absolute path. If just a filename, then the
                         path will be {Data}/models/{model}. The .h5 extension may be omitted.
                         Default = BasicSR-60-60-2-dpx.h5
+    test=1|0|T|F        If true, only predict first, last and middle image. Default=False
+    png=1|0|T|F         If true, force output images to be png. Default=False
+    diff=1|0|T|F        If true, generate input/output difference images. Default=False
+                        Generates regular (-diff) and normalized (-ndiff) images.
 
     Option names may be any unambiguous prefix of the option (ie: w=60, wid=60 and width=60 are all OK)
 
@@ -26,7 +30,7 @@ import json
 
 import numpy as np
 
-from Modules.misc import oops, terminate, set_docstring, parse_options
+from Modules.misc import oops, terminate, set_docstring, parse_options, printlog
 import Modules.frameops as frameops
 from Modules.modelio import ModelIO
 import Modules.models as models
@@ -42,6 +46,10 @@ def setup(options):
     """Set up configuration """
 
     # Set remaining options
+
+    options.setdefault('test', False)
+    options.setdefault('png', False)
+    options.setdefault('diff', False)
 
     options.setdefault('data', 'Data')
     dpath = options['data']
@@ -74,6 +82,9 @@ def setup(options):
     print('            Model : {}'.format(options['model']))
     print('            State : {}'.format(options['state']))
     print('       Model Type : {}'.format(model_type))
+    print('        Test Mode : {}'.format(options['test']))
+    print('        Force PNG : {}'.format(options['png']))
+    print(' Make Differences : {}'.format(options['diff']))
     print('')
 
     # Validation and error checking
@@ -107,6 +118,9 @@ def setup(options):
     config['quality'] = 1.0
     config['edges'] = True
     config['model_type'] = model_type
+
+    for option in ['test', 'png', 'diff']:
+        config[option] = options[option]
 
     config = ModelIO(config)
 
@@ -155,15 +169,15 @@ def predict(config, image_info):
 
     # Process the images
 
-    if DEBUG:
-        image_info = [image_info[0], image_info[-1]]  # just do a couple of images
+    if config.config['test']:
+        image_info = [image_info[0], image_info[len(image_info) // 2], image_info[-1]]  # just do a couple of images
 
     # There is no point in caching tiles since we never revisit them.
 
     frameops.reset_cache(enabled=False)
 
     for img_path in image_info:
-        print('Predicting', os.path.basename(img_path))
+        printlog('Predicting', os.path.basename(img_path))
 
         # Generate the tiles for the image. Note that tiles is a generator
 
@@ -175,7 +189,7 @@ def predict(config, image_info):
         for idx, tile in enumerate(tiles):
             tile_batch[idx] = tile
 
-
+        """
         if DEBUG:
             fname = os.path.basename(img_path)
             for i in range(0, min(30, tiles_per_img)):
@@ -184,6 +198,7 @@ def predict(config, image_info):
             input_image = frameops.grout(tile_batch, config)
             fpath = os.path.join('Temp', 'PNG', os.path.basename(img_path)[:-4] + '-IN.png')
             frameops.imsave(fpath, input_image)
+        """
 
         # Predict the new tiles in relatively small chunks so the GPU doesn't get clogged
 
@@ -204,9 +219,30 @@ def predict(config, image_info):
 
         # Save the image
 
-        fpath = os.path.join(config.paths['predict'], config.beta, os.path.basename(img_path))
+        basename = os.path.basename(img_path)
+        fname, ext = os.path.splitext(basename)
+        ext = '.png' if config.config['png'] else ext
+        basename = fname + ext
+
+        fpath = os.path.join(config.paths['predict'], config.beta, basename)
         frameops.imsave(fpath, predicted_image)
 
+        if config.config['diff']:
+            difference_tiles = np.absolute(predicted_tiles - tile_batch)
+            difference_image = frameops.grout(difference_tiles, config)
+            basename = fname + '-diff' + ext
+            fpath = os.path.join(config.paths['predict'], config.beta, basename)
+            frameops.imsave(fpath, difference_image)
+
+            # Also generate normalized difference image (easier to see)
+
+            maxdiff = np.amax(difference_image)
+            difference_image /= maxdiff
+            basename = fname + '-ndiff' + ext
+            fpath = os.path.join(config.paths['predict'], config.beta, basename)
+            frameops.imsave(fpath, difference_image)
+
+        """
         # Debug code to confirm what we are doing
 
         if DEBUG:
@@ -217,13 +253,16 @@ def predict(config, image_info):
 
             fpath = os.path.join('Temp', 'PNG', os.path.basename(img_path)[:-4] + '-OUT.png')
             frameops.imsave(fpath, predicted_image)
+        """
 
-    print('')
-    print('Predictions completed...')
+    printlog('Predictions completed...')
 
 
 if __name__ == '__main__':
     OPCODES = {
+        'test': ('test', bool, lambda x: not isinstance(x, bool), 'Test value invalid ({}). Must be 0, 1, T, F.'),
+        'png': ('png', bool, lambda x: not isinstance(x, bool), 'Png value invalid ({}). Must be 0, 1, T, F.'),
+        'diff': ('diff', bool, lambda x: not isinstance(x, bool), 'Diff value invalid ({}). Must be 0, 1, T, F.'),
         'data': ('data', str, lambda x: False, ''),
         'images': ('predict', str, lambda x: False, ''),
         'model': ('model', str, lambda x: False, '')}
