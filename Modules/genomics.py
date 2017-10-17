@@ -8,6 +8,7 @@ Toolkit for evolving Keras models
 import random
 import sys
 import itertools
+import datetime
 
 from keras.models import Model
 from keras.layers import Add, Average, Multiply, Maximum, Input
@@ -740,21 +741,28 @@ class Organism():
             self.fitness = item[1] if len(item) > 1 else 0.0
             self.epoch = item[2] if len(item) > 2 else 0
             self.improved = item[3] if len(item) > 3 else True
+            self.timestamp = item[4] if len(item) > 4 else datetime.datetime.now().timestamp()
         elif isinstance(item, str):
             self.genome = item
             self.fitness, self.epoch, self.improved = 0.0, 0, True
+            self.timestamp = datetime.datetime.now().timestamp()
 
     def __iter__(self):
         yield self.genome
         yield self.fitness
         yield self.epoch
         yield self.improved
+        yield self.timestamp
 
     def __repr__(self):
         return str(list(self))
 
     def __str__(self):
-        return "Genome={}, Fitness={}, Epoch={}, Improved={}".format(self.genome, self.fitness, self.epoch, self.improved)
+        return "Genome={}, Fitness={}, Epoch={}, Improved={} @ {}".format(self.genome,
+                                                                          self.fitness,
+                                                                          self.epoch,
+                                                                          self.improved,
+                                                                          self.timestamp)
 
 def train(org, config, epochs=1):
     """ Train an organism for 1 or more epochs

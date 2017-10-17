@@ -241,15 +241,12 @@ def evolve(config, genepool, image_info):
             ["conv_f64_k9_elu-conv_f32_k1_elu-avg_f32_k135_d3_elu-out_k5_elu", 0.0, 0, True]
         ]
 
-    # Update population state structure from older, simpler formats
+    # Convert json lists to Organisms
 
     population = [Organism(p) for p in population]
 
     if 'graveyard' in genepool:
         graveyard = genepool['graveyard']
-
-        # Update graveyard to current format (backwards-compatibility)
-
         graveyard = [Organism(g) for g in graveyard]
     else:
         printlog('Initializing graveyard...')
