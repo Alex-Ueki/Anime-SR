@@ -355,20 +355,25 @@ def evolve(config, genepool, image_info):
 
             try:
 
-                # Sort lowest-fitness to front of list, but exempt continuous improvers
+                # Sort lowest-fitness to front of list.
 
-                population.sort(key=lambda o: 9999.9 if o.improved else -o.fitness)
+                population.sort(key=lambda o: o.fitness)
 
-                # Remove the worst organism(s), but don't do so if we are in the post-EPOCHS
-                # bonus training period for slow-evolvers.
+                # Remove the worst organism(s), but don't remove if they are continuous
+                # improvers.
 
                 least_evolved = min(EPOCHS, *[p.epoch for p in population])
-
-                while len(population) > MAX_POPULATION - least_evolved:
-                    printlog('Removing {} = {} @ {}'.format(population[0].genome, population[0].fitness, population[0].epoch))
-                    graveyard.append(population[0])
-                    statistics = ligate(statistics, population[0].genome, population[0].fitness)
-                    del population[0]
+                max_allowed = MAX_POPULATION - least_evolved
+                if len(population) > max_allowed:
+                    for slot in reversed(range(max_allowed, len(population))):
+                        printlog('Removing {} = {} @ {}'.format(population[slot].genome,
+                                                                population[slot].fitness,
+                                                                population[slot].epoch))
+                        graveyard.append(population[slot])
+                        statistics = ligate(statistics,
+                                            population[slot].genome,
+                                            population[slot].fitness)
+                        del population[slot]
 
             except:
                 raise
