@@ -159,7 +159,7 @@ def genepool_display(data, codon_filter=None, last_mod=None):
             info['paths[\'{}\']'.format(k)] = info['paths'][k]
         del info['paths']
 
-        print('Genepool IO settings{}\n'.format(timestamp))
+        print('Genepool Config settings{}\n'.format(timestamp))
         keys = sorted(info.keys())
         max_width = max([len(k) for k in keys])
         for key in sorted(info.keys()):
@@ -182,7 +182,7 @@ def genepool_display(data, codon_filter=None, last_mod=None):
     select = {'population': population_display,
               'graveyard': population_display,
               'statistics': statistics_display,
-              'io': io_display}
+              'config': io_display}
 
     if data in select:
         select[data](info, timestamp, data)
@@ -204,7 +204,7 @@ def models_display(states, last_mod=None):
         bestv = state['best_values']['val_PeakSignaltoNoiseRatio']
         beste = state['best_epoch']['val_PeakSignaltoNoiseRatio']
         ecount = state['epoch_count']
-        mname = fitstr(os.path.basename(state['io']['model_path']).split('.h5')[0], 30)
+        mname = fitstr(os.path.basename(state['config']['paths']['model']).split('.h5')[0], 30)
         info.append((bestv, beste, ecount, mname))
 
     info.sort()
@@ -233,7 +233,7 @@ def monitor():
                 'G': (GENEPOOL, 'graveyard'),
                 'S': (GENEPOOL, 'statistics'),
                 'F': (GENEPOOL, 'statistics'),
-                'I': (GENEPOOL, 'io'),
+                'C': (GENEPOOL, 'config'),
                 'M': (MODELS, None),
                 'Q': (GENEPOOL, None)}
 
@@ -274,7 +274,7 @@ def monitor():
 
         key = input('\n{:%I:%M:%S %p}'.format(datetime.datetime.now()) +
                     ' : M)odels, Genepool P)opulation, G)raveyard,' +
-                    ' S)tats, Set F)ilter, I)O, Q)uit [ENTER to refresh] >')
+                    ' S)tats, Set F)ilter, C)onfig, Q)uit [ENTER to refresh] >')
 
         if key != '':
             cmd = key[0].upper()
