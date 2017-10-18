@@ -236,11 +236,19 @@ def predict(config, image_info):
 
             # Also generate normalized difference image (easier to see)
 
+            axes = (1, 2) if config.theano else (0, 1)
+
             maxdiff = np.amax(difference_image)
+            maxchan = np.amax(difference_image, axes) * 100.0
+            avgchan = np.average(difference_image, axes) * 100.0
+
             difference_image /= maxdiff
             basename = fname + '-ndiff' + ext
             fpath = os.path.join(config.paths['predict'], config.beta, basename)
             frameops.imsave(fpath, difference_image)
+
+            printlog('  Max channel color error: {:6.2f}%, {:6.2f}%, {:6.2f}%'.format(*maxchan))
+            printlog('  Avg channel color error: {:6.2f}%, {:6.2f}%, {:6.2f}%'.format(*avgchan))
 
         """
         # Debug code to confirm what we are doing
