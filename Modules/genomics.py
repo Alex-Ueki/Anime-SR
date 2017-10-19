@@ -69,16 +69,15 @@ ALL_MERGERS = {
 # and a restricted number of filter and kernel sizes. Once we find a good model
 # topology, we can explore variants of that topology.
 
-FILTERS = [32, 64]
-KERNELS = [3, 5, 7, 9]
-ACTS = ['elu']
-DEPTHS = [2, 3]
-MULTIPLIERS = [1, 2, 4, 8]
+# These values are now set in configure_environment!
 
-MERGERS = {
-    'add': Add(),
-    'max': Maximum()
-}
+FILTERS = None
+KERNELS = None
+ACTS = None
+DEPTHS = None
+MULTIPLIERS = None
+
+MERGERS = None
 
 # List of layers created by a build_model operation (useful for debugging/testing)
 
@@ -108,10 +107,10 @@ def _bn_conv2d(filters, kernels, activation, padding):
 CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): _bn_conv2d(f, k, activation=a, padding='same')
                 for a in ALL_ACTS for k in ALL_KERNELS for f in ALL_FILTERS}
 
-# Also a dictionary of all the convolutions we may generate via mutation
+# Also a dictionary of all the convolutions we may generate via mutation. All the MUTABLE_
+# variables are now set in configure_environment.
 
-MUTABLE_CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): _bn_conv2d(f, k, activation=a, padding='same')
-                        for a in ACTS for k in KERNELS for f in FILTERS}
+MUTABLE_CONVOLUTIONS = {}
 
 def _make_composites(mergers, filters, acts, depths, kernels):
     """ Make composite codons. """
@@ -144,10 +143,10 @@ def _make_composites(mergers, filters, acts, depths, kernels):
     return codons
 
 COMPOSITES = _make_composites(ALL_MERGERS, ALL_FILTERS, ALL_ACTS, ALL_DEPTHS, ALL_KERNELS)
-MUTABLE_COMPOSITES = _make_composites(MERGERS, FILTERS, ACTS, DEPTHS, KERNELS)
+MUTABLE_COMPOSITES = {}
 
 MODIFIERS = {'mod_r' + str(n): n for n in ALL_MULTIPLIERS}
-MUTABLE_MODIFIERS = {'mod_r' + str(n): n for n in MULTIPLIERS}
+MUTABLE_MODIFIERS = {}
 
 # The output layer is always an un-normalized convolution layer that generates 3 channels.
 # Input layers are the same, but normalized
@@ -206,14 +205,75 @@ ALL_CODONS = {**CONVOLUTIONS, **COMPOSITES, **OUTPUTS, **INPUTS, **MODIFIERS}
 
 HAS_ACTIVATION = {**CONVOLUTIONS, **COMPOSITES}
 
-# What codons are available in the primordial soup for random inclusion?
+# What codons are available in the primordial soup for random inclusion? Set in
+# configure_environment.
 
-PRIMORDIAL_CODONS = [k for k in {**MUTABLE_CONVOLUTIONS, **MUTABLE_COMPOSITES, **MUTABLE_MODIFIERS}]
+PRIMORDIAL_CODONS = []
 
 # What codons are conserved -- and thus will not be point-mutated once they appear
-# in a genome.
+# in a genome. Set in configure_environment.
 
-CONSERVED_CODONS = [] # [k for k in {**INPUTS, **OUTPUTS}]
+CONSERVED_CODONS = []
+
+# Configure environment - sets up the globals that control mutation
+
+def configure_environment(env=''):
+    """ Configure environment globals. env selects a particular
+        predefined environment - can be a comma-separated list
+        of environments that are applied in order.
+    """
+
+    global FILTERS
+    global KERNELS
+    global ACTS
+    global DEPTHS
+    global MULTIPLIERS
+    global MERGERS
+    global MUTABLE_CONVOLUTIONS
+    global MUTABLE_COMPOSITES
+    global MUTABLE_MODIFIERS
+    global PRIMORDIAL_CODONS
+    global CONSERVED_CODONS
+
+    # Defaults
+
+    FILTERS = [32, 64]
+    KERNELS = [3, 5, 7, 9]
+    ACTS = ['elu']
+    DEPTHS = [2, 3]
+    MULTIPLIERS = [1, 2, 4, 8]
+    MERGERS = {
+        'add': Add(),
+        'avg': Average(),
+        'mult': Multiply(),
+        'max': Maximum()
+    }
+    conserved = []
+
+    # Process environmental restrictions - only one for now
+
+    for cenv in env.split(','):
+        if cenv == 'lockio':
+            conserved += [k for k in {**INPUTS, **OUTPUTS}]
+        else:
+            printlog('Warning: Unknown environment {} - ignored!'.format(cenv))
+
+    # Set up dictionaries
+
+    if ACTS and KERNELS and FILTERS:
+        MUTABLE_CONVOLUTIONS = {'conv_f{}_k{}_{}'.format(f, k, a): _bn_conv2d(f, k, activation=a, padding='same')
+                                for a in ACTS for k in KERNELS for f in FILTERS}
+
+    if MERGERS and ACTS and KERNELS and FILTERS:
+        MUTABLE_COMPOSITES = _make_composites(MERGERS, FILTERS, ACTS, DEPTHS, KERNELS)
+
+    if MULTIPLIERS:
+        MUTABLE_MODIFIERS = {'mod_r' + str(n): n for n in MULTIPLIERS}
+
+    PRIMORDIAL_CODONS = [k for k in {**MUTABLE_CONVOLUTIONS, **MUTABLE_COMPOSITES, **MUTABLE_MODIFIERS}]
+
+    CONSERVED_CODONS = conserved
+
 
 def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
     """ Build and compile a keras model from an expressed sequence of codons.
@@ -224,6 +284,10 @@ def build_model(genome, shape=(64, 64, 3), learning_rate=0.001, metrics=None):
         learning_rate   initial learning rate
         metrics         callbacks
     """
+
+    if KERNELS is None:
+        printlog('Fatal Error: configure_environment was not called!')
+        exit(1)
 
     # Remove any old layers from global
 
@@ -455,7 +519,7 @@ def insertion(child, _, acceptable_fitness):
 
 
 def deletion(child, _, min_len):
-    """ Deletion mutation - never delete output codon! """
+    """ Deletion mutation - never delete output codon or conserved codons! """
 
     if _DEBUG:
         printlog('Deletion <', child)
@@ -465,7 +529,12 @@ def deletion(child, _, min_len):
     if child_len <= min_len:
         return child
 
-    del child[random.randrange(child_len - 1)]
+    dpos = random.randrange(child_len - 1)
+
+    if child[dpos] in CONSERVED_CODONS:
+        return child
+
+    del child[dpos]
 
     if _DEBUG:
         printlog('Deletion <', child)
@@ -489,7 +558,7 @@ def conjugation(child, conjugate, _):
 
 
 def transposition(child, _, __):
-    """ Transposition mutation - never transpose output codon """
+    """ Transposition mutation - never transpose output or input codon """
 
     if _DEBUG:
         printlog('Transposition <', child)
@@ -501,6 +570,10 @@ def transposition(child, _, __):
 
     splice = random.randrange(len(child) - 1)
     codon = child[splice]
+
+    if codon in INPUTS or codon in OUTPUTS:
+        return child
+
     del child[splice]
 
     splice = random.randrange(len(child) - 1)
@@ -525,6 +598,13 @@ def inversion(child, _, __):
         return child
 
     locus = 0 if len(child) == 2 else random.randrange(len(child) - 2)
+
+    # Cannot invert if input or output codon
+
+    if child[locus] in INPUTS or child[locus + 1] in OUTPUTS:
+        return child
+
+    # Swap codons
 
     child[locus], child[locus + 1] = child[locus + 1], child[locus]
 
@@ -629,6 +709,10 @@ def mutate(parent, conjugate, tried, min_len=2, max_len=90, odds=(4, 8, 9, 10, 1
         statistics    dictionary of codon statistics for guiding evolotion
         viable        viability function; takes a codon list, returns true if it is acceptable
     """
+
+    if KERNELS is None:
+        printlog('Fatal Error: configure_environment was not called!')
+        exit(1)
 
     if not isinstance(parent, list):
         parent = parent.split('-')
@@ -773,6 +857,12 @@ def train(org, config, epochs=1):
 
         Returns updated organism
     """
+
+    if KERNELS is None:
+        printlog('Fatal Error: configure_environment was not called!')
+        exit(1)
+
+    print('Conserved ', CONSERVED_CODONS)
 
     genome = org.genome
 

@@ -11,6 +11,7 @@ Usage: evolve.py [option(s)] ...
 Options are:
 
     genepool=path       path to genepool file, default is {Data}/genepool.json
+    env=restrictions    comma-separated list of environmental restrictions
     width=nnn           tile width, default=60
     height=nnn          tile height, default=60
     border=nnn          border size, default=10 (note difference here from train)
@@ -37,6 +38,10 @@ Options are:
 
     See Modules/genomics.py for details on the structure of genes, codons and other genetic elements.
 
+    Currently-defined evironmental restrictions:
+
+        lockio      Input and Output codons are conserved and will not be modified or deleted
+
 """
 
 import os
@@ -47,7 +52,7 @@ import numpy as np
 
 from Modules.misc import oops, terminate, set_docstring, printlog, parse_options
 from Modules.modelio import ModelIO
-from Modules.genomics import Organism, train, ligate, mutate
+from Modules.genomics import Organism, train, ligate, mutate, configure_environment
 
 set_docstring(__doc__)
 
@@ -85,6 +90,7 @@ def setup(options):
     errors = False
     genepool = {}
     options.setdefault('border', 10)
+    options.setdefault('env', '')
     options['paths'].setdefault('genepool', os.path.join('Data', 'genepool.json'))
     poolpath = options['paths']['genepool']
 
@@ -263,6 +269,7 @@ def evolve(config, genepool, image_info):
     # Remind user what we're about to do.
 
     print('          Genepool : {}'.format(config.paths['genepool']))
+    print('       Environment : {}'.format(config.config['env']))
     print('        Tile Width : {}'.format(config.base_tile_width))
     print('       Tile Height : {}'.format(config.base_tile_height))
     print('       Tile Border : {}'.format(config.border))
@@ -288,6 +295,10 @@ def evolve(config, genepool, image_info):
 
 
     checkpoint(poolpath, population, graveyard, statistics, config)
+
+    # Set up environmental restrictions.
+
+    configure_environment(config.config['env'])
 
     # Repeat until program terminated.
 
@@ -454,7 +465,8 @@ if __name__ == '__main__':
         'data': ('data_path', str, lambda x: False, ''),
         'training': ('training_path', str, lambda x: False, ''),
         'validation': ('validation_path', str, lambda x: False, ''),
-        'genepool': ('genepool_path', str, lambda x: False, '')
+        'genepool': ('genepool_path', str, lambda x: False, ''),
+        'env': ('env', str, lambda x: False, '')
     }
 
     OPTIONS = parse_options(OPCODES)
