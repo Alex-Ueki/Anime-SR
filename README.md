@@ -1,4 +1,4 @@
-# Anime Image Super Resolution using Keras 2+ (TensorFlow Backend)
+# Anime Image Super Resolution using Keras (TensorFlow Backend)
 
 Toolkit for investigating techniques for improved upconversion of SD video to HD. Can potentially be adapted for
 use on other image conversion tasks.
@@ -10,13 +10,23 @@ use on other image conversion tasks.
 - Tools for data preparation, training, evaluation, prediction, genetic evolution of models.
 - Training can be interrupted and restarted freely.
 
-Training dataset (remove this link before publishing repo): https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0
+## Performance
+
+Performance Metric for this framework is [Peak Signal-to-Noise ratio](https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio)
+Frames were sourced from :PU INSERT SOURCE HERE:
+
+Training Set: 66 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders
+Validation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders
+Evaluation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders
+
+Results
+- BasicSR Residual Model: PeekSignalToNoiseRatio = 50.51191
 
 ## Setup
 
 Requires python 3.5+, Keras, assorted standard packages (numpy, scipy, etc.)
 
-Data directory should be as follows (setup.py will do this for you)
+Data directory should be as follows (Tools/setup.py will do this for you)
 
 ```
 Data
@@ -35,10 +45,6 @@ Data
             Beta/                   Target images
     models/                 .h5 and .json files for trained models.
 ```
-
-Alex : *<a href="https://www.dropbox.com/sh/69ec5l61cpmsgmn/AAAIAdlsfDe6_hZorAfu3yIwa?dl=0&preview=Data.zip">Data.zip</a>*
-
-*<a href="https://www.imagemagick.org/script/index.php">ImageMagick</a>* is an indispensible tool for manipulating bitmap images.
 
 See *Notes.md* for useful tips / tricks / comments
 
@@ -208,14 +214,8 @@ Options are:
 
 ## TODOS
 
-- Parental Unit
-    - Test current models
-    - Pythonate sdcopy.sh
-    - Improve Documentation
-
-- Gene-Perpetuation Unit
-    - New, better models
-    - Random Brilliance
+- Leverage the video aspect of the images to improve results (recurrent models)
+- Add in the latest fads and models, e.g Capsule Networks
 
 ## Included Models (From Image-Super-Resolution)
 
@@ -225,16 +225,21 @@ The following are the models sourced from Image-Super-Resolution
 - Expanded Super Resolution CNN (ESR)
 - Deep Denoising Super Resolution (DDSR)
 
-There is also an incomplete implementation of *<a href="https://arxiv.org/abs/1511.04587">Accurate Image Super-Resolution Using Very Deep Convolutional Networks</a>*.
-
+From *<a href="https://arxiv.org/abs/1511.04587">Accurate Image Super-Resolution Using Very Deep Convolutional Networks</a>*.
 - Very Deep Super Resolution (VDSR)
 
+Additionally, as a modification
+- Exponential Linear Unit Variations on the above models
+
+Finally, there are models that can be generated using evolve.py
 
 ## Credits
 
 *<a href="https://github.com/titu1994/Image-Super-Resolution">Image-Super-Resolution</a>*
-for base code.
+for base code and implementations of     
+Super Resolution CNN, Expanded Super Resolution, Deep Denoising Super Resolution.
+
+*<a href="https://arxiv.org/abs/1511.04587">Accurate Image Super-Resolution Using Very Deep Convolutional Networks</a>*.
+for the model structure of VDSR.
 
 *https://gist.github.com/jackdoerner/1c9c48956a1e00a29dbc* for DPX file io.
-
-**PU: More credits here**

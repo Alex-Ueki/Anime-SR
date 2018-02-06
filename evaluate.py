@@ -42,12 +42,12 @@ def setup(options):
     options.setdefault('data', 'Data')
     dpath = options['data']
 
-    options.setdefault('model', os.path.join(dpath, 'models', 'BasicSR-60-60-2-dpx.h5'))
+    options.setdefault('model', os.path.join(dpath, 'models', 'BasicSR-R-60-60-2-dpx.h5'))
     options.setdefault('evaluation', os.path.join(dpath, 'eval_images'))
 
     if not options['model'].endswith('.h5'):
         options['model'] = options['model'] + '.h5'
-        
+
     if os.path.dirname(options['model']) == '':
         options['model'] = os.path.join(dpath, 'models', options['model'])
 

@@ -13,6 +13,7 @@ from keras.models import Sequential, Model, load_model
 from keras.layers import Add, Average, Input
 from keras.layers.convolutional import Conv2D, MaxPooling2D, UpSampling2D
 from keras.layers.normalization import BatchNormalization
+from keras.losses import mean_squared_error
 from keras import backend as K
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
@@ -67,7 +68,7 @@ class ModelState(callbacks.Callback):
         # Currently, for everything we track, lower is better.
 
         for k in logs:
-            if k not in self.state['best_values'] or logs[k] < self.state['best_values'][k]:
+            if k not in self.state['best_values'] or logs[k] > self.state['best_values'][k]:
                 self.state['best_values'][k] = float(logs[k])
                 self.state['best_epoch'][k] = self.state['epoch_count']
 
@@ -109,17 +110,16 @@ class AdjustableGradient(callbacks.Callback):
 
 
 def psnr_loss(y_true, y_pred):
-    """ PSNR is Peak Signal to Noise Ratio, which is similar to mean squared error.
-
-        It can be calculated as
+    """ PSNR is Peak Signal to Noise Ratio, defined below
         PSNR = 20 * log10(MAXp) - 10 * log10(MSE)
+        MAXp = maximum pixel value.
+        Our framework scales to [0,1] range, so MAXp = 1.
+        The 20 * log10(MAXp) reduces to 0
 
-        When providing an unscaled input, MAXp = 255. Therefore 20 * log10(255)== 48.1308036087.
-        However, since we are scaling our input, MAXp = 1. Therefore 20 * log10(1) = 0.
-        Thus we remove that component completely and only compute the remaining MSE component.
+        https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
     """
 
-    return -10.0 * K.log(1.0 / (K.mean(K.square(y_pred - y_true)))) / K.log(10.0)
+    return -10.0 * K.log(mean_squared_error(y_true, y_pred)) / K.log(10.0)
 
 
 def psnr_loss_border(border):
@@ -216,7 +216,7 @@ class BaseSRCNNModel(object):
         val_count = self.config.val_images_count()
 
         learning_rate = callbacks.ReduceLROnPlateau(monitor=self.val_loss_function,
-                                                    mode='min',
+                                                    mode='max',
                                                     factor=0.9,
                                                     min_lr=0.0002,
                                                     patience=10,
@@ -225,11 +225,13 @@ class BaseSRCNNModel(object):
         # GPU. mode was 'max', but since we want to minimize the PSNR (better = more
         # negative) shouldn't it be 'min'?
 
+        # Alex: Thats on me, I negated the metric by accident. You wanna max it
+
         model_checkpoint = callbacks.ModelCheckpoint(self.config.paths['model'],
                                                      monitor=self.val_loss_function,
                                                      save_best_only=True,
                                                      verbose=self.config.verbose,
-                                                     mode='min',
+                                                     mode='max',
                                                      save_weights_only=False)
 
         # Set up the model state. Can potentially load saved state.
@@ -504,13 +506,7 @@ class VDSR(BaseSRCNNModel):
 
 
 class PUPSR(BaseSRCNNModel):
-    """ Parental Unit Pathetic Super-Resolution Model (batch normalization, residual, sequential)
-
-        BasicSR (20 Epochs, relu) : -39.7536911815 @ epoch 15
-        PUPSR (20 Epochs, relu)   : -40.8934259724 @ epoch 20
-        PUPSR (20 Epochs, elu)    : -40.7926285811 @ epoch 15
-        PUPSR (20 Epochs, leveld) : -40.8624241233 @ epoch 16
-    """
+    """ Parental Unit Pathetic Super-Resolution Model (batch normalization, residual, sequential) """
 
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
@@ -540,8 +536,7 @@ class PUPSR(BaseSRCNNModel):
         return model
 
 class PUPSR2(BaseSRCNNModel):
-    """ Parental Unit Pathetic Super-Resolution Model V2 - API generated
-    """
+    """ Parental Unit Pathetic Super-Resolution Model V2 - API generated """
 
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
 
@@ -578,8 +573,7 @@ class GPUSR(BaseSRCNNModel):
         Tackles two problems with VDSR, Gradients and 'dead' neurons
         Using VDSR with Exponential Linear Unit (elu), which allows negative values
         I think the issue with VDSR is the ReLu creating "dead" neurons
-        Also added gradient clipping and an epsilon
-        TO-DO Residuals
+        Also added gradient clipping and an epsilion
     """
 
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
@@ -624,14 +618,8 @@ MODELS = {'BasicSR': BasicSR,
 """
     TestModels section
     Define all experimental models
-    train.py can train this models using type=test
 """
 
-"""
-    Evaluation results
-       BasicSR : Loss = 0.00058 | PeekSignalToNoiseRatio = -39.41335
-    ELUBasicSR : Loss = 0.00032 | PeekSignalToNoiseRatio = -44.32544
-"""
 class ELUBasicSR(BaseSRCNNModel):
     """ Test model """
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
@@ -660,11 +648,6 @@ class ELUBasicSR(BaseSRCNNModel):
 
         return model
 
-"""
-    Evaluation results
-    ELUExpansionSR : Loss = 0.00033 | PeekSignalToNoiseRatio = -45.90310
-       ExpansionSR : Loss = 0.00043 | PeekSignalToNoiseRatio = -41.49931
-"""
 class ELUExpansionSR(BaseSRCNNModel):
     """ Test Model """
 
@@ -701,11 +684,6 @@ class ELUExpansionSR(BaseSRCNNModel):
 
         return model
 
-"""
-    Evaluation results
-    ELUDeepDenoiseSR : Loss = 0.00065 | PeekSignalToNoiseRatio = -40.46243
-       DeepDenoiseSR : Loss = 0.00044 | PeekSignalToNoiseRatio = -42.58665
-"""
 class ELUDeepDenoiseSR(BaseSRCNNModel):
     """ Test Model """
     def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
@@ -757,11 +735,6 @@ class ELUDeepDenoiseSR(BaseSRCNNModel):
 
         return model
 
-"""
-    Evaluation results
-    ELUVDSR : Loss = 0.00027 | PeekSignalToNoiseRatio = -45.43717
-       VDSR : Loss = 0.01211 | PeekSignalToNoiseRatio = -19.73214
-"""
 class ELUVDSR(BaseSRCNNModel):
     """ Test Model """
 

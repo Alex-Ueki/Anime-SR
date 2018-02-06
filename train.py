@@ -15,7 +15,7 @@ Options are:
     epochs+=nnn         run epoch count, default=None. Overrides epochs=nnn
     lr=.nnn             set initial learning rate, default = use model's current learning rate. Should be 0.001 or less
     quality=.nnn        fraction of the "best" tiles used in training. Default is 1.0 (use all tiles)
-    residual=1|0|T|F    have the model train using residual images. Default is false.
+    residual=1|0|T|F    have the model train using residual images. Default is true.
     black=auto|nnn      black level (0..1) for image border pixels, default=auto (use blackest pixel in first image)
     trimleft=nnn        pixels to trim on image left edge, default = 240
     trimright=nnn       pixels to trim on image right edge, default = 240
@@ -335,12 +335,7 @@ def train(config, options):
 
 
 
-    if config.model_type.lower() == 'all':
-        model_list = models.MODELS
-    elif config.model_type.lower() == 'test':
-        config.model_list = models.TESTMODELS
-    else:
-        model_list = [config.model_type]
+    model_list = [config.model_type]
 
     for model in model_list:
 
