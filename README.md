@@ -12,12 +12,12 @@ use on other image conversion tasks.
 
 ## Performance
 
-Performance Metric for this framework is [Peak Signal-to-Noise ratio](https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio)
+Performance Metric for this framework is [Peak Signal-to-Noise ratio](https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio)     
 Frames were sourced from :PU INSERT SOURCE HERE:
 
-Training Set: 66 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders
-Validation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders
-Evaluation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders
+Training Set: 66 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders     
+Validation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders       
+Evaluation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders       
 
 Results
 - BasicSR Residual Model: PeekSignalToNoiseRatio = 50.51191
