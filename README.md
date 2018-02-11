@@ -12,15 +12,24 @@ use on other image conversion tasks.
 
 ## Performance
 
-Performance Metric for this framework is [Peak Signal-to-Noise ratio](https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio)     
-Frames were sourced from :PU INSERT SOURCE HERE:
+Performance Metric for this framework is [Peak Signal-to-Noise ratio](https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio)      
+Images drawn from the Riding Bean anime, where each training pair is a naively upscaled SD image with a true HD image.
 
 Training Set: 66 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders     
 Validation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders       
-Evaluation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders       
+Evaluation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders   
 
-Results
-- BasicSR Residual Model: PeekSignalToNoiseRatio = 50.51191
+All models were trained on 1612 batches of size 16 per epoch
+
+Results: After 100 epochs
+- BasicSR: PeekSignalToNoiseRatio = 45.55115
+- BasicSR w/ Residual: PeekSignalToNoiseRatio = 50.00968
+- DeepDenoiseSR: PeekSignalToNoiseRatio = 48.34253
+- DeepDenoiseSR w/ Residual: PeekSignalToNoiseRatio = 50.83483
+- VDSR: TODO
+- VDSR w/ Residual: PeekSignalToNoiseRatio = 50.35691
+- VDSR w/ ELU: PeekSignalToNoiseRatio = 40.31843
+- VDSR w/ ELU & Residual: TODO
 
 ## Setup
 
