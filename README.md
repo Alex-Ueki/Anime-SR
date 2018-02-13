@@ -14,6 +14,7 @@ use on other image conversion tasks.
 
 Performance Metric for this framework is [Peak Signal-to-Noise ratio](https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio)      
 Images drawn from the Riding Bean anime, where each training pair is a naively upscaled SD image with a true HD image.
+Models were trained to predict either full images or residual images (the difference between the SD and HD)
 
 Training Set: 66 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders     
 Validation Set: 18 pairs of 1920x1080 .dpx Frames, tiled into 60x60 segments with 2-pixel borders       
@@ -26,10 +27,10 @@ Results: After 100 epochs
 - BasicSR w/ Residual: PeekSignalToNoiseRatio = 50.00968
 - DeepDenoiseSR: PeekSignalToNoiseRatio = 48.34253
 - DeepDenoiseSR w/ Residual: PeekSignalToNoiseRatio = 50.83483
-- VDSR: TODO
+- VDSR: PeekSignalToNoiseRatio = 20.63989 (Probably an issue with current implementation)
 - VDSR w/ Residual: PeekSignalToNoiseRatio = 50.35691
 - VDSR w/ ELU: PeekSignalToNoiseRatio = 40.31843
-- VDSR w/ ELU & Residual: TODO
+- VDSR w/ ELU & Residual: PeekSignalToNoiseRatio = 50.78876
 
 ## Setup
 
@@ -225,6 +226,8 @@ Options are:
 
 - Leverage the video aspect of the images to improve results (recurrent models)
 - Add in the latest fads and models, e.g Capsule Networks
+- Look into gaussian output layers for residual models to boost convergence speeds (assuming residuals are near zero)
+- Determine the optimal training time for convergence (should be 100+ epochs).
 
 ## Included Models (From Image-Super-Resolution)
 
