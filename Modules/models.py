@@ -19,6 +19,7 @@ import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 
 from Modules.misc import printlog
+from Modules.denseblock import dense_block
 
 class ModelState(callbacks.Callback):
     """ State monitor callback. Tracks how well we are doing and writes
@@ -604,6 +605,67 @@ class GPUSR(BaseSRCNNModel):
 
         return model
 
+class DenseSR(BaseSRCNNModel):
+    """
+        Uses a single densely connected convolutional block
+    """
+
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
+
+        super(DenseSR, self).__init__('DenseSR', config, loss_function)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+
+        input = Input(self.config.image_shape)
+
+        model = Model(input, dense_block(input, layers=10, k=6, window=(3,3)))
+
+        model.compile(optimizer=optimizers.Adam(lr=.001), loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.config.paths['model'])
+
+        self.model = model
+
+        return model
+
+class DenseSubSampleSR(BaseSRCNNModel):
+    """
+        Uses a multiple dense blocks with subsampling and upsampling
+    """
+
+    def __init__(self, config, loss_function='PeakSignaltoNoiseRatio'):
+
+        super(DenseSubSampleSR, self).__init__('DenseSubSampleSR', config, loss_function)
+
+    # Create a model to be used to sharpen images of specific height and width.
+
+    def create_model(self, load_weights):
+
+        input = Input(self.config.image_shape)
+
+        db = lambda x: dense_block(x, layers=6, k=5, window=(3,3))
+
+        db1 = db(input)
+        db2 = db(MaxPooling2D()(db1))
+        db3 = db(MaxPooling2D()(db2))
+
+        merged_output = concatenate([db1, UpSampling2D()(db2), UpSampling2D((4,4))(db3)])
+        model = Model(input, merged_output)
+
+        model.compile(optimizer=optimizers.Adam(lr=.001), loss='mse',
+                      metrics=[self.evaluation_function])
+
+        if load_weights:
+            model.load_weights(self.config.paths['model'])
+
+        self.model = model
+
+        return model
+
 
 MODELS = {'BasicSR': BasicSR,
           'VDSR': VDSR,
@@ -612,7 +674,9 @@ MODELS = {'BasicSR': BasicSR,
           'PUPSR': PUPSR,
           'PUPSR2': PUPSR2,
           'GPUSR': GPUSR,
-          'Dummy': Dummy
+          'Dummy': Dummy,
+          'DenseSR': DenseSR,
+          'DenseSubSampleSR': DenseSubSampleSR
          }
 
 """
@@ -762,7 +826,6 @@ class ELUVDSR(BaseSRCNNModel):
         self.model = model
 
         return model
-
 
 TESTMODELS = {'ELUBasicSR': ELUBasicSR,
               'ELUVDSR': ELUVDSR,
