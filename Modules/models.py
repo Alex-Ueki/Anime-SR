@@ -620,7 +620,11 @@ class DenseSR(BaseSRCNNModel):
 
         input = Input(self.config.image_shape)
 
-        model = Model(input, dense_block(input, layers=10, k=6, window=(3,3)))
+        embedding = dense_block(input, layers=10, k=6, window=(3,3))
+        self.feature_model = Model(input, embedding)
+
+        output = Conv2D(self.config.channels, (1, 1), padding='same')(embedding)
+        model = Model(input, output)
 
         model.compile(optimizer=optimizers.Adam(lr=.001), loss='mse',
                       metrics=[self.evaluation_function])
@@ -653,8 +657,11 @@ class DenseSubSampleSR(BaseSRCNNModel):
         db2 = db(MaxPooling2D()(db1))
         db3 = db(MaxPooling2D()(db2))
 
-        merged_output = concatenate([db1, UpSampling2D()(db2), UpSampling2D((4,4))(db3)])
-        model = Model(input, merged_output)
+        embedding = concatenate([db1, UpSampling2D()(db2), UpSampling2D((4,4))(db3)])
+        self.feature_model = Model(input, embedding)
+
+        output = Conv2D(self.config.channels, (1, 1), padding='same')(embedding)
+        model = Model(input, output)
 
         model.compile(optimizer=optimizers.Adam(lr=.001), loss='mse',
                       metrics=[self.evaluation_function])
